@@ -110,7 +110,7 @@ mat0<-mat
 mat0[is.na(mat0)]<-0
 pca<-prcomp(t(mat0))
 pc<-pca$x
-#library<-as.numeric(batch[rownames(pc),"Library_Complexity"])
+library<-as.numeric(batch[rownames(pc),"Library_Complexity"])
 resLm<-lm(pc[,1]~library)
 summary(resLm)
 # Residuals:
@@ -407,6 +407,8 @@ pc<-pca$x
 summary(pca) #explique que 3.7% !
 #library<-as.numeric(batch[rownames(pc),"Library_Complexity"])
 resLm<-lm(pc[,1]~library)
+anova(resLm)$Pr[1]
+
 summary(resLm)
 
 # Residuals:
