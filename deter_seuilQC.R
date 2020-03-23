@@ -29,17 +29,24 @@ batch=read.csv2("../../ref/20-02-17_batch_119samples_IUGRLGACTRL_noNA_withHpaC.c
 
 #1.1 plot coude : 
 #a) fct deterQual
-source('scripts/old/deterQual.R')
+source('scripts/deterDataQual.R')
 
-#b) test arrondi
+#b) qualité data_all
 mat<-as.matrix(data_all[,samples])
-deterQual(mat) #0.00938
-
+deterQual(mat) #0.4153642
+deterQual2(mat,batch) 
 
 #c) plot coude de 0.01 a 0.20 de msp1c
-
-deterSeuilQC<-function(dataCpG,metrique,qTestes,test="quantile"){
-  quals<-rep(0,length(qTestes))
+deterSeuilQC<-function(dataCpG,metrique,qTestes,qualMetriques=c(1,2),test="quantile"){
+  if (1%in% qualMetriques){
+    quals<-rep(0,length(qTestes))
+  }
+  if (2%in% qualMetriques){
+    quals2<-rep(0,length(qTestes))
+    quals3<-rep(0,length(qTestes))
+    quals4<-rep(0,length(qTestes))
+  }
+  
   print(paste("determine si",metrique,"peut permettre d'exclure des locis de faible confiance"))
   for (i in 1:length(qTestes)){
     q<-qTestes[i]
@@ -50,19 +57,32 @@ deterSeuilQC<-function(dataCpG,metrique,qTestes,test="quantile"){
     }
     
     locisLo<-na.exclude(rownames(dataCpG)[dataCpG[,metrique]<=q])
-    print(paste("analyses qualité des",length(locisLo),"locis avec",metrique,"<",round(q,2)))
+    print(paste("analyses qualité des",length(locisLo),"locis avec",metrique,"<",q))
     
     if(length(locisLo)>100000){
       locisLo<-sample(locisLo,100000)
     }
     dataCpGLo<-as.matrix(dataCpG[locisLo,samples])
     
+    if (1%in% qualMetriques){
+      quals[i]<-deterQual(dataCpGLo,maxMethyl = 5)
+    }
     
-    quals[i]<-deterQual(dataCpGLo,maxMethyl = 5)
+    
+    if (2%in% qualMetriques){
+      res<-deterQual2(dataCpGLo,batch)
+      quals2[i]<-res$p
+      quals3[i]<-res$pctPC
+      quals4[i]<-res$r2
+    }
+    
   }
   
-  print(plot(qTestes,quals))
-  return(quals)
+  print(plot(qTestes,quals,main='pctLocis Avec Vrais Zeros'))
+  print(plot(qTestes,quals2,main='pval PC~library'))
+  print(plot(qTestes,quals3,main='pctPC Library'))
+  print(plot(qTestes,quals4,main='r2 PC~library'))
+  return(list(qual1=quals,qual2.p=quals2,quals2.pctPC=quals3,qual2.r=quals4 ))
 }
 #on veut enlelver les locis faux zeros parmi les locis pct0>0.7
 locis0<-rownames(data_all)[data_all$pct0>0.7]
@@ -71,11 +91,11 @@ names(data_all)
 
 #msp1c
 qTestes<-1:20/50
-qualsMsp1c<-deterSeuilQC(data_all,"msp1c",qTestes) #0.08
+qualsMsp1c<-deterSeuilQC(data_all,"msp1c",qTestes) #0.08 fenetre basse, 0.3 fenetre haute
 
 #confScore
 qTestes<-1:20/50
-qualsConf<-deterSeuilQC(data_all,"confidenceScore",qTestes) #0.08 aussi
+qualsConf<-deterSeuilQC(data_all,"confidenceScore",qTestes) #confidence score nul car pval ~library de  plus en plus fort
 
 #mean
 qTestes<-1:19/40

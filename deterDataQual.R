@@ -11,12 +11,47 @@ deterQual<-function(matCpG, maxMethyl =5, minPct0=0.7){
   matCpG[is.na(matCpG)]<-0
   #2) recupère mat avec plus de 70% de CpG
   matCpG<-matCpG[((rowSums(matCpG==0)/ncol(matCpG))>minPct0),]
+  pctLocisAvecVraisZeros<-sum(rowSums(matCpG>0&matCpG<maxMethyl)>0)/nrow(matCpG)
+  print(paste("pct Locis avec Vrais zeros =",round(pctLocisAvecVraisZeros,3)))
+  return(pctLocisAvecVraisZeros)
+}
+
+deterQual2<-function(mat,df.covars,covarNum="Library_Complexity",pcTestes=5){
+  #quelle corralation avec library complexity?
+  res<-list(p=1, r2=0,PC=0, pctPC=0)
+  library<-as.numeric(df.covars[rownames(pc),covarNum])
+  mat[is.na(mat)]<-0
+  pca<-prcomp(t(mat))
+  pc<-pca$x
+   #explique que 3.7% !
+  #library<-as.numeric(batch[rownames(pc),"Library_Complexity"])
+  for (i in 1:pcTestes){
+    
+    resLm<-lm(pc[,i]~library)
+    
+    if(anova(resLm)$Pr[1]<res$p & summary(resLm)$adj.r.squared>res$r2){
+      
+      res$p<-anova(resLm)$Pr[1]
+      res$r2<-summary(resLm)$adj.r.squared
+      res$PC<-i
+      res$pctPC<-round(pca$sd[i]^2/sum(pca$sdev^2),3)
+      print(paste("PC",i," (",res$pctPC,"% de la variance","a R2 avec",covarNum,"=",round(summary(resLm)$adj.r.squared,2),"et pval = 10^",log10(anova(resLm)$Pr[1])))
+      
+    }
+    
+  }
   
-  return(sum(rowSums(matCpG>0&matCpG<maxMethyl)>0)/nrow(matCpG))
+  
+
+  
+  return(res)
+  
 }
 
 
-deterQual2<-function(mat,df.covars,topSD=10000,covar){
+
+
+deterQual3<-function(mat,df.covars,topSD=10000,covar){
   if(is.numeric(topSD)){
     locis<-topVarFeatures(mat,topSD)
     mat<-mat[locis,]
