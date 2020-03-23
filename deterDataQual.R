@@ -19,10 +19,11 @@ deterQual<-function(matCpG, maxMethyl =5, minPct0=0.35){
 deterQual2<-function(mat,df.covars,covarNum="Library_Complexity",pcTestes=5){
   #quelle corralation avec library complexity?
   res<-list(p=1, r2=0,PC=0, pctPC=0)
-  library<-as.numeric(df.covars[rownames(pc),covarNum])
+  
   mat[is.na(mat)]<-0
   pca<-prcomp(t(mat))
   pc<-pca$x
+  library<-as.numeric(df.covars[rownames(pc),covarNum])
    #explique que 3.7% !
   #library<-as.numeric(batch[rownames(pc),"Library_Complexity"])
   for (i in 1:pcTestes){

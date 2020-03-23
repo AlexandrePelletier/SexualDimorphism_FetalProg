@@ -10,11 +10,20 @@ dir.create(path = outputDir, recursive = TRUE, showWarnings = FALSE, mode = "077
 
 #data
 data_all<-fread("../../ref/CD34_angle_119_noEmptyLocis_withConfScore_withoutChrXY.txt",header = T)
+
 data_all=data.frame(data_all)
 rownames(data_all)<-data_all$id
 head(data_all)
 dim(data_all) #1709224     127
 samples<-names(data_all)[str_detect(names(data_all),"CBP")]
+
+#nas :
+mat<-as.matrix(data_all[,samples])
+sum(is.na(mat))/length(mat) #1%
+sum(rowSums(is.na(mat))>0)/nrow(mat) #7.9% des locis
+# data_all$pctNA<-rowSums(is.na(mat))/ncol(mat)
+# head(data_all)
+# fwrite(data_all,"../../ref/CD34_angle_119_noEmptyLocis_withConfScore_withoutChrXY.txt")
 
 batch=read.csv2("../../ref/20-02-17_batch_119samples_IUGRLGACTRL_noNA_withHpaC.csv",header=T,row.names = 1)
 
@@ -103,6 +112,20 @@ qualsPct0<-deterSeuilQC(data_all,"pct0",pctTestes,test = "brut",lowerThan = F)
 locis0<-rownames(data_all)[data_all$pct0>0.35]
 data_0<-data_all[locis0,]
 dim(data_0) #1446462     131
+
+
+#mm chose pour le pctNA
+max(data_all$pctNA)
+pctTestes<-0:7/50
+qualsNAs<-deterSeuilQC(data_all,"pctNA",pctTestes, test= "brut",lowerThan = F) #exclusion : pctNA>0.02?
+pctTestes<-0:5/200
+qualsNAs<-deterSeuilQC(data_all,"pctNA",pctTestes, test= "brut") #exclusion : pctNA!=0
+
+
+locis0<-rownames(data_all)[data_all$pct0>0.35]
+data_0<-data_all[locis0,]
+dim(data_0) #1446462     131
+
 #tester, msp1c, conf
 
 # =  confidencescorehi
@@ -112,14 +135,8 @@ qualsConfScore<-deterSeuilQC(data_all,"confidenceScore",qTestes,lowerThan = F)
 
 # =  confidencescoreNormhi
 qTestes<-1:19/20
-qualsConfScore<-deterSeuilQC(data_all,"confidenceScoreNorm",qTestes,lowerThan = F) #pas plus inclusif que confidenceScore
+qualsConfScoreNorm<-deterSeuilQC(data_all,"confidenceScoreNorm",qTestes,lowerThan = F) #pas plus inclusif que confidenceScore
 
-
-
-# nb methyl Non zeros 
-qTestes<-1:19/20
-qualsConfScore<-deterSeuilQC(data_all,"nbMethylNonZeros",qTestes,lowerThan = F) 
-#inclusion : >0.65
 
 
 # mean 
@@ -135,119 +152,138 @@ qualsMeans<-deterSeuilQC(data_all,"sd",qTestes,lowerThan = F)
 #inclusoin >0.75
 
 
-locisRmvable<-rownames(data_all)[data_all$pct0>0.35&
+
+
+locisArmNA<-rownames(data_all)[data_all$pctNA!=0]
+length(locisArmNA) #135k
+
+
+locisRmvable<-na.omit(rownames(data_all)[(data_all$pct0>0.35&
                                    data_all$confidenceScore<quantile(data_all$confidenceScore,0.65,na.rm=T)&
-                                   data_all$nbMethylNonZeros<4&
+                                   
                                    data_all$mean<quantile(data_all$mean,0.75,na.rm=T)&
-                                   data_all$mean<quantile(data_all$sd,0.75,na.rm=T)]
+                                   data_all$sd<quantile(data_all$sd,0.75,na.rm=T))])
 
-length(locisRmvable) #701095        
 
+length(locisRmvable) # 992749      
+head(locisRmvable)
 
 data_rmvable<-data_all[locisRmvable,]
-#enrichissement en conf et mean
-plot(density(data_all$msp1c))
-lines(density(data_rmvable$msp1c),col=2)
+#enrichissement en conf et mean et sd
+hist(data_rmvable$RankConfidenceScore,breaks=100)
+hist(data_all[!(rownames(data_all)%in%locisRmvable),"RankConfidenceScore"],breaks=100)
+
+locisKeep<-rownames(data_all)[!(rownames(data_all)%in%union(locisRmvable,locisArmNA))]
+length(locisKeep)
 #msp1c
 qTestes<-1:9/10
-qualsMsp1c<-deterSeuilQC(data_rmvable,"msp1c",qTestes) 
+qualsMsp1c<-deterSeuilQC(data_rmvable,"msp1c",qTestes,qualMetriques = 1)  
 ##entre 0.04 et 0.2
 qTestes<-2:10/50
-qualsMsp1c2<-deterSeuilQC(data_rmvable,"msp1c",qTestes) 
-#<0.12 => exclusion
+qualsMsp1c2<-deterSeuilQC(data_rmvable,"msp1c",qTestes,qualMetriques = 1) 
+#exclusion 0.10
+
 
 #confScore
 qTestes<-1:9/10
-qualsConf<-deterSeuilQC(data_rmvable,"confidenceScore",qTestes,qualMetriques = 1) #confidence score nul car pval ~library de  plus en plus fort
+qualsConf<-deterSeuilQC(data_rmvable,"confidenceScore",qTestes,qualMetriques = 1) #inclusion >0.7
 #mais entre 0.1 et 0.2 ya un enrichissemnet ++ en vrai zeros
 qTestes<-1:10/50
-qualsConf<-deterSeuilQC(data_rmvable,"confidenceScore",qTestes,qualMetriques = 1) #seuil : 0.1
+qualsConf<-deterSeuilQC(data_rmvable,"confidenceScore",qTestes,qualMetriques = 1) #exclusion : 0.08
 
 #mean
 qTestes<-1:9/10
-qualsMean<-deterSeuilQC(data_rmvable,"mean",qTestes,qualMetriques = 1)
-#0.2 exclusion ? 
+qualsMean<-deterSeuilQC(data_rmvable,"mean",qTestes,qualMetriques = 1)  #inclusion : <0.1?
+
+#0.1 inclusion  ? 
 qTestes<-1:15/50
-qualsMean<-deterSeuilQC(data_0,"mean",qTestes) 
-#0.12 pour etre exact
+qualsMean<-deterSeuilQC(data_rmvable,"mean",qTestes,qualMetriques = 1) 
+#0.04 pour etre exact
 
-
-# et <0.8 exclusion ?
 
 
 #sd
-qualsMean<-deterSeuilQC(data_0,"sd",qTestes)
+qTestes<-1:9/10
+qualsConf<-deterSeuilQC(data_rmvable,"sd",qTestes,qualMetriques = 1) #inclusion <0.2 ?
 
-#quals1 diminue jusqu'a 0.2 puis augmente ! 
-#quals2 pval diminue jusya 0.1 (gros pic de 0.06 à 0.1)puis augmente, r2 le + fort entre 0.08 et 0.1, pval 
-#donc peut etre enlver les locis entre 0.06 et 0.1 ?
+qTestes<-1:10/50
+qualsConf<-deterSeuilQC(data_rmvable,"sd",qTestes,qualMetriques = 1) #inclusion <0.04
 
-plot(density(data_all$mean))
-abline(v=0.06)
-abline(v=0.1,col=2)
-locisARm<-locis0[data_all[locis0,"mean"]>quantile(data_all$mean,0.06)&data_all[locis0,"mean"]<quantile(data_all$mean,0.1)]
-length(locisARm)
+
+#nbMethylNonzeros
+qTestes<-1:9/10
+qualsConf<-deterSeuilQC(data_rmvable,"nbMethylNonZeros",qTestes,qualMetriques = 1) #exclusion nbMethyl = 0
+
+
+
+#ccl : locis exclu = nbMethylNonZeros = 0, msp1c<q0.14, et confscore <q0.12 (mais inutile car msp1c suffit), 
+locisArm<-na.omit(locisRmvable[data_rmvable$nbMethylNonZeros==0|data_rmvable$msp1c<quantile(data_rmvable$msp1c,0.10)|data_rmvable$pctNA>0])
+sum(is.na(locisArm))
+head(locisArm)
+length(locisArm) #361279
+
+
+
 #locislomean bad qual locis ?
-plot(density(log10(data_all$msp1c)))
-lines(density(na.omit(log10(data_all[locis0,"msp1c"]))),col=2)
-lines(density(na.omit(log10(data_all[locisARm,"msp1c"]))),col=3) #plutot leauvais niveau mso1c
+plot(density(data_all$mean))
+lines(density(na.omit(data_all[locisRmvable,"mean"])),col=2)
+lines(density(na.omit(data_all[locisArm,"mean"])),col=3) #plutot leauvais niveau mso1c
+plot(density(data_all$sd))
+lines(density(na.omit(data_all[locisRmvable,"sd"])),col=2)
+lines(density(na.omit(data_all[locisArm,"sd"])),col=3)
 
-plot(density(na.omit(log10(data_all$confidenceScore))))
-lines(density(na.omit(log10(data_all[locis0,"confidenceScore"]))),col=2)
-lines(density(na.omit(log10(data_all[locisARm,"confidenceScore"]))),col=3)#bad locis
+hist(data_rmvable$RankConfidenceScore,breaks=100)
+hist(data_rmvable[locisArm,"RankConfidenceScore"],breaks=100)
+
 
 #check quals locisarm et loocis filtre
-locis<-rownames(data_all)[!(rownames(data_all)%in%locisARm)]
-deterQual(as.matrix(data_all[locisARm,samples]),maxMethyl = 5)#0.332
-deterQual(as.matrix(data_all[locis,samples]),maxMethyl = 5) #0.42 au lieu de 0.415
-deterQual2(as.matrix(data_all[locisARm,samples]),batch) # pas signif, donc la pval dépend des moins bon
+locis<-rownames(data_all)[!(rownames(data_all)%in%locisArm)]
 
+deterQual(as.matrix(data_all[locisArm,samples]),maxMethyl = 5)#0.177
+deterQual(as.matrix(data_all[locis,samples]),maxMethyl = 5) #0.45 au lieu de 0.415
 
+deterQual2(as.matrix(data_all[locisArm,samples]),batch) # PC 1  ( 8.1 % de la variance a R2 avec Library_Complexity = 0.33 et pval = 10^ -11.4460774167366
 deterQual2(as.matrix(data_all[locis,samples]),batch)
-#PC 1  16.9 % de la variance a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.3754771648479
+#PC 1  ( 21.1 % de la variance a R2 avec Library_Complexity = 0.74 et pval = 10^ -35.0833868846837
+#au lieu de : PC 1  ( 16.9 % de la variance a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.3801368616723
+data_F<-data_all[locis,]
 
-#moins stringent : entre 0.02 et 0.1, on gagne en qual ? quantile(data_all$mean,0.02) = 0.09
-locisARm<-locis0[data_all[locis0,"mean"]>quantile(data_all$mean,0.02)&data_all[locis0,"mean"]<quantile(data_all$mean,0.1)]
+#les locis rmvable mais pas exclus
+locisRmvable<-locisRmvable[!(locisRmvable%in%locisArm)]
+length(locisRmvable) #818540
 
-#check quals locisarm et loocis filtre
-locis<-rownames(data_all)[!(rownames(data_all)%in%locisARm)]
-deterQual(as.matrix(data_all[locisARm,samples]),maxMethyl = 5) #0.329
-deterQual(as.matrix(data_all[locis,samples]),maxMethyl = 5) #0.425 au lieu de 0.42 au lieu de 0.415
-
-
-deterQual2(as.matrix(data_all[locis,samples]),batch)#"PC 1  ( 16.9 % de la variance a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.3736045681155"
-
-#pas de diminution importante, de la pval/r2, on utilise pas mean comme filtre
-
-#sd
-qTestes<-1:19/20
-qualsSD<-deterSeuilQC(data_all,"sd",qTestes)
-#quals diminue jusqu'a 0.4, plateau jusqu'a 0.7 , et redescend ensuite 
-#quals2 diminue formatement a 0.7 assi => enlver >0.7 ?
-locisARm<-locis0[data_all[locis0,"sd"]>quantile(data_all$mean,0.7)]
-
-#check quals locisarm et loocis filtre
-locis<-rownames(data_all)[!(rownames(data_all)%in%locisARm)]
-deterQual(as.matrix(data_all[locisARm,samples]),maxMethyl = 5) #0.40
-deterQual(as.matrix(data_all[locis,samples]),maxMethyl = 5) #0.43 au lieu de 0.415 donc o gagne
-
-deterQual2(as.matrix(data_all[locis,samples]),batch) #PC 1 21.1 % de la variance a R2 avec Library_Complexity = 0.74 et pval = 10^ -35.0833868846837
-
-#donc on diminue en pval par rapport a avant c'est mieuc
-
-plot(density(log10(data_all$msp1c)))
-
-lines(density(na.omit(log10(data_all[locis0,"msp1c"]))),col=2)
-lines(density(na.omit(log10(data_all[locisARm,"msp1c"]))),col=3)
-lines(density(na.omit(log10(data_all[locis,"msp1c"]))),col=4)
+#enleve si ne passe pas critere inclusion de sd et mean < q0.04:
+locisArm<-locisRmvable[data_all[locisRmvable,"sd"]>quantile(data_rmvable$sd,0.04, na.rm=T)&
+                         data_all[locisRmvable,"mean"]>quantile(data_rmvable$mean,0.04, na.rm=T)&
+                         data_all[locisRmvable,"msp1c"]<quantile(data_rmvable$msp1c,0.7, na.rm=T)&
+                         data_all[locisRmvable,"confidenceScore"]<quantile(data_rmvable$confidenceScore,0.7, na.rm=T)&
+                         data_all[locisRmvable,"nbMethylNonZeros"]<4]
+length(locisArm) #477197
+locis<-locisRmvable[!(locisRmvable%in%locisArm)]
+length(locis)#192k
+hist(data_rmvable$RankConfidenceScore,breaks=100)
+hist(data_rmvable[locisArm,"RankConfidenceScore"],breaks=100) 
 
 
-plot(density(na.omit(log10(data_all$confidenceScore))))
-lines(density(na.omit(log10(data_all[locis0,"confidenceScore"]))),col=2)
-lines(density(na.omit(log10(data_all[locisARm,"confidenceScore"]))),col=3)
-lines(density(na.omit(log10(data_all[locis,"confidenceScore"]))),col=4)  #bcp mieux !
-
-#ccl sd : on filtre au dessus de 0.7
+deterQual(as.matrix(data_all[locis,samples]),maxMethyl = 5)#0.37
+deterQual(as.matrix(data_all[locisArm,samples]),maxMethyl = 5)#0.17
 
 
+deterQual2(as.matrix(data_all[locis,samples]),batch) #PC 1  ( 6.4 % de la variance a R2 avec Library_Complexity = 0.35 et pval = 10^ -12.0958497599772
+deterQual2(as.matrix(data_all[locisArm,samples]),batch) #"PC 1  ( 8.1 % de la variance a R2 avec Library_Complexity = 0.33 et pval = 10^ -11.446077416736
+
+#ccl finale : 
+locis<-setdiff(rownames(data_F),locisArm)
+length(locis)#120k
+head(locis)
+sum(is.na(locis))
+write.table(locis,"locisPassantQC.txt",sep = ",")
+data_F<-data_all[locis,]
+
+head(data_F)
+dim(data_F)
+summary(data_F)
+sum(is.na(data_F[,samples]))
+
+sum(rowSums(is.na(data_F[,samples])>0))/nrow(data_F) #44% ont des NAs.. wtf
 
