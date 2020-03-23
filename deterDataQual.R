@@ -5,11 +5,11 @@ topVarFeatures<-function(mat,topSD){
   return(rownames(mat)[order(sds,decreasing = T)][1:topSD])
 }
 
-deterQual<-function(matCpG, maxMethyl =5, minPct0=0.7){
+deterQual<-function(matCpG, maxMethyl =5, minPct0=0.35){
   #parmi les locis avec pct0>, quelle pct de locis avec vrais zeros ?
   #1) remplace NA par 0
   matCpG[is.na(matCpG)]<-0
-  #2) recupère mat avec plus de 70% de CpG
+  #2) recupère mat avec plus de 35% de 0 dans locis
   matCpG<-matCpG[((rowSums(matCpG==0)/ncol(matCpG))>minPct0),]
   pctLocisAvecVraisZeros<-sum(rowSums(matCpG>0&matCpG<maxMethyl)>0)/nrow(matCpG)
   print(paste("pct Locis avec Vrais zeros =",round(pctLocisAvecVraisZeros,3)))
@@ -35,7 +35,7 @@ deterQual2<-function(mat,df.covars,covarNum="Library_Complexity",pcTestes=5){
       res$r2<-summary(resLm)$adj.r.squared
       res$PC<-i
       res$pctPC<-round(pca$sd[i]^2/sum(pca$sdev^2),3)
-      print(paste("PC",i," (",res$pctPC,"% de la variance","a R2 avec",covarNum,"=",round(summary(resLm)$adj.r.squared,2),"et pval = 10^",log10(anova(resLm)$Pr[1])))
+      print(paste("PC",i," (",res$pctPC*100,"% de la variance","a R2 avec",covarNum,"=",round(summary(resLm)$adj.r.squared,2),"et pval = 10^",log10(anova(resLm)$Pr[1])))
       
     }
     
