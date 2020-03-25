@@ -40,3 +40,50 @@ plotPCVarExplain<-function(pca,rngPCs,lineSeuilPct=1,returnPCSeuils=T){
   return(as.numeric(names(pct.varPCs)[pct.varPCs>lineSeuilPct]))
   
 }
+
+plotCovarPCs<-function(pca,rngPCs,batch,var_num,var_fac,exclude=NULL,seuilP=0.1){
+  source("scripts/utils.R")
+  pc<-data.frame(pca$x)
+  batch_num=batch[rownames(pc),var_num]
+  batch_fac=batch[rownames(pc),var_fac]
+  batch_num=t(batch_num)
+  batch_fac=t(batch_fac)
+  split_num=split(batch_num,rownames(batch_num))
+  split_fac=split(batch_fac,rownames(batch_fac))
+  pv_num=lapply(split_num,function(x){
+    FAC1.p<-rep(0,length(rngPCs))
+    for (i in rngPCs){
+      FAC1<-as.numeric(x)
+      FAC1<-lm(pc[,i]~FAC1)
+      FAC1.p[i]<-anova(FAC1)$Pr[1]
+    }
+    return(FAC1.p)})
+  
+  pv_fac=lapply(split_fac,function(x){
+    FAC1.p<-rep(0,length(rngPCs))
+    for (i in rngPCs){
+      FAC1<-as.factor(x)
+      FAC1<-lm(pc[,i]~FAC1)
+      FAC1.p[i]<- anova(FAC1)$Pr[1]
+    }
+    return(FAC1.p)})
+  
+  
+  pvals.num<-do.call(rbind,pv_num)
+  pvals.fac<-do.call(rbind,pv_fac)
+  final_pv=rbind(pvals.num,pvals.fac)
+  pv2=data.matrix(final_pv)
+  pv2[which(pv2>seuilP)]<-1 ####here I basicaly put them to 1 if less than 0.05
+  logpvals.raw<--log10(pv2)
+  
+  pct.varPCs<-pctPC(pca,rngPCs)
+  vars<-rownames(logpvals.raw)[!(rownames(logpvals.raw)%in%exclude)]
+  pheatmap(logpvals.raw[vars,rngPCs],cluster_rows = F,cluster_cols = F,
+           labels_col= paste0("PC",rngPCs,"(",round(pct.varPCs[as.character(rngPCs)],0),"%)"),
+           display_numbers = T,
+           color = colorRampPalette(c("white", "red"))(13), breaks = c(40,20,10:1, 0.5,0.1))
+  
+  return(pv2)
+  
+  
+}

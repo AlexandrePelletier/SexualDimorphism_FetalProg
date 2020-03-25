@@ -192,66 +192,51 @@ PCAlist<-list(pca_All=pc1,pca_F=pc2,pca_F_S=pc3)
 rm(pc1,pc2,pc3)
 saveRDS(PCAlist,file.path(outputDir,"PCAlist.rds"))
 
-plotPCVarExplain(PCAlist[[3]],1:40,lineSeuilPct = 1)
-
-#PCA
-#PCAlist<-readRDS(file.path(outputDir,"PCAlist.rds"))
+pcaChoose<-"pca_All"
+PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
 names(batch)
-plotPCA(PCAlist[[3]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showSampleIDs=F)
-
+plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showSampleIDs=F)
 
 #influence Covar sur PC
-
-names(batch)
 var_fac<-names(batch)[c(2,4,8,10,11,12,13,15,16,19,24,27,29)]
 var_num<-names(batch)[c(5,6,17,20,21,22,23,25,26,28,32)]
 varAdd<-c('Group_Complexity','GroupBatch_Complexity','GroupBatch_Complexity_Fac','Group_Complexity_Fac','pct0ApresF')
+vardint<-c("Group","Group_Sex","Sex")
+resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
+
+rowSums(resPV[rownames(resPV)%in%vardint,])
+# Group Group_Sex       Sex 
+# 10.014683  8.206359 10.069588 
+
+
+pcaChoose<-"pca_F"
+PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
+plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showSampleIDs=F)
+#influence Covar sur PC
+resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
+rowSums(resPV[rownames(resPV)%in%vardint,])
+# Group Group_Sex       Sex 
+# 10.014683  8.206359 10.069588 
+# Group Group_Sex       Sex 
+# 8.204696 10.174072 11.104204
+
+pcaChoose<-"pca_F_S"
+PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
+plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showSampleIDs=F)
+#influence Covar sur PC
+resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
+rowSums(resPV[rownames(resPV)%in%vardint,])
+# Group Group_Sex       Sex 
+# 10.014683  8.206359 10.069588 
+# Group Group_Sex       Sex 
+# 8.204696 10.174072 11.104204
+# Group Group_Sex       Sex 
+# 31.52790  34.26341  34.27271 
+
+#avec R2 : 
+
+
 ##covar avec Pval<0.01 dans pcaF_S
-pc<-data.frame(PCAlist[[3]]$x)
-nrow(pc)
-pcs<-1:39
-
-batch_num=batch[rownames(pc),var_num]
-batch_fac=batch[rownames(pc),var_fac]
-batch_num=t(batch_num)
-batch_fac=t(batch_fac)
-split_num=split(batch_num,rownames(batch_num))
-split_fac=split(batch_fac,rownames(batch_fac))
-
-pv_num=lapply(split_num,function(x){
-  FAC1.p<-rep(0,length(pcs))
-  for (i in pcs){
-    FAC1<-as.numeric(x)
-    FAC1<-lm(pc[,i]~FAC1)
-    FAC1.p[i]<-anova(FAC1)$Pr[1]
-  }
-  return(FAC1.p)})
-
-pv_fac=lapply(split_fac,function(x){
-  FAC1.p<-rep(0,length(pcs))
-  for (i in pcs){
-    FAC1<-as.factor(x)
-    FAC1<-lm(pc[,i]~FAC1)
-    FAC1.p[i]<- anova(FAC1)$Pr[1]
-  }
-  return(FAC1.p)})
-
-
-pvals.num<-do.call(rbind,pv_num)
-pvals.fac<-do.call(rbind,pv_fac)
-final_pv=rbind(pvals.num,pvals.fac)
-pv2=data.matrix(final_pv)
-pv2[which(pv2>0.1)]<-1 ####here I basicaly put them to 1 if less than 0.05
-logpvals.raw<--log10(pv2)
-
-rngPC<-1:20
-pct.varPCs<-pctPC(PCAlist[[3]],rngPC)
-vars<-rownames(logpvals.raw)[!(rownames(logpvals.raw)%in%varAdd)]
-pheatmap(logpvals.raw[var,rngPC],cluster_rows = F,cluster_cols = F,
-         labels_col= paste0("PC",rngPC,"(",round(pct.varPCs[rngPC],0),"%)"),
-         display_numbers = T,
-         color = colorRampPalette(c("white", "red"))(13), breaks = c(40,20,10:1, 0.5,0.1))
-barplot(rowSums(logpvals.raw[!(rownames(logpvals.raw)%in%varAdd),]))
 
 #pheatmaps des R2 aussi 
 
