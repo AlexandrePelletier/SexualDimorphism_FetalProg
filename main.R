@@ -37,11 +37,13 @@ plot(density(data_all$sd))
 plot(density(data_all$pct0))
 
 
-#Filtration des locis peu fiable
+#FILTRATION DES LOCIS
+#see deterSeuilQC.R pour la détermination des seuils de QC
 locis<-read.table("locisPassantQC.txt",row.names = 1,sep = ",",colClasses = "character")
 head(locis)
 locis<-locis$x
 head(locis)
+length(locis)
 
 #gain en qualité
 #avant
@@ -65,9 +67,11 @@ deterQual2(mat[sample(rownames(mat),length(locis)),],batch)
 
 #petite amelioration comparé aux hasard mais on peut surement ameliorer filtration pour enlever plus de dépendance
   
-#visualisation de nouvelle distribution
+#FILTRATION
 data_F<-data_all[locis,]
 head(data_F)
+
+#visualisation de nouvelle distribution
 sum(is.na(data_F[,samples]))
 
 dim(data_F) #1097732     132
@@ -87,8 +91,6 @@ hist(data_all[sample(rownames(mat),length(locis)),"RankConfidenceScore"],breaks 
 
 #heatmap 
 #avant filtrage
-
-
 topVarLocis1<-rownames(data_all)[order(data_all$sd,decreasing = T)[1:10000]]
 head(data_all[topVarLocis,"sd"])
 subMat<-mat[topVarLocis,]
@@ -123,5 +125,56 @@ dev.off()
 #encore une clusterisation selon batch et Library Complexity(pas etonnant vu que 83% sont les meme locis)
 
 
-#samples filtration
-#
+#FILTRATION DES SAMPLES
+# en fct pct0
+
+# batch[samples,"pct0"]<-colSums(data_all[,samples]==0,na.rm = T)/nrow(data_all)
+# batch[samples,"pct0ApresF"]<-colSums(data_F[,samples]==0,na.rm = T)/nrow(data_F)
+# write.csv2(batch,"../../ref/20-02-17_batch_119samples_IUGRLGACTRL_noNA_withHpaC.csv",row.names = T)
+
+
+#plot les pct0 avant filtration, colorés par le groupe
+y<-batch$pct0
+o<-order(y)
+plot(x=1:nrow(batch),y[o],col=(batch$Group[o]+1))
+plot(x=1:nrow(batch),y[o],col=(batch$batch[o]))
+abline(h=0.845)
+samplesToRm1<-rownames(batch)[batch$pct0>0.845]
+length(samplesToRm1)
+
+#apres F
+y<-batch$pct0ApresF
+o<-order(y)
+plot(x=1:nrow(batch),y[o],col=(batch$Group[o]+1))
+plot(x=1:nrow(batch),y[o],col=(batch$batch[o]))
+abline(h=0.775)
+samplesToRm2<-rownames(batch)[batch$pct0ApresF>0.775]
+length(samplesToRm2)
+
+d<-setdiff(samplesToRm2,samplesToRm1)#CBP467
+col<-as.numeric(rownames(batch)%in%d)+1
+plot(x=1:nrow(batch),y[o],col=col[o])
+y<-batch$pct0
+o<-order(y)
+plot(x=1:nrow(batch),y[o],col=col[o]) 
+
+d<-setdiff(samplesToRm1,samplesToRm2)#CBP250
+col<-as.numeric(rownames(batch)%in%d)+1
+plot(x=1:nrow(batch),y[o],col=col[o])
+y<-batch$pct0ApresF
+o<-order(y)
+plot(x=1:nrow(batch),y[o],col=col[o]) 
+
+#ccl : la filtration ne change presque pas la qualité des ech, il fait juste  remonter CBP467 (devient un mauvais sample)
+#et descendre CBP250. => on filtre les samples avec batch$pct0ApresF>0.775
+
+data_F_S<-data_F[,!(names(data_F)%in%samplesToRm2)]
+dim(data_F_S)
+samples_F<-samples[samples%in%names(data_F_S)]
+length(samples_F) #96
+
+
+
+
+
+
