@@ -13,6 +13,7 @@ library(org.Hs.eg.db)
 set.seed(12345)
 source("scripts/deterDataQual.R")
 source("scripts/visual_function.R")
+source("scripts/utils.R")
 #output dir
 script_name <- "main"
 outputDir <- file.path("analyses",script_name)
@@ -242,35 +243,60 @@ varImportantes<-names(sort(pctCovarExplPC[vars],decreasing = T)[1:3])
 
 #Library>mat.age>batch, (GDM > ethni > Group_Sex )
 
-#check covar influence :
-#on veut : 
+#on s'interesse a l'interaction entre sex et group, les var a modeliser sont donc :
 varModelisable<-c(varImportantes,"Group","Sex","Group_Sex")
-resR2<-plotCovarCorel(varModelisable,batch,var_num,var_fac,res="r2" )
+
+#LibraryC est une variable tech et bio,
+#pour le prouver :
+varModelisable
+library<-as.numeric(batch[samples_F,"Library_Complexity"])
+group<-as.factor(batch[samples_F,"Group_name"])
+sex<-as.factor(batch[samples_F,"Sex"])
+mat.age<-as.numeric(batch[samples_F,"Mat.Age"])
+batches<-as.factor(batch[samples_F,"batch"])
+group_sex<-as.factor(batch[samples_F,"Group_Sex"])
 
 
-model 
+summary(lm(pc[,1]~library+library:group))#interaction Library:IUGR ameliore model pour expliquer PC1
+
+summary(lm(pc[,1]~library+library:sex)) #no interaction library:sex
+summary(lm(pc[,1]~library+mat.age+library:mat.age)) #l'interaction library:matage n'explique pas mieux le model
+summary(lm(pc[,1]~library+library:batches)) #interaction Library:batch2 ameliore model pour expliquer PC1 que library seul
+#et pour pc2 qui est expliqué par batch et library ?
+summary(lm(pc[,2]~library+library:batches+batches)) #model non explicatif de pc2
+summary(lm(pc[,2]~library+batches)) #library et batches2 signif mais pas intercept,
 
 
-##covar avec Pval<0.01 dans pcaF_S
+#donc l'interaction library:Group est importante
+#le model serait donc : group*sex + group*library +mat.age+batch
 
-#pheatmaps des R2 aussi 
+#pour que les coeff du model soit fiable, on doit eviter la colinearité entre les var du model : 
+#il faut surtout que les coeff de group et sex soit bon, donc on check leur independance des autre vars
+correl(mat.age,group,ret = "all")#correlé 
+# $p
+# [1] 0.009002168
+# 
+# $r2
+# [1] 0.07770615 #mais pas bcp
 
-R_num=lapply(split_num,function(x){
-  FAC1.r2<-rep(0,length(pcs))
-  for (i in pcs){
-    FAC1<-as.numeric(x)
-    FAC1<-lm(pc[,i]~FAC1)
-    FAC1.r2[i]<-summary(FAC1)$adj.r.squared
-    
-  }
-  return(FAC1.r2)})
-R_fac=lapply(split_fac,function(x){
-  FAC1.r2<-rep(0,length(pcs))
-  for (i in pcs){
-    FAC1<-as.factor(x)
-    FAC1<-lm(pc[,i]~FAC1)
-    FAC1.r2[i]<-summary(FAC1)$adj.r.squared
-    
-  }
-  return(FAC1.r2)})
+correl(library,group,ret = "all") #no signif
+
+correl(group,batches,ret = "all") #no signif
+
+
+correl(mat.age,sex,ret = "all")#no signif
+
+correl(library,sex,ret = "all") #no signif
+
+correl(sex,batches,ret = "all") #no signif
+
+correl(sex,group,ret = "all")
+
+correl(mat.age,group_sex,ret = "all")#petite signif r2 0.07
+correl(library,group_sex,ret = "all") #no signif n
+correl(group_sex,batches,ret = "all") #no signif
+
+
+#ccl : seulement colinearité entre mat.age et group mais group explique suelemnet 7% de mat.age donc on prend pas en compte
+
 

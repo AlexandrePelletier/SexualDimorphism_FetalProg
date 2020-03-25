@@ -41,6 +41,8 @@ plotPCVarExplain<-function(pca,rngPCs,lineSeuilPct=1,returnPCSeuils=T){
   
 }
 
+
+
 plotCovarPCs<-function(pca,rngPCs,batch,var_num,var_fac,exclude=NULL,res="pval",seuilP=0.1){
   source("scripts/utils.R")
   pc<-data.frame(pca$x)
@@ -107,3 +109,5 @@ plotCovarPCs<-function(pca,rngPCs,batch,var_num,var_fac,exclude=NULL,res="pval",
   
   
 }
+
+
