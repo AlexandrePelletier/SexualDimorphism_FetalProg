@@ -12,7 +12,7 @@ library('clusterProfiler')
 library(org.Hs.eg.db)
 set.seed(12345)
 source("scripts/deterDataQual.R")
-
+source("scripts/visual_function.R")
 #output dir
 script_name <- "main"
 outputDir <- file.path("analyses",script_name)
@@ -173,8 +173,93 @@ dim(data_F_S)
 samples_F<-samples[samples%in%names(data_F_S)]
 length(samples_F) #96
 
+#gagne en qualité ?
+deterQual(mat[locis,samples_F]) #62% > 65%
+deterQual2(mat[locis,samples_F],batch) 
+#PC 1  ( 10.2 % de la variance a R2 avec Library_Complexity = 0.74 et pval = 10^ -29.0080916905632
+#au lieu de : 
+# PC 1  ( 18.7 % de la variance) a R2 avec Library_Complexity = 0.75 et pval = 10^ -36.5075044149743
+
+#VISUALISATION AVEC PCA
+matNA<-mat
+matNA[is.na(matNA)]<-0
+sum(is.na(matNA))
+pc1<-prcomp(t(matNA),center = T)
+pc2<-prcomp(t(matNA[locis,]),center = T)
+pc3<-prcomp(t(matNA[locis,samples_F]),center = T)
+
+PCAlist<-list(pca_All=pc1,pca_F=pc2,pca_F_S=pc3)
+rm(pc1,pc2,pc3)
+saveRDS(PCAlist,file.path(outputDir,"PCAlist.rds"))
+
+plotPCVarExplain(PCAlist[[3]],1:40,lineSeuilPct = 1)
+
+#PCA
+#PCAlist<-readRDS(file.path(outputDir,"PCAlist.rds"))
+names(batch)
+plotPCA(PCAlist[[3]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showSampleIDs=F)
 
 
+#influence Covar sur PC
+pc<-data.frame(pc3$x)
+pcs<-1:30
+names(batch)
+var_fac<-names(batch)[c(2,4,8,10,11,12,13,15,16,19,24,27,29)]
+var_num<-names(batch)[c(5,6,17,20,21,22,23,25,26,28,32)]
 
+batch_num=batch[rownames(pc),var_num]
+batch_fac=batch[rownames(pc),var_fac]
+batch_num=t(batch_num)
+batch_fac=t(batch_fac)
+split_num=split(batch_num,rownames(batch_num))
+split_fac=split(batch_fac,rownames(batch_fac))
 
+pv_num=lapply(split_num,function(x){
+  FAC1.p<-rep(0,length(pcs))
+  for (i in pcs){
+    FAC1<-as.numeric(x)
+    FAC1<-lm(pc[,i]~FAC1)
+    FAC1.p[i]<-anova(FAC1)$Pr[1]
+  }
+  return(FAC1.p)})
+
+R_num=lapply(split_num,function(x){
+  FAC1.r2<-rep(0,length(pcs))
+  for (i in pcs){
+    FAC1<-as.numeric(x)
+    FAC1<-lm(pc[,i]~FAC1)
+    FAC1.r2[i]<-summary(FAC1)$adj.r.squared
+    
+  }
+  return(FAC1.r2)})
+
+pv_fac=lapply(split_fac,function(x){
+  FAC1.p<-rep(0,length(pcs))
+  for (i in pcs){
+    FAC1<-as.factor(x)
+    FAC1<-lm(pc[,i]~FAC1)
+    FAC1.p[i]<- anova(FAC1)$Pr[1]
+  }
+  return(FAC1.p)})
+
+R_fac=lapply(split_fac,function(x){
+  FAC1.r2<-rep(0,length(pcs))
+  for (i in pcs){
+    FAC1<-as.factor(x)
+    FAC1<-lm(pc[,i]~FAC1)
+    FAC1.r2[i]<-summary(FAC1)$adj.r.squared
+    
+  }
+  return(FAC1.r2)})
+pvals.num<-do.call(rbind,pv_num)
+pvals.fac<-do.call(rbind,pv_fac)
+final_pv=rbind(pvals.num,pvals.fac)
+pv2=data.matrix(final_pv)
+pv2[which(pv2>0.05)]<-1 ####here I basicaly put them to 1 if less than 0.05
+logpvals.raw<--log10(pv2)
+
+pheatmap(logpvals.raw[,1:10],cluster_rows = F,cluster_cols = F,labels_col= paste("PC",1:10),display_numbers = T)
+pheatmap(logpvals.raw[,11:30],cluster_rows = F,cluster_cols = F,labels_col= paste("PC",11:30),display_numbers = T)
+
+#pheatmaps des R2 aussi 
 
