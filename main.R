@@ -220,9 +220,6 @@ plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showS
 #influence Covar sur PC
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
 
-
-
-
 #on voit ici que les pvalue augmente tous
 
 
@@ -230,7 +227,30 @@ resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude =
 pcaChoose<-"pca_F_S"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
 resR2<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,res="r2",exclude = varAdd )
-#Library>batch>mat.age, GDM, 
+#ordonner covar importante en fct sum(R2*pctPC)
+
+resR2[resR2<0]<-0
+#enlever val si pval >0.01
+resR2[resPV==1]<-0
+pctPCs<-pctPC(PCAlist[[pcaChoose]],rngPCs =PCs1pct )
+
+matR.pcPC<-t(resR2)*(pctPCs/100)
+pctCovarExplPC<-colSums(matR.pcPC)*100
+vars<-!(names(pctCovarExplPC)%in%varAdd)
+barplot(sort(pctCovarExplPC[vars],decreasing = T),cex.names = 0.7)
+varImportantes<-names(sort(pctCovarExplPC[vars],decreasing = T)[1:3])
+
+#Library>mat.age>batch, (GDM > ethni > Group_Sex )
+
+#check covar influence :
+#on veut : 
+varModelisable<-c(varImportantes,"Group","Sex","Group_Sex")
+resR2<-plotCovarCorel(varModelisable,batch,var_num,var_fac,res="r2" )
+
+
+model 
+
+
 ##covar avec Pval<0.01 dans pcaF_S
 
 #pheatmaps des R2 aussi 
