@@ -33,8 +33,8 @@ plotPCA<-function(pca,PCx,PCy,colorBatch,batch=NULL,showSampleIDs=F){
 }
 
 plotPCVarExplain<-function(pca,rngPCs,lineSeuilPct=1,returnPCSeuils=T){
-  pct.varPCs<-pca$sdev[rngPCs]^2/sum(pca$sdev^2)*100
-  names(pct.varPCs)<-rngPCs
+  source("scripts/utils.R")
+  pct.varPCs<-pctPC(pca,rngPCs)
   barplot(pct.varPCs[rngPCs],names.arg = rngPCs,ylab = "Percent of variance explained")
   abline(h=lineSeuilPct)
   return(as.numeric(names(pct.varPCs)[pct.varPCs>lineSeuilPct]))
