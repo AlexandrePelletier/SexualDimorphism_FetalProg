@@ -41,7 +41,7 @@ plotPCVarExplain<-function(pca,rngPCs,lineSeuilPct=1,returnPCSeuils=T){
   
 }
 
-plotCovarPCs<-function(pca,rngPCs,batch,var_num,var_fac,exclude=NULL,seuilP=0.1){
+plotCovarPCs<-function(pca,rngPCs,batch,var_num,var_fac,exclude=NULL,res="pval",seuilP=0.1){
   source("scripts/utils.R")
   pc<-data.frame(pca$x)
   batch_num=batch[rownames(pc),var_num]
@@ -50,40 +50,60 @@ plotCovarPCs<-function(pca,rngPCs,batch,var_num,var_fac,exclude=NULL,seuilP=0.1)
   batch_fac=t(batch_fac)
   split_num=split(batch_num,rownames(batch_num))
   split_fac=split(batch_fac,rownames(batch_fac))
-  pv_num=lapply(split_num,function(x){
+  res_num=lapply(split_num,function(x,ret=res){
     FAC1.p<-rep(0,length(rngPCs))
+    FAC1.r2<-rep(0,length(rngPCs))
     for (i in rngPCs){
       FAC1<-as.numeric(x)
       FAC1<-lm(pc[,i]~FAC1)
       FAC1.p[i]<-anova(FAC1)$Pr[1]
+      FAC1.r2[i]<-summary(FAC1)$adj.r.squared
     }
-    return(FAC1.p)})
+    if(ret=="pval"){
+      return(FAC1.p)
+    }else if(ret=="r2"){
+      return(FAC1.r2)
+    }
+    })
   
-  pv_fac=lapply(split_fac,function(x){
+  res_fac=lapply(split_fac,function(x,ret=res){
     FAC1.p<-rep(0,length(rngPCs))
+    FAC1.r2<-rep(0,length(rngPCs))
     for (i in rngPCs){
       FAC1<-as.factor(x)
       FAC1<-lm(pc[,i]~FAC1)
       FAC1.p[i]<- anova(FAC1)$Pr[1]
+      FAC1.r2[i]<-summary(FAC1)$adj.r.squared
     }
-    return(FAC1.p)})
+    if(ret=="pval"){
+      return(FAC1.p)
+    }else if(ret=="r2"){
+      return(FAC1.r2)
+    }})
   
   
-  pvals.num<-do.call(rbind,pv_num)
-  pvals.fac<-do.call(rbind,pv_fac)
-  final_pv=rbind(pvals.num,pvals.fac)
-  pv2=data.matrix(final_pv)
-  pv2[which(pv2>seuilP)]<-1 ####here I basicaly put them to 1 if less than 0.05
-  logpvals.raw<--log10(pv2)
-  
+  res.num<-do.call(rbind,res_num)
+  res.fac<-do.call(rbind,res_fac)
+  final_res=rbind(res.num,res.fac)
+  res2=data.matrix(final_res)
+  if(res=="pval"){
+    res2[which(res2>seuilP)]<-1 ####here I basicaly put them to 1 if less than 0.1
+    resToPlot<--log10(res2)
+    breakRes<-c(40,20,10:1, 0.5,0.1)
+  }else{
+    resToPlot<-res2
+    breakRes<-NA
+    
+  }
+   
   pct.varPCs<-pctPC(pca,rngPCs)
   vars<-rownames(logpvals.raw)[!(rownames(logpvals.raw)%in%exclude)]
-  pheatmap(logpvals.raw[vars,rngPCs],cluster_rows = F,cluster_cols = F,
+  pheatmap(resToPlot[vars,rngPCs],cluster_rows = F,cluster_cols = F,
            labels_col= paste0("PC",rngPCs,"(",round(pct.varPCs[as.character(rngPCs)],0),"%)"),
            display_numbers = T,
-           color = colorRampPalette(c("white", "red"))(13), breaks = c(40,20,10:1, 0.5,0.1))
+           color = colorRampPalette(c("white", "red"))(13), breaks = breakRes)
   
-  return(pv2)
+  return(res2)
   
   
 }

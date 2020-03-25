@@ -201,12 +201,10 @@ plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showS
 var_fac<-names(batch)[c(2,4,8,10,11,12,13,15,16,19,24,27,29)]
 var_num<-names(batch)[c(5,6,17,20,21,22,23,25,26,28,32)]
 varAdd<-c('Group_Complexity','GroupBatch_Complexity','GroupBatch_Complexity_Fac','Group_Complexity_Fac','pct0ApresF')
-vardint<-c("Group","Group_Sex","Sex")
+vardint<-c("Group","Group_Sex","Sex","Library_Complexity")
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
 
-rowSums(resPV[rownames(resPV)%in%vardint,])
-# Group Group_Sex       Sex 
-# 10.014683  8.206359 10.069588 
+rowMeans(resPV[rownames(resPV)%in%vardint,])
 
 
 pcaChoose<-"pca_F"
@@ -214,28 +212,25 @@ PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
 plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showSampleIDs=F)
 #influence Covar sur PC
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
-rowSums(resPV[rownames(resPV)%in%vardint,])
-# Group Group_Sex       Sex 
-# 10.014683  8.206359 10.069588 
-# Group Group_Sex       Sex 
-# 8.204696 10.174072 11.104204
+
 
 pcaChoose<-"pca_F_S"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
 plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showSampleIDs=F)
 #influence Covar sur PC
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
-rowSums(resPV[rownames(resPV)%in%vardint,])
-# Group Group_Sex       Sex 
-# 10.014683  8.206359 10.069588 
-# Group Group_Sex       Sex 
-# 8.204696 10.174072 11.104204
-# Group Group_Sex       Sex 
-# 31.52790  34.26341  34.27271 
-
-#avec R2 : 
 
 
+
+
+#on voit ici que les pvalue augmente tous
+
+
+#on veut recupèrer également les R2
+pcaChoose<-"pca_F_S"
+PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
+resR2<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,res="r2",exclude = varAdd )
+#Library>batch>mat.age, GDM, 
 ##covar avec Pval<0.01 dans pcaF_S
 
 #pheatmaps des R2 aussi 
