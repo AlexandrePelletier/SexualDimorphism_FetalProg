@@ -1,7 +1,7 @@
 plotPCA<-function(pca,PCx,PCy,colorBatch,batch=NULL,showSampleIDs=F){
   library(stringr)
   if(is.null(batch)){
-    batch<-read.csv2("../../ref/20-02-17_batch_119samples_IUGRLGACTRL_noNA_withHpaC.csv",header=T,row.names = 1)
+    batch<-read.csv2("../../ref/batch_CD34_library_date_032520.csv",header=T,row.names = 1)
   }
   pc<-pca$x
   namesFac<-levels(as.factor(batch[,colorBatch]))
@@ -92,20 +92,22 @@ plotCovarPCs<-function(pca,rngPCs,batch,var_num,var_fac,exclude=NULL,res="pval",
   
   res.num<-do.call(rbind,res_num)
   res.fac<-do.call(rbind,res_fac)
-  final_res=rbind(res.num,res.fac)
-  res2=data.matrix(final_res)
+  final_res<-rbind(res.num,res.fac)
+  res2<-data.matrix(final_res)
   if(res=="pval"){
     res2[which(res2>seuilP)]<-1 ####here I basicaly put them to 1 if less than 0.1
     resToPlot<--log10(res2)
     breakRes<-c(40,20,10:1, 0.5,0.1)
   }else{
+    res2[res2<0]<-0
     resToPlot<-res2
     breakRes<-NA
     
   }
    
   pct.varPCs<-pctPC(pca,rngPCs)
-  vars<-rownames(logpvals.raw)[!(rownames(logpvals.raw)%in%exclude)]
+  vars<-rownames(resToPlot)[!(rownames(resToPlot)%in%exclude)]
+  
   pheatmap(resToPlot[vars,rngPCs],cluster_rows = F,cluster_cols = F,
            labels_col= paste0("PC",rngPCs,"(",round(pct.varPCs[as.character(rngPCs)],0),"%)"),
            display_numbers = T,

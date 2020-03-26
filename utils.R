@@ -46,3 +46,10 @@ correl<-function(x,y,ret="pval",verbose=T){
   }
   
 }
+
+
+# trunkName<-function(names,maxLeng=5,n.Mot=3){
+#   library(stringr)
+#   str_split()
+#   str_sub(names,)
+# }
