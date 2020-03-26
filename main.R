@@ -203,9 +203,9 @@ deterQual2(mat[locis,samples_F],batch)
 # PC 1  ( 18.7 % de la variance) a R2 avec Library_Complexity = 0.75 et pval = 10^ -36.5075044149743
 
 #VISUALISATION AVEC PCA
-matNA<-mat
-matNA[is.na(matNA)]<-0
-sum(is.na(matNA))
+# matNA<-mat
+# matNA[is.na(matNA)]<-0
+# sum(is.na(matNA))
 # pc1<-prcomp(t(matNA),center = T)
 # pc2<-prcomp(t(matNA[locis,]),center = T)
 # pc3<-prcomp(t(matNA[locis,samples_F]),center = T)
@@ -216,10 +216,14 @@ PCAlist<-readRDS(file.path(outputDir,"PCAlist.rds"))
 pcaChoose<-"pca_All"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
 names(batch)
-plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showSampleIDs=F)
+plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="sequencing",batch = batch,showSampleIDs=F)
+
+plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="date",batch = batch,showSampleIDs=F)
+
+plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="DNA.extraction",batch = batch,showSampleIDs=F)
 
 #influence Covar sur PC
-var_fac<-names(batch)[c(2,4,8,10,11,12,13,15,16,19,24,27,29)]
+var_fac<-names(batch)[c(2,4,8,10,11,12,13,15,16,19,24,27,29,33,34,35)]
 var_num<-names(batch)[c(5,6,17,20,21,22,23,25,26,28,32)]
 varAdd<-c('Group_Complexity','GroupBatch_Complexity','GroupBatch_Complexity_Fac','Group_Complexity_Fac','pct0ApresF')
 vardint<-c("Group","Group_Sex","Sex","Library_Complexity")

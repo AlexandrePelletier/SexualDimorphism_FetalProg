@@ -15,11 +15,17 @@ plotPCA<-function(pca,PCx,PCy,colorBatch,batch=NULL,showSampleIDs=F){
     namesFac<-c("female_CTRL","male_CTRL","female_IUGR","male_IUGR","female_LGA","male_LGA")
   }
   
+  if(is.numeric(batch[rownames(pc),colorBatch])){
+    colors<-batch[rownames(pc),colorBatch]+1
+  }else{
+    colors<-as.numeric(as.factor(batch[rownames(pc),colorBatch]))
+  }
+  
   pct.varX<-pca$sdev[PCx]^2/sum(pca$sdev^2)*100
   pct.varY<-pca$sdev[PCy]^2/sum(pca$sdev^2)*100
   plot(pc[,PCx],
        pc[,PCy],
-       col=batch[rownames(pc),colorBatch]+1,
+       col=colors,
        pch=19,
        xlab = paste0("PC",PCx," (",round(pct.varX,1),"% of variance)"),
        ylab = paste0("PC",PCy," (",round(pct.varY,1),"% of variance)"))
@@ -27,8 +33,8 @@ plotPCA<-function(pca,PCx,PCy,colorBatch,batch=NULL,showSampleIDs=F){
   if(showSampleIDs){
     textxy(pc[,PCx],pc[,PCy],rownames(pc),offset=-.7)
   }
-  colors<-as.numeric(levels(as.factor(na.omit(batch[,colorBatch]+1 ))))
-  legend("topleft", legend = namesFac ,col =colors,pch=19, title=str_sub(colorBatch,1,7))
+  colorsLvl<-levels(as.factor(colors))
+  legend("topleft", legend = namesFac ,col =colorsLvl,pch=19, title=str_sub(colorBatch,1,7))
   
 }
 
