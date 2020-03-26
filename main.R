@@ -30,7 +30,28 @@ samples<-names(data_all)[str_detect(names(data_all),"CBP")]
 
 batch<-read.csv2("../../ref/20-02-17_batch_119samples_IUGRLGACTRL_noNA_withHpaC.csv",header=T,row.names = 1)
 
-
+# #add date(v2), sequencing, dnaextraction, 
+# batch2<-read.csv2("../../ref/batch_CD34_library_date_032520.csv",header = T)
+# head(batch2[,25:30],30)
+# batch2$V2
+# batch2$DNA.extraction
+# batch2$batch
+# batch2$wasp.name
+# batch2$V2
+# batch2[batch2$batch==2,25:30] #ya 2 batch2 avec DNA bag
+# #fusion des batch
+# batch2<-batch2[batch2$colnames.data2..5.124.%in%samples,]
+# d<-duplicated(batch2$colnames.data2..5.124.)
+# batch2[d,]
+# samplesDupli<-batch2$colnames.data2..5.124.[d]
+# batch2[batch2$colnames.data2..5.124.%in%samplesDupli,]#les memes 
+# batch2<-batch2[!d,]
+# rownames(batch2)<-batch2$colnames.data2..5.124.
+# batch$date<-batch2[samples,"V2"]
+# batch$DNA.extraction<-batch2[samples,"DNA.extraction"]
+# batch$sequencing<-batch2[samples,"Sequencing"]
+# write.csv2(batch,"../../ref/batch_CD34_library_date_032520.csv",row.names = T)
+head(batch)
 #data exploration
 plot(density(na.omit(as.matrix(data_all[,samples]))))
 plot(density(data_all$mean))
@@ -166,11 +187,11 @@ y<-batch$pct0ApresF
 o<-order(y)
 plot(x=1:nrow(batch),y[o],col=col[o]) 
 
-#ccl : la filtration ne change presque pas la qualité des ech, il fait juste  remonter CBP467 (devient un mauvais sample)
+#ccl : la filtration des locis ne change presque pas la qualité des ech, il fait juste  remonter CBP467 (devient un mauvais sample)
 #et descendre CBP250. => on filtre les samples avec batch$pct0ApresF>0.775
 
 data_F_S<-data_F[,!(names(data_F)%in%samplesToRm2)]
-dim(data_F_S)
+dim(data_F_S) # 1097732     109
 samples_F<-samples[samples%in%names(data_F_S)]
 length(samples_F) #96
 
@@ -185,14 +206,13 @@ deterQual2(mat[locis,samples_F],batch)
 matNA<-mat
 matNA[is.na(matNA)]<-0
 sum(is.na(matNA))
-pc1<-prcomp(t(matNA),center = T)
-pc2<-prcomp(t(matNA[locis,]),center = T)
-pc3<-prcomp(t(matNA[locis,samples_F]),center = T)
-
-PCAlist<-list(pca_All=pc1,pca_F=pc2,pca_F_S=pc3)
-rm(pc1,pc2,pc3)
-saveRDS(PCAlist,file.path(outputDir,"PCAlist.rds"))
-
+# pc1<-prcomp(t(matNA),center = T)
+# pc2<-prcomp(t(matNA[locis,]),center = T)
+# pc3<-prcomp(t(matNA[locis,samples_F]),center = T)
+# PCAlist<-list(pca_All=pc1,pca_F=pc2,pca_F_S=pc3)
+# rm(pc1,pc2,pc3)
+# saveRDS(PCAlist,file.path(outputDir,"PCAlist.rds"))
+PCAlist<-readRDS(file.path(outputDir,"PCAlist.rds"))
 pcaChoose<-"pca_All"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
 names(batch)
