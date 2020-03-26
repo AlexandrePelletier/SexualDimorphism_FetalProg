@@ -251,13 +251,16 @@ varModelisable<-c(varImportantes,"Group","Sex","Group_Sex")
 varModelisable
 library<-as.numeric(batch[samples_F,"Library_Complexity"])
 group<-as.factor(batch[samples_F,"Group_name"])
-sex<-as.factor(batch[samples_F,"Sex"])
+sex<-as.factor(batch[samples_F,"Gender"])
 mat.age<-as.numeric(batch[samples_F,"Mat.Age"])
 batches<-as.factor(batch[samples_F,"batch"])
 group_sex<-as.factor(batch[samples_F,"Group_Sex"])
 
-
 summary(lm(pc[,1]~library+library:group))#interaction Library:IUGR ameliore model pour expliquer PC1
+summary(lm(pc[,1]~library:group)) #enlever library diminue pas model
+summary(lm(pc[,2]~library:group))
+summary(lm(pc[,2]~library:group+library))
+summary(lm(pc[,2]~library))
 
 summary(lm(pc[,1]~library+library:sex)) #no interaction library:sex
 summary(lm(pc[,1]~library+mat.age+library:mat.age)) #l'interaction library:matage n'explique pas mieux le model
@@ -266,37 +269,80 @@ summary(lm(pc[,1]~library+library:batches)) #interaction Library:batch2 ameliore
 summary(lm(pc[,2]~library+library:batches+batches)) #model non explicatif de pc2
 summary(lm(pc[,2]~library+batches)) #library et batches2 signif mais pas intercept,
 
+#donc l'interaction library:Group est importante, vaut mieux prendre ça que library seul
 
-#donc l'interaction library:Group est importante
-#le model serait donc : group*sex + group*library +mat.age+batch
+#est ce que l'interaction sex:group est importante ?
+# verif que var group_sex == groupe:sex
+#pc13 est ++ signif pour group_sex, l'est il aussi pour group:sex ?
+summary(lm(pc[,13]~group:sex))#oui !
+#les pc ne le sont pas par contre ? par exemple PC4 (ctl neg)
+
+summary(lm(pc[,4]~group:sex))#effectivement
+
+#pc13 est aussi expliqué par sex et group c'est bien indep ?
+summary(lm(pc[,13]~sex+group)) #c'est bien l'interaction qui explique le plus le pc13
+#ccl : en ajoutant des var dans le model, on perd en R2, donc 
+#pour notre qu bio, on s'interesse a l'interaction groupe et sex => on met dans model group:sex
+
+#le model serait donc : group:sex + group:library +mat.age+batch
+#group library correspond à ça :
+group_library<-batch[samples_F,"Group_Complexity"]
 
 #pour que les coeff du model soit fiable, on doit eviter la colinearité entre les var du model : 
 #il faut surtout que les coeff de group et sex soit bon, donc on check leur independance des autre vars
-correl(mat.age,group,ret = "all")#correlé 
-# $p
-# [1] 0.009002168
+
+
+correl(mat.age,group_library,ret = "all")#correlé 
+# [1] 0.002950581
 # 
 # $r2
-# [1] 0.07770615 #mais pas bcp
+# [1] 0.08134327 mais mat.age explique que 8% de libraryC
 
-correl(library,group,ret = "all") #no signif
+correl(group_library,batches,ret = "all") #no signif
+correl(group_library,group:sex,ret = "all") #no signif
 
-correl(group,batches,ret = "all") #no signif
-
-
-correl(mat.age,sex,ret = "all")#no signif
-
-correl(library,sex,ret = "all") #no signif
-
-correl(sex,batches,ret = "all") #no signif
-
-correl(sex,group,ret = "all")
 
 correl(mat.age,group_sex,ret = "all")#petite signif r2 0.07
-correl(library,group_sex,ret = "all") #no signif n
-correl(group_sex,batches,ret = "all") #no signif
+#revient au meme que : 
+correl(mat.age,group:sex,ret = "all")#petite signif r2 0.07n donc oui
 
+correl(group_sex,batches,ret = "all") #no signif
 
 #ccl : seulement colinearité entre mat.age et group mais group explique suelemnet 7% de mat.age donc on prend pas en compte
 
+# LIMMA model
+samples_F_F<-samples_F[!is.na(batch[samples_F,"Mat.Age"])]
 
+library<-as.numeric(batch[samples_F_F,"Library_Complexity"])
+group<-as.factor(batch[samples_F_F,"Group_name"])
+sex<-as.factor(batch[samples_F_F,"Gender"])
+mat.age<-as.numeric(batch[samples_F_F,"Mat.Age"])
+batches<-as.factor(batch[samples_F_F,"batch"])
+group_sex<-as.factor(batch[samples_F_F,"Group_Sex"])
+group_library<-as.factor(batch[samples_F_F,"Group_Complexity"])
+
+formule<-~0 + group:sex + group:library +mat.age+batches
+design<-model.matrix(formule)
+colnames(design)<-make.names(colnames(design))
+ #loose just 1 ech
+fit <- lmFit(data_F_S[,samples_F_F], design)  #Coefficients not estimable: groupL.sexM, why ???
+#! continue ici
+
+
+cont.matrix <- makeContrasts(C.I="(groupC.sexF+groupC.sexM)-(groupI.sexF+groupI.sexM)",
+                             C.L = "(groupC.sexF+groupC.sexM)-(groupL.sexF+groupL.sexM)",
+                             I.L = "(groupI.sexF+groupI.sexM)-(groupL.sexF+groupL.sexM)",
+                             MC.ML="groupC.sexM-groupL.sexM",
+                             MC.MI="groupC.sexM-groupI.sexM",
+                             MI.ML="groupI.sexM-groupL.sexM",
+                             FC.FL="groupC.sexF-groupL.sexF",
+                             FC.FI="groupC.sexF-groupI.sexF",
+                             ML.FL="groupL.sexM-groupL.sexF",
+                             MI.FI="groupI.sexM-groupI.sexF",
+                             MC.FC="groupC.sexM-groupC.sexF",
+                             M.F="(groupC.sexF+groupL.sexF+groupI.sexF)-(groupI.sexM+groupC.sexM+groupL.sexM)",
+                             
+                             levels=design)
+fit2  <- contrasts.fit(fit, cont.matrix)
+fit2  <- eBayes(fit2)
+top1000<-topTable(fit2, adjust="BH",number = 1000)

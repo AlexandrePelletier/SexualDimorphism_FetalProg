@@ -9,9 +9,16 @@ pctPC<-function(pca,rngPCs="all"){
   return( pct.varPCs)
 }
 
-correl<-function(x,y,ret="pval"){
+correl<-function(x,y,ret="pval",verbose=T){
   if(is.numeric(x)){
+    if(verbose){
+      print("linear modeling ")
+    }
+    
     res<-lm(x~y)
+    if(verbose){
+      print(summary(res))
+    }
   if(ret=="r2"){
     
     return(summary(res)$adj.r.squared)
@@ -25,8 +32,15 @@ correl<-function(x,y,ret="pval"){
   }
     
   }else if(all(sapply(list(x,y),is.factor))){
+    if(verbose){
+      print("Chi-squared independance test")
+    }
+    
     tableF<-table(x,y)
     test<-chisq.test(tableF)
+    if(verbose){
+      print(test)
+    }
     
     return(test$p.value)
   }
