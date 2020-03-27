@@ -10,6 +10,7 @@ library(pheatmap)
 library(limma)
 library('clusterProfiler')
 library(org.Hs.eg.db)
+library(VennDiagram)
 set.seed(12345)
 source("scripts/deterDataQual.R")
 source("scripts/visual_function.R")
@@ -415,8 +416,8 @@ correl(group_sex,batches,ret = "all") #no signif
 
 #A))) est ce que prendre group_complexity ameliorer interpret bio des locis ?
 varToModel1<-varModelisable[c(2,3,5,8)]
-varToModel2<-varModelisable[c(2,3,5,8,9)]
-
+varToModel2<-varModelisable[c(2,3,5,8)]
+varToModel3<-varModelisable[c(2,3,5,8,9),"Group_Complexity_Fac"]
 samples_F_F<-samples_F[rowSums(is.na(batch[samples_F,varToModel1]))==0] 
 length(samples_F_F) #loose just 2 ech
 sequencing<-as.factor(batch[samples_F_F,"sequencing"])
@@ -427,12 +428,14 @@ batches<-as.factor(batch[samples_F_F,"batch"])
 group_sex<-as.factor(batch[samples_F_F,"Group_Sex"])
 group_sex<-revalue(group_sex,c("1"="FC","2"="MC","3"="FI","4"="MI","5"="FL","6"="ML"))
 group_library<-as.numeric(batch[samples_F_F,"Group_Complexity"])
+group_library_fac<-as.numeric(batch[samples_F_F,"Group_Complexity_Fac"])
 
 formule1<-~0 + group_sex + sequencing +mat.age+batches 
 formule2<-~0 + group_sex + sequencing +mat.age+batches + group_library
+formule3<-~0 + group_sex + sequencing +mat.age+batches + group_library_fac  
 
-models<-list(formule1,formule2)
-model<-2
+models<-list(formule1,formule2,formule3)
+model<-3
 design<-model.matrix(models[[model]])
 colnames(design)<-make.names(colnames(design))
 fit <- lmFit(data_F_S[,samples_F_F], design)  
@@ -459,10 +462,10 @@ fit2  <- eBayes(fit2) #pour formule1 et 2 : warning message :Zero sample varianc
 top1000<-topTable(fit2, adjust="BH",number = 1000)
 head(top1000)
 min(top1000$P.Value)
-max(top1000$P.Value) #1 : 0.001094843 2: 0.0006614376
+max(top1000$P.Value) #1 : 0.001094843 2: 0.0006614376 3:0.0004495575
 
 plot(density(log10(fit2$p.value[fit2$p.value<0.01])))
-abline(v=-3) #top1000 bien
+abline(v=log10(0.0004)) #top1000 bien
 sum(fit2$p.value<0.01) #106k > 130k
 sum(fit2$p.value<0.001) #9728 locis > 14k
 #on enregistre top1000 locis
@@ -533,7 +536,8 @@ head(res)
 resListe[[model]]<-res
 
 
-mean(sort(top1000$adj.P.Val)[1:100]) #0.696 > 0.32
+mean(sort(top1000$adj.P.Val)[1:100]) #0.696 > 0.32 > 0.24
+
 results <- decideTests(fit2)
 sum(abs(results)) #2passe H0 avec pval adj signif ! > 4
 colSums(abs(results))
@@ -543,9 +547,11 @@ colSums(abs(results))
 
 # C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
 # 0     0     1     1     0     0     0     0     2     0     0     0 
+# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
+# 0     0     2     0     0     0     0     0     1     0     0     0 
 
 #nb C-L 
-sum(res$C.L<0.001) #710 > 94
+sum(res$C.L<0.001) #710 > 94 > 202
 sum(res$M.F<0.001) #0 > 0
 #nb par compa
 
@@ -557,17 +563,21 @@ distribListe[[model]]<-colSums(apply(res[,compas],2, function(x)return(x<0.001))
 
 # C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
 # 188    94   143   138   286   268   178   141   248   277   105   132 
+
+# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
+# 150   202   243   149   244   291   243   127   207   254    93   117 
+
 #model_char<-str_replace_all(paste(strsplit(as.character(models[[1]])[2],"\\+")[[1]][-1],collapse = ""),pattern = " ","_")
 
 write.csv2(res,file.path(outputDir,paste0("top1000Locis_Group.Sex__model",model,"_annotated_260320.csv")),row.names = T)
 
 locisFC<-na.exclude(rownames(res)[res$topFC>20])
-length(locisFC)#614 > 595
+length(locisFC)#614 > 595 > 697
 
 hist(res$RankConfidenceScore,100)
 abline(v=750000)
 locisConf<-na.omit(rownames(res)[res$RankConfidenceScore>750000])
-length(locisConf)#885 > 869
+length(locisConf)#885 > 869 > 869
 
 
 #prox genes : 
@@ -575,9 +585,9 @@ plot(density(na.omit(res$posAvant))) #globale
 abline(v=-50000)
 abline(v=quantile(na.omit(res$posAvant),0.1),col=1) 
 abline(v=quantile(na.omit(res$posAvant),0.9),col=2)
-sum(res$posAvant>-20000&res$posAvant<20000,na.rm = T)/length(res$posAvant) #47% entre -20 et 20kb du TSS > 48%
+sum(res$posAvant>-20000&res$posAvant<20000,na.rm = T)/length(res$posAvant) #47% entre -20 et 20kb du TSS > 48% > 48%
 
-sum(res$posAvant>-2000&res$posAvant<2000,na.rm = T)/length(res$posAvant) #16% entre -2 et 2kb > 16%
+sum(res$posAvant>-2000&res$posAvant<2000,na.rm = T)/length(res$posAvant) #16% entre -2 et 2kb > 16% > 16.8
 
 #all locis prox de genes
 randomProxAllData<-annot[sample(rownames(data_all),100000),]$posAvant
@@ -596,9 +606,9 @@ hist(randomProxAllData[(randomProxAllData>(-5000) & randomProxAllData<(5000))],b
 hist(res$posAvant[(res$posAvant>(-5000) & res$posAvant<(5000))],breaks = 100)
 
 locisGenes10kb<-rownames(res)[res$posAvant>-10000&res$posAvant<10000]
-length(locisGenes10kb)#333
+length(locisGenes10kb)#333 > 338
 locisGenes2kb<-rownames(res)[res$posAvant>-2000&res$posAvant<2000]
-length(locisGenes2kb)#158
+length(locisGenes2kb)#158 > 169
 
 
 #CRE : 
@@ -617,6 +627,9 @@ typeListe[[model]]<-round(table(res$type)/length(res$type)*100,1)
 typeListe[[model]]
 # 0    1    2    3    4    5    6 
 # 32.9  9.2 10.5 10.9 15.6  7.5 13.3 
+# 3: 
+#   0    1    2    3    4    5    6 
+# 32.1  9.7 10.7 10.1 15.5  7.5 14.3 
 round(table(res$type)/length(res$type)*100,1)
 
 
@@ -626,8 +639,35 @@ lines(density(res$complexity),col=2)
 locisComplex<-rownames(res)[res$complexity>60]
 length(locisComplex)#422
 
+#vulcano
+for(i in 1:length(compas)){
+  print(compas[i])
+  res2<- topTable(fit2,coef=compas[i],n =1000)
+  if(any(res2$P.Value<0.01)){
+    resF<-res2[(rownames(res2)%in%rownames(res)),]
+    
+    AllLocisP4F20[[compas[i]]]<-rownames(resFF)
+    
+    colors<-resFiltered[rownames(resF),"type"]+1
+    
+    
+    top20<-(rownames(resF)[order((length(resF$logFC)/rank(resF$logFC))+rank(resF$P.Value))])[1:20]
+    
+    
+    png(file.path(outputDir,paste(compas[i],"volcano.png",sep="_")), width = 700, height = 500)
+    plot(resF$logFC,-log10(resF$P.Value),col=colors,main = compas[i])
+    textxy(resF[top20,'logFC'],-log10(resF[top20,'P.Value']),resFiltered[top20,'gene'],offset= -.7)
+    dev.off()
+    
+  }else{
+    print(paste("pas de CpG pour",compas[i]))
+  }
+  
+  
+}
 
-#match
+
+#locis Hi conf
 
 locisHiConf<-intersect(intersect(intersect(intersect(locisComplex,locisConf),locisCRE),locisFC),locisGenes10kb) 
 length(locisHiConf) #48
@@ -636,6 +676,9 @@ table(res[locisHiConf,"TopCompaSig"])
 # 4     4     6     2     5     2     5     1     2     2    15 
 # C.I   C.L   F.M FC.FL   I.L MC.FC MC.ML MI.FI MI.ML ML.FL 
 # 4     4     7     1    10     2     3     2     1    11 
+# C.I   C.L   F.M FC.FL   I.L MC.FC MC.MI MC.ML MI.FI MI.ML ML.FL 
+# 3    15     5     7    17     1     1     4     2     1    11 
+
 
 #save filtr
 #LocisF_liste<-list()
@@ -679,7 +722,7 @@ g<-genesF.compa_liste[[model]]$C.L$all
 gM<-genesF.compa_liste[[model]]$MC.ML$all
 gF<-genesF.compa_liste[[model]]$FC.FL$all
 
-library(VennDiagram)
+
 venn.diagram(
   x = list(g, gM, gF),
   category.names = c("C.L" , "CM.LM" , "CF.LF"),
@@ -694,5 +737,37 @@ intersect(gF,gM)
 
 locisListe
 
-#save res
+#COMPA model
+g1<-genesF.compa_liste[[1]]$C.L$all
+gM1<-genesF.compa_liste[[1]]$MC.ML$all
+gF1<-genesF.compa_liste[[1]]$FC.FL$all
+
+
+g2<-genesF.compa_liste[[2]]$C.L$all
+gM2<-genesF.compa_liste[[2]]$MC.ML$all
+gF2<-genesF.compa_liste[[2]]$FC.FL$all
+
+g3<-genesF.compa_liste[[3]]$C.L$all
+gM3<-genesF.compa_liste[[3]]$MC.ML$all
+gF3<-genesF.compa_liste[[3]]$FC.FL$all
+
+venn.diagram(
+  x = list(g1,g2, g3),
+  category.names = c("noComplexity" , "Group_Complexity" , "Group_Complexity_Fac"),
+  filename = file.path(outputDir,paste0('vennGenesCTRLvsLGA_compa_model1-3.png')),
+  output=T
+)
+
+venn.diagram(
+  x = list(gM1,gM2, gM3),
+  category.names = c("noComplexity" , "Group_Complexity" , "Group_Complexity_Fac"),
+  filename = file.path(outputDir,'vennGenesCTRLMvsLGAM_compa_model1-3.png'),
+  output=T
+)
+venn.diagram(
+  x = list(gF1,gF2, gF3),
+  category.names = c("noComplexity" , "Group_Complexity" , "Group_Complexity_Fac"),
+  filename = file.path(outputDir,'vennGenesCTRLFvsLGAF_compa_model1-3.png'),
+  output=T
+)
 
