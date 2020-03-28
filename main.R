@@ -64,43 +64,34 @@ plot(density(data_all$pct0))
 
 
 #FILTRATION DES LOCIS
-#see deterSeuilQC.R pour la détermination des seuils de QC
-locis<-read.table("locisPassantQC.txt",row.names = 1,sep = ",",colClasses = "character")
-head(locis)
-locis<-locis$x
-head(locis)
-length(locis)
-
+mat<-as.matrix(data_all[,samples])
+data_F<-data_all[data_all$msp1c>10^-7&
+                   rowSums(is.na(mat))==0&
+                   rowSums(data_all[,samples]>10,na.rm = T)>3,]
+nrow(data_F) #1029401
+locisF<-rownames(data_F)
 #gain en qualité
 #avant
-mat<-as.matrix(data_all[,samples])
 deterQual(mat) #41% des locis avec Vrais zeros
-deterQual(mat[locis,]) #62% de locis avec vrais zeros
+deterQual(mat[locisF,]) #54% de locis avec vrais zeros
 
 deterQual2(mat,batch) #PC 1  ( 16.9 % de la variance) a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.3801368616723
 
 
-deterQual2(mat[locis,],batch) # PC 1  ( 18.7 % de la variance) a R2 avec Library_Complexity = 0.75 et pval = 10^ -36.5075044149743
-deterQual2(mat[!(rownames(mat)%in%locis),],batch)
-# [1] "PC 1  ( 7 % de la variance) a R2 avec Library_Complexity = 0.39 et pval = 10^ -13.8555937486684"
-# [1] "PC 2  ( 3.3 % de la variance) a R2 avec Library_Complexity = 0.48 et pval = 10^ -17.713854390605"
+deterQual2(mat[locisF,],batch) #PC 1  ( 17.8 % de la variance a R2 avec Library_Complexity = 0.74 et pval = 10^ -35.5622767364567
+deterQual2(mat[!(rownames(mat)%in%locisF),],batch)
+# "PC 1  ( 14.3 % de la variance a R2 avec Library_Complexity = 0.79 et pval = 10^ -40.6381624618702"
 
-
-deterQual2(mat[sample(rownames(mat),length(locis)),],batch)
+deterQual2(mat[sample(rownames(mat),length(locisF)),],batch)
 #PC 1  ( 16.9 % de la variance) a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.4019834323515"
-deterQual2(mat[sample(rownames(mat),length(locis)),],batch)
+deterQual2(mat[sample(rownames(mat),length(locisF)),],batch)
 #PC 1  ( 16.9 % de la variance a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.3775925094346
 
-#petite amelioration comparé aux hasard mais on peut surement ameliorer filtration pour enlever plus de dépendance
-  
-#FILTRATION
-data_F<-data_all[locis,]
-head(data_F)
+#amelioration comparé aux hasard mais on peut surement ameliorer filtration pour enlever plus de dépendance
 
 #visualisation de nouvelle distribution
-sum(is.na(data_F[,samples]))
 
-dim(data_F) #1097732     132
+dim(data_F) #1029401     132
 
 plot(density(as.matrix(data_F[,samples])))
 plot(density(data_all$mean))
@@ -111,9 +102,10 @@ plot(density(data_all$pct0))
 lines(density(data_F$pct0),col=2)
 
 hist(data_F$RankConfidenceScore,breaks = 100)
+
 #comparé aux hasard : 
-hist(data_all[sample(rownames(mat),length(locis)),"RankConfidenceScore"],breaks = 100)
-hist(data_all[sample(rownames(mat),length(locis)),"RankConfidenceScore"],breaks = 100)
+hist(data_all[sample(rownames(mat),length(locisF)),"RankConfidenceScore"],breaks = 100)
+hist(data_all[sample(rownames(mat),length(locisF)),"RankConfidenceScore"],breaks = 100)
 
 #heatmap 
 #avant filtrage
@@ -134,29 +126,33 @@ dev.off()
 
 #apres
 topVarLocis2<-rownames(data_F)[order(data_F$sd,decreasing = T)[1:10000]]
-sum(topVarLocis2 %in% topVarLocis1)/10000 #83% des topSD locis conservés
+sum(topVarLocis2 %in% topVarLocis1)/10000 #seulement 4.1% des topSD locis conservés !!!
 head(data_all[topVarLocis2,"sd"])
 subMat<-mat[topVarLocis2,]
 p<-pheatmap(subMat,show_rownames = F,
             annotation_col = data.frame(row.names =colnames(subMat),
                                         groupe=batch[colnames(subMat),"Group_name"],
                                         sex=batch[colnames(subMat),"Gender"],
+                                        mat.age=batch[colnames(subMat),"Mat.Age"],
                                         batch=batch[colnames(subMat),"batch"],
+                                        seq=batch[colnames(subMat),"sequencing"],
+                                        dnaExtr=batch[colnames(subMat),"DNA.extraction"],
                                         hpa2c=batch[colnames(subMat),"Library_Complexity"])
             
 )
 png(file.path(outputDir,paste("heatmapsApresFiltration.png",sep="_")), width = 1200, height = 800)
 p
 dev.off()
-#encore une clusterisation selon batch et Library Complexity(pas etonnant vu que 83% sont les meme locis)
+#encore une clusterisation selon batch et Library Complexity(pas etonnant vu que 80% sont les meme locis)
 
 
 #FILTRATION DES SAMPLES
 # en fct pct0
 
 # batch[samples,"pct0"]<-colSums(data_all[,samples]==0,na.rm = T)/nrow(data_all)
-# batch[samples,"pct0ApresF"]<-colSums(data_F[,samples]==0,na.rm = T)/nrow(data_F)
-# write.csv2(batch,"../../ref/20-02-17_batch_119samples_IUGRLGACTRL_noNA_withHpaC.csv",row.names = T)
+ batch[samples,"pct0ApresF2"]<-colSums(data_F[,samples]==0,na.rm = T)/nrow(data_F)
+ batch[samples,"pct0locisLo"]<-colSums(data_all[!(rownames(data_all)%in%locisF),samples]==0,na.rm = T)/sum(!(rownames(data_all)%in%locisF))
+ # write.csv2(batch,"../../ref/20-02-17_batch_119samples_IUGRLGACTRL_noNA_withHpaC.csv",row.names = T)
 
 
 #plot les pct0 avant filtration, colorés par le groupe
@@ -164,18 +160,37 @@ y<-batch$pct0
 o<-order(y)
 plot(x=1:nrow(batch),y[o],col=(batch$Group[o]+1))
 plot(x=1:nrow(batch),y[o],col=(batch$batch[o]))
+plot(x=1:nrow(batch),y[o],col=(batch$DNA.extraction[o]))
+abline(h=0.845)
+samplesToRm1<-rownames(batch)[batch$pct0>0.845]
+length(samplesToRm1)
+
+#Locis Lo
+y<-batch$pct0locisLo
+o<-order(y)
+plot(x=1:nrow(batch),y[o],col=(batch$Group[o]+1))
+plot(x=1:nrow(batch),y[o],col=(batch$batch[o]))
+plot(x=1:nrow(batch),y[o],col=(batch$DNA.extraction[o]))
+plot(x=1:nrow(batch),y[o],col=(batch$sequencing[o]))
 abline(h=0.845)
 samplesToRm1<-rownames(batch)[batch$pct0>0.845]
 length(samplesToRm1)
 
 #apres F
-y<-batch$pct0ApresF
+y<-batch$pct0ApresF2
 o<-order(y)
 plot(x=1:nrow(batch),y[o],col=(batch$Group[o]+1))
 plot(x=1:nrow(batch),y[o],col=(batch$batch[o]))
-abline(h=0.775)
-samplesToRm2<-rownames(batch)[batch$pct0ApresF>0.775]
-length(samplesToRm2)
+plot(x=1:nrow(batch),y[o],col=(batch$Mat.Age_Fac[o]),main="pct0 dans les échantillons") 
+plot(x=1:nrow(batch),y[o],col=(batch$sequencing[o]),main="pct0 dans les échantillons") 
+plot(x=1:nrow(batch),y[o],col=(batch$DNA.extraction[o]),main="pct0 dans les échantillons")
+
+plot(x=1:nrow(batch),y[o],col=(batch$sequencing),main="pct0 dans les échantillons")
+
+
+abline(h=0.8)
+samplesToRm2<-rownames(batch)[batch$pct0ApresF>0.8]
+length(samplesToRm2) #21
 
 d<-setdiff(samplesToRm2,samplesToRm1)#CBP467
 col<-as.numeric(rownames(batch)%in%d)+1
@@ -183,54 +198,52 @@ plot(x=1:nrow(batch),y[o],col=col[o])
 y<-batch$pct0
 o<-order(y)
 plot(x=1:nrow(batch),y[o],col=col[o]) 
+batch[d,]
 
-d<-setdiff(samplesToRm1,samplesToRm2)#CBP250
-col<-as.numeric(rownames(batch)%in%d)+1
-plot(x=1:nrow(batch),y[o],col=col[o])
-y<-batch$pct0ApresF
-o<-order(y)
-plot(x=1:nrow(batch),y[o],col=col[o]) 
 
 #ccl : la filtration des locis ne change presque pas la qualité des ech, il fait juste  remonter CBP467 (devient un mauvais sample)
-#et descendre CBP250. => on filtre les samples avec batch$pct0ApresF>0.775
+# batch$pct0ApresF>0.8
 
 data_F_S<-data_F[,!(names(data_F)%in%samplesToRm2)]
-dim(data_F_S) # 1097732     109
+dim(data_F_S) # 1097732     111
 samples_F<-samples[samples%in%names(data_F_S)]
-length(samples_F) #96
+length(samples_F) #98
 
 #gagne en qualité ?
-deterQual(mat[locis,samples_F]) #62% > 65%
-deterQual2(mat[locis,samples_F],batch) 
-#PC 1  ( 10.2 % de la variance a R2 avec Library_Complexity = 0.74 et pval = 10^ -29.0080916905632
+deterQual(mat[locisF,samples_F]) #54%> 56%
+deterQual2(mat[locisF,samples_F],batch) 
+#PC 1  ( 9.4 % de la variance a R2 avec Library_Complexity = 0.77 et pval = 10^ -32.0961766241104
 #au lieu de : 
-# PC 1  ( 18.7 % de la variance) a R2 avec Library_Complexity = 0.75 et pval = 10^ -36.5075044149743
+# PC 1  ( 16.9 % de la variance) a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.4019834323515"
 
 #VISUALISATION AVEC PCA
 # matNA<-mat
 # matNA[is.na(matNA)]<-0
 # sum(is.na(matNA))
 # pc1<-prcomp(t(matNA),center = T)
-# pc2<-prcomp(t(matNA[locis,]),center = T)
-# pc3<-prcomp(t(matNA[locis,samples_F]),center = T)
-# PCAlist<-list(pca_All=pc1,pca_F=pc2,pca_F_S=pc3)
+# pc2<-prcomp(t(matNA[locisF,]),center = T)
+# pc3<-prcomp(t(matNA[locisF,samples_F]),center = T)
+# PCAlist[["pca_F"]]<-pc2
+# PCAlist[["pca_F_S"]]<-pc3
 # rm(pc1,pc2,pc3)
 # saveRDS(PCAlist,file.path(outputDir,"PCAlist.rds"))
 PCAlist<-readRDS(file.path(outputDir,"PCAlist.rds"))
+
+#visual PCA
 pcaChoose<-"pca_All"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
 names(batch)
 plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="sequencing",batch = batch,showSampleIDs=F)
 
-plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="date",batch = batch,showSampleIDs=F)
+plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group",batch = batch,showSampleIDs=F)
 
-plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="DNA.extraction",batch = batch,showSampleIDs=F)
+plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Sex",batch = batch,showSampleIDs=F)
 
 #influence Covar sur PC
 var_fac<-names(batch)[c(2,4,8,10,11,12,13,15,16,19,24,27,29,33,34,35)]
 var_num<-names(batch)[c(5,6,17,20,21,22,23,25,26,28,32)]
-varAdd<-c('Group_Complexity','GroupBatch_Complexity','GroupBatch_Complexity_Fac','Group_Complexity_Fac','pct0ApresF')
-vardint<-c("Group","Group_Sex","Sex","Library_Complexity")
+varAdd<-c('GroupBatch_Complexity','GroupBatch_Complexity_Fac','pct0ApresF')
+vardint<-c("Group","Group_Sex","Sex","Library_Complexity","Group_Complexity","Group_Complexity_Fac")
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd ) #date PC4 et 6
 
 rowSums(-log10(resPV[rownames(resPV)%in%vardint,]))
@@ -245,19 +258,28 @@ plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="date",batch = batch,showSam
 #influence Covar sur PC
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
 rowSums(-log10(resPV[rownames(resPV)%in%vardint,]))
-# Library_Complexity              Group          Group_Sex                Sex 
-# 40.307264           7.828541           3.752303           2.755889
+# Group_Complexity   Library_Complexity                Group Group_Complexity_Fac            Group_Sex                  Sex 
+# 38.669826            39.491955             7.206245            30.814766             6.855886             3.876376 
 
 pcaChoose<-"pca_F_S"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
 plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showSampleIDs=F)
 
+length(LGA)
+batch[LGA,]
+#!conitnuer ici : regarder si LGA enlever etait les plus extrèmes et si oui, on les garde
+
+plot(density(na.omit(as.numeric(batch[LGA,"PI"]))))
+lines(density(na.omit(as.numeric(batch[CTRL,"PI"]))),col=3)
+lines(density(na.omit(as.numeric(batch[LGA[LGA%in%samplesToRm2],"PI"]))),col=2) #enrich en bon LGA donc on suppr pas.
+
+plot(density(batch[samplesToRm2,"PI"]))
 
 #influence Covar sur PC
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
 rowSums(-log10(resPV[rownames(resPV)%in%vardint,]))
-# Library_Complexity              Group          Group_Sex                Sex 
-# 31.399055           9.934421           7.734257           7.655447 
+# Group_Complexity   Library_Complexity                Group Group_Complexity_Fac            Group_Sex                  Sex 
+# 31.515646            33.529202            10.371856            27.248603             8.230855             7.483574 
 #on voit ici que les pvalue augmente pour les var d'int et diminue pour library comp
 
 
@@ -289,7 +311,7 @@ varImportantes<-names(pctCovarExplPC[vars])[pctCovarExplPC[vars]>1]
 #"Library_Complexity" "Mat.Age"            "batch"              "date"               "sequencing"
 
 #on s'interesse a l'interaction entre sex et group, les var a modeliser sont donc :
-varModelisable<-c(varImportantes,"Group","Sex","Group_Sex","Group_Complexity")
+varModelisable<-c(varImportantes,"Group","Sex","Group_Sex")
 
 #LibraryC est une variable tech et bio ?
 ##est ce que library bonne var tech ? (=pas correlé a var bio : group, sex, matage, PI)
@@ -298,14 +320,20 @@ PI<-as.numeric(batch[samples_F,'PI'])
 weight<-as.numeric(batch[samples_F,'Weight..g.'])
 weightAtTerm<-as.numeric(batch[samples_F,"Weight.at.term..lbs."])
 library<-as.numeric(batch[samples_F,"Library_Complexity"])
+group_complexity<-as.numeric(batch[samples_F,"Group_Complexity"])
+
 mat.age<-as.numeric(batch[samples_F,"Mat.Age"])
 
+
+group_complexity_fac<-as.factor(batch[samples_F,"Group_Complexity_Fac"])
+mat.age_fac<-as.factor(batch[samples_F,"Mat.Age_Fac"])
 group<-as.factor(batch[samples_F,"Group_name"])
 sex<-as.factor(batch[samples_F,"Gender"])
 batches<-as.factor(batch[samples_F,"batch"])
 group_sex<-as.factor(batch[samples_F,"Group_Sex"])
 date<-as.factor(batch[samples_F,"date"])
 sequencing<-as.factor(batch[samples_F,"sequencing"])
+
 #1)correl ac bio ?
 correl(library,PI,ret = "all")
 correl(library,group,ret = "all") #no signif
@@ -320,26 +348,23 @@ correl(library,mat.age,ret = "all") #signif
 # [1] 0.1036555
 #donc library pas 100% independant/technique
 
-#2) 
+#group_comp ?
+correl(group_complexity,PI,ret = "all")
+correl(group_complexity,group,ret = "all") #no signif
+correl(group_complexity,sex,ret = "all") #no signif
+correl(group_complexity,weight,ret = "all")
+correl(group_complexity,weightAtTerm,ret = "all")
+correl(group_complexity,mat.age,ret = "all") #encore signif mais moins
+
+#group_comp_fac ?
+correl(mat.age,group_complexity_fac,ret="all")# c'est pu signif ! donc c'est mieux
+
+
+#2) PC1 explicable par group ?
 pc<-PCAlist[[3]]$x
-summary(lm(pc[,1]~library+library:group))#interaction Library:IUGR ameliore model pour expliquer PC1
-#= il y a interaction signif entre library et group
-summary(lm(pc[,1]~library:group)) #enlever library diminue pas model #r2 = 0.76
 
-summary(lm(pc[,2]~library:group)) #0.16
-summary(lm(pc[,2]~library:group+group))
-summary(lm(pc[,2]~library:group+group))
-summary(lm(pc[,2]~library))
-
-summary(lm(pc[,1]~library+library:sex)) #no interaction library:sex
-summary(lm(pc[,1]~library+mat.age+library:mat.age)) #l'interaction library:matage n'explique pas mieux le model
-summary(lm(pc[,1]~library+library:batches)) #interaction Library:batch2 ameliore model pour expliquer PC1 que library seul
-#et pour pc2 qui est expliqué par batch et library ?
-summary(lm(pc[,2]~library+library:batches+batches)) #model non explicatif de pc2
-summary(lm(pc[,2]~library+batches)) #library et batches2 signif mais pas intercept,
-
-#donc l'interaction library:Group est signif; interpr: etre  IUGR permet de mieux expliquer la var PC1(=var hypo/hypermet global)
-#que library_comp. seul
+summary(lm(pc[,1]~group_complexity_fac+group+mat.age))
+#0.75 !! alors que sans group > 0.67 donc on capture avec group de la var qu'on capturait pas avant
 
 #est ce que l'interaction library:sequencing peut etre une bonne var techniqui ?
 #pc1
@@ -383,59 +408,76 @@ group_library<-batch[samples_F,"Group_Complexity"]
 #pour que les coeff du model soit fiable, on doit eviter la colinearité entre les var du model : 
 #il faut surtout que les coeff de group et sex soit bon, donc on check leur independance des autre vars
 
-correl(mat.age,sequencing,ret = "all")#correlé 
-# $p
-# [1] 0.239616
-# 
-# $r2
-# [1] 0.0421595
 
-correl(group_library,batches,ret = "all") #0.08042903
+correl(group_complexity_fac,group,ret = "all") #indep
+correl(group_complexity_fac,sex,ret = "all") #p 0.08
+correl(group_complexity_fac,group_sex,ret = "all")
 
-correl(mat.age,group_library,ret = "all")#correlé 
-# $p
-# [1] 0.003115581
-# 
-# $r2
-# [1] 0.08119963
-
+correl(mat.age,group_sex,ret = "all")#petite signif r2 0.1
+correl(batches,group_sex,ret = "all")
+correl(sequencing,group_sex,ret = "all")
+#ccl : seulement colinearité entre mat.age et group mais group explique suelemnet 10% de mat.age.
+batch$Mat.Age_Fac
+hist(batch$Mat.Age,breaks =12 )
+plot(batch$Mat.Age,batch$pct0ApresF2,col=(batch$Mat.Age_Fac)) #c'est ok
+correl(mat.age_fac,group_sex) #tjr correlé donc on prend mat.age
+table(mat.age_fac,group)
 
 
+plot(batch$Mat.Age,batch$pct0ApresF2,col=(batch$Sex)+1)
+
+LGA<-rownames(batch)[batch$Group_name=="L"]
+IUGR<-rownames(batch)[batch$Group_name=="I"]
+CTRL<-rownames(batch)[batch$Group_name=="C"]
+
+M<-rownames(batch)[batch$Gender=="M"]
+Fe<-rownames(batch)[batch$Gender=="F"]
+
+correl(batch[LGA,"Mat.Age"],batch[LGA,"pct0ApresF2"])
+
+correl(batch[CTRL,"Mat.Age"],batch[CTRL,"pct0ApresF2"])
+
+correl(batch[IUGR,"Mat.Age"],batch[IUGR,"pct0ApresF2"])
+
+correl(batch[M,"Mat.Age"],batch[M,"pct0ApresF2"])
+correl(batch[Fe,"Mat.Age"],batch[Fe,"pct0ApresF2"])
+
+LGAM<-rownames(batch)[batch$Group_name=="L"]
+IUGRM<-rownames(batch)[batch$Group_name=="I"]
+CTRLM<-rownames(batch)[batch$Group_name=="C"]
+
+correl(batch$Mat.Age,batch$pct0ApresF2)
+
+plot(batch[LGA,"Mat.Age"],batch[LGA,"pct0ApresF2"],col=batch$Mat.Age_Fac) 
+plot(batch[CTRL,"Mat.Age"],batch[CTRL,"pct0ApresF2"],col=batch$Mat.Age_Fac) 
+plot(batch[IUGR,"Mat.Age"],batch[IUGR,"pct0ApresF2"],col=batch$Mat.Age_Fac) 
 
 
-correl(mat.age,group_sex,ret = "all")#petite signif r2 0.07
-#revient au meme que : 
-correl(mat.age,group:sex,ret = "all")#petite signif r2 0.07n donc oui
-
-correl(group_sex,batches,ret = "all") #no signif
-
-#ccl : seulement colinearité entre mat.age et group mais group explique suelemnet 7% de mat.age donc on prend pas en compte
-
-# LIMMA model
-
-
-#A))) est ce que prendre group_complexity ameliorer interpret bio des locis ?
-varToModel1<-varModelisable[c(2,3,5,8)]
-varToModel2<-varModelisable[c(2,3,5,8)]
-varToModel3<-varModelisable[c(2,3,5,8,9),"Group_Complexity_Fac"]
-samples_F_F<-samples_F[rowSums(is.na(batch[samples_F,varToModel1]))==0] 
+# LIMMA model 
+#A))) est ce que prendre group_complexity ameliorer inte  rpret bio des locis ?
+varToModel<-varModelisable[c(6,3,4,7,10)]
+samples_F_F<-samples_F[rowSums(is.na(batch[samples_F,varToModel]))==0] 
 length(samples_F_F) #loose just 2 ech
 sequencing<-as.factor(batch[samples_F_F,"sequencing"])
-#group<-as.factor(batch[samples_F_F,"Group_name"])
+group<-as.factor(batch[samples_F_F,"Group_name"])
 #sex<-as.factor(batch[samples_F_F,"Gender"])
 mat.age<-as.numeric(batch[samples_F_F,"Mat.Age"])
+mat.age_fac<-as.factor(batch[samples_F_F,"Mat.Age_Fac"])
 batches<-as.factor(batch[samples_F_F,"batch"])
 group_sex<-as.factor(batch[samples_F_F,"Group_Sex"])
 group_sex<-revalue(group_sex,c("1"="FC","2"="MC","3"="FI","4"="MI","5"="FL","6"="ML"))
 group_library<-as.numeric(batch[samples_F_F,"Group_Complexity"])
 group_library_fac<-as.numeric(batch[samples_F_F,"Group_Complexity_Fac"])
-
-formule1<-~0 + group_sex + sequencing +mat.age+batches 
-formule2<-~0 + group_sex + sequencing +mat.age+batches + group_library
-formule3<-~0 + group_sex + sequencing +mat.age+batches + group_library_fac  
-
-models<-list(formule1,formule2,formule3)
-model<-3
+group_mat.age_fac<-mat.age_fac:group
+length(group_mat.age_fac)
+formule1<-~0 + group_sex + sequencing +batches 
+formule2<-~0 + group_sex + sequencing +mat.age+batches 
+formule3<-~0 + group_sex + sequencing +mat.age+batches + group_library
+formule4<-~0 + group_sex  +sequencing+ batches +mat.age+ group_library_fac  
+formule5<-~0 + group_sex  + batches +mat.age+ group_library_fac  #mieux d'enlever sequencing car ~= group_library_fac et 21 lvl bcp ?
+formule6<-~0 + group_sex  + batches + group_library_fac
+models<-list(formule1,formule2,formule3,formule4,formule5)
+model<-1
 design<-model.matrix(models[[model]])
 colnames(design)<-make.names(colnames(design))
 fit <- lmFit(data_F_S[,samples_F_F], design)  
@@ -461,20 +503,37 @@ fit2  <- eBayes(fit2) #pour formule1 et 2 : warning message :Zero sample varianc
 #concentrons nous sur le top1000
 top1000<-topTable(fit2, adjust="BH",number = 1000)
 head(top1000)
-min(top1000$P.Value)
-max(top1000$P.Value) #1 : 0.001094843 2: 0.0006614376 3:0.0004495575
+mean(top1000$adj.P.Val) #0.63
 
-plot(density(log10(fit2$p.value[fit2$p.value<0.01])))
-abline(v=log10(0.0004)) #top1000 bien
-sum(fit2$p.value<0.01) #106k > 130k
-sum(fit2$p.value<0.001) #9728 locis > 14k
+top12000<-topTable(fit2, adjust="BH",number = 12000)
+max(top12000$P.Value)#0.01
+plot(density(log10(fit2$p.value[fit2$p.value<0.05])))
+abline(v=log10(max(top12000$P.Value))) #top12000 bien
+
 #on enregistre top1000 locis
 #locisListe<-list()
-locisListe[[model]]<-rownames(top1000)
+locisListe[[model]]<-rownames(top12000)
 locis<-locisListe[[model]]
 res<-data.frame(row.names = locis,fit2$p.value[locis,],annot[locis,c("chr","start","posAvant","gene","type","mean","Expr","Variable")],
                          data_F_S[locis,c("confidenceScore","complexity","msp1c","RankConfidenceScore")])
-#enregistrer df FC et topFC/top compa dans res
+
+results <- decideTests(fit2)
+sum(abs(results)) #7
+colSums(abs(results))
+# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
+# 0     0     1     0     0     2     0     0     4     0     0     0 
+
+#enh/prom distrib
+round(table(res$type)/length(res$type)*100,1) #tjr d'enrich en 4 et 6..
+# 0    1    2    3    4    5    6 
+# 30.6 11.0 10.2 11.5 14.8  7.1 14.3 
+
+
+#distribListe<-list()
+colSums(apply(res[,compas],2, function(x)return(x<0.001)))
+distribListe[[model]]<-colSums(apply(res[,compas],2, function(x)return(x<0.001)))
+
+
 #1) df FC :
 compas<-names(res)[str_detect(names(res),"\\.")]
 FCs<-data.frame()
@@ -513,90 +572,65 @@ Pvalliste[[model]]<-pvals
 #topFC
 locisSansMax<-c()
 for(locus in rownames(res)){
-  print(locus)
-  m<-which.max(FCs[locus,])
-  
-  if(length(m)>0){
-    res[locus,"TopCompaSig"]<-colnames(FCs)[m]
-    print(res[locus,"TopCompaSig"])
-    res[locus,"topFC"]<-FCs[locus, res[locus,"TopCompaSig"]]
+  if(locus%in%rownames(FCs)){
     
-  }else{
-    print(paste("locus : ",locus,"pas de max"))
-    locisSansMax<-c(locisSansMax,locus)
+    compasTop<-colnames(FCs)[which(sapply(FCs[locus,],abs)>20)]
+    
+    if(length(compasTop)==1){
+      res[locus,"TopCompaSig"]<-compasTop
+      res[locus,"topFC"]<-round(FCs[locus, compasTop],1)
+      
+    }else if(length(compasTop)>1){
+      compasTopOrdered<- compasTop[order(sapply(FCs[locus, compasTop],abs),decreasing = T)]
+      res[locus,"TopCompaSig"]<-compasTopOrdered[1]
+      res[locus,"topFC"]<-round(FCs[locus, compasTopOrdered[1]],1)
+      
+      res[locus,"CompaSig"]<-paste(compasTopOrdered,collapse = "/")
+      res[locus,"FC_CompaSig"]<-paste(round(FCs[locus, compasTopOrdered],0),collapse = "/")
+    }else{
+      #print(paste("locus : ",locus,"pas de max"))
+      locisSansMax<-c(locisSansMax,locus)
+    }
+    
   }
   
   
+  
 }
-FCs[locisSansMax,] #nexiste pas ds FC, jsp pk
-
+length(locisSansMax)
                                     
 head(res)
 #resListe<-list()
 resListe[[model]]<-res
 
 
-mean(sort(top1000$adj.P.Val)[1:100]) #0.696 > 0.32 > 0.24
 
-results <- decideTests(fit2)
-sum(abs(results)) #2passe H0 avec pval adj signif ! > 4
-colSums(abs(results))
-
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 0     0     0     1     0     0     0     0     1     0     0     0 
-
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 0     0     1     1     0     0     0     0     2     0     0     0 
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 0     0     2     0     0     0     0     0     1     0     0     0 
-
-#nb C-L 
-sum(res$C.L<0.001) #710 > 94 > 202
-sum(res$M.F<0.001) #0 > 0
-#nb par compa
-
-#distribListe<-list()
-colSums(apply(res[,compas],2, function(x)return(x<0.001)))
-distribListe[[model]]<-colSums(apply(res[,compas],2, function(x)return(x<0.001)))
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 138   109   101   160   225   230   204   132   284   211   114   106 
-
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 188    94   143   138   286   268   178   141   248   277   105   132 
-
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 150   202   243   149   244   291   243   127   207   254    93   117 
-
-#model_char<-str_replace_all(paste(strsplit(as.character(models[[1]])[2],"\\+")[[1]][-1],collapse = ""),pattern = " ","_")
-
-write.csv2(res,file.path(outputDir,paste0("top1000Locis_Group.Sex__model",model,"_annotated_260320.csv")),row.names = T)
+write.csv2(res,file.path(outputDir,paste0("top1000Locis_Group.Sex__model",model,"BasicsLocisFilteringAndSamples_F_annotated_280320.csv")),row.names = T)
 
 locisFC<-na.exclude(rownames(res)[res$topFC>20])
-length(locisFC)#614 > 595 > 697
+length(locisFC)#3269
 
 hist(res$RankConfidenceScore,100)
 abline(v=750000)
 locisConf<-na.omit(rownames(res)[res$RankConfidenceScore>750000])
-length(locisConf)#885 > 869 > 869
+length(locisConf)#10692
 
 
 #prox genes : 
 plot(density(na.omit(res$posAvant))) #globale
 abline(v=-50000)
-abline(v=quantile(na.omit(res$posAvant),0.1),col=1) 
+abline(v=quantile(na.omit(res$posAvant),0.1),col=2) 
 abline(v=quantile(na.omit(res$posAvant),0.9),col=2)
-sum(res$posAvant>-20000&res$posAvant<20000,na.rm = T)/length(res$posAvant) #47% entre -20 et 20kb du TSS > 48% > 48%
+sum(res$posAvant>-20000&res$posAvant<20000,na.rm = T)/length(res$posAvant) #50% entre -20 et 20kb du TSS 
 
-sum(res$posAvant>-2000&res$posAvant<2000,na.rm = T)/length(res$posAvant) #16% entre -2 et 2kb > 16% > 16.8
+sum(res$posAvant>-2000&res$posAvant<2000,na.rm = T)/length(res$posAvant) #18% entre -2 et 2kb 
 
 #all locis prox de genes
-randomProxAllData<-annot[sample(rownames(data_all),100000),]$posAvant
-sum(randomProxAllData>-20000&randomProxAllData<20000,na.rm = T)/length(randomProxAllData) #49% entre -20 et 20kb du TSS
-sum(randomProxAllData>-2000&randomProxAllData<2000,na.rm = T)/length(randomProxAllData) #17% entre -2 et 2kb
+# randomProxAllData<-annot[sample(rownames(data_all),100000),]$posAvant
+# sum(randomProxAllData>-20000&randomProxAllData<20000,na.rm = T)/length(randomProxAllData) #49% entre -20 et 20kb du TSS
+# sum(randomProxAllData>-2000&randomProxAllData<2000,na.rm = T)/length(randomProxAllData) #17% entre -2 et 2kb
 
 plot(density(na.omit(randomProxAllData[(randomProxAllData>(-50000) & randomProxAllData<(50000))])))
-
-
 #locis signif :
 lines(density(na.omit(res$posAvant[(res$posAvant>(-50000) & res$posAvant<(50000))])),col=2) #around 10kb of TSS
 
@@ -606,31 +640,24 @@ hist(randomProxAllData[(randomProxAllData>(-5000) & randomProxAllData<(5000))],b
 hist(res$posAvant[(res$posAvant>(-5000) & res$posAvant<(5000))],breaks = 100)
 
 locisGenes10kb<-rownames(res)[res$posAvant>-10000&res$posAvant<10000]
-length(locisGenes10kb)#333 > 338
+length(locisGenes10kb)#4474
 locisGenes2kb<-rownames(res)[res$posAvant>-2000&res$posAvant<2000]
-length(locisGenes2kb)#158 > 169
+length(locisGenes2kb)#2253
 
 
 #CRE : 
 locisCRE<-na.exclude(rownames(res)[res$type%in%c(4,6)])
-length(locisCRE) #284 >289
+length(locisCRE) #3494
 
-round(table(annot[sample(rownames(data_all),100000),]$type)/1000,1)
-# 0     1     2     3     4     5     6 
-# 0.304 0.108 0.101 0.118 0.146 0.072 0.146 
-round(table(annot[sample(rownames(data_F),100000),]$type)/1000,1)
-# 0    1    2    3    4    5    6 
-# 30.3 11.1 10.0 11.9 14.7  7.1 14.5 
+# round(table(annot[sample(rownames(data_all),100000),]$type)/1000,1)
+# # 0     1     2     3     4     5     6 
+# # 0.304 0.108 0.101 0.118 0.146 0.072 0.146 
+# round(table(annot[sample(rownames(data_F),100000),]$type)/1000,1)
+# # 0    1    2    3    4    5    6 
+# # 30.3 11.1 10.0 11.9 14.7  7.1 14.5 
 
 #typeListe<-list()
 typeListe[[model]]<-round(table(res$type)/length(res$type)*100,1)
-typeListe[[model]]
-# 0    1    2    3    4    5    6 
-# 32.9  9.2 10.5 10.9 15.6  7.5 13.3 
-# 3: 
-#   0    1    2    3    4    5    6 
-# 32.1  9.7 10.7 10.1 15.5  7.5 14.3 
-round(table(res$type)/length(res$type)*100,1)
 
 
 #complexity : 
@@ -639,46 +666,41 @@ lines(density(res$complexity),col=2)
 locisComplex<-rownames(res)[res$complexity>60]
 length(locisComplex)#422
 
-#vulcano
-for(i in 1:length(compas)){
-  print(compas[i])
-  res2<- topTable(fit2,coef=compas[i],n =1000)
-  if(any(res2$P.Value<0.01)){
-    resF<-res2[(rownames(res2)%in%rownames(res)),]
-    
-    AllLocisP4F20[[compas[i]]]<-rownames(resFF)
-    
-    colors<-resFiltered[rownames(resF),"type"]+1
-    
-    
-    top20<-(rownames(resF)[order((length(resF$logFC)/rank(resF$logFC))+rank(resF$P.Value))])[1:20]
-    
-    
-    png(file.path(outputDir,paste(compas[i],"volcano.png",sep="_")), width = 700, height = 500)
-    plot(resF$logFC,-log10(resF$P.Value),col=colors,main = compas[i])
-    textxy(resF[top20,'logFC'],-log10(resF[top20,'P.Value']),resFiltered[top20,'gene'],offset= -.7)
-    dev.off()
-    
-  }else{
-    print(paste("pas de CpG pour",compas[i]))
-  }
-  
-  
-}
+#vulcano #! a faire
+# for(i in 1:length(compas)){
+#   print(compas[i])
+#   res2<- topTable(fit2,coef=compas[i],n =1000)
+#   if(any(res2$P.Value<0.01)){
+#     resF<-res2[(rownames(res2)%in%rownames(res)),]
+#     
+#     AllLocisP4F20[[compas[i]]]<-rownames(resFF)
+#     
+#     colors<-resFiltered[rownames(resF),"type"]+1
+#     
+#     
+#     top20<-(rownames(resF)[order((length(resF$logFC)/rank(resF$logFC))+rank(resF$P.Value))])[1:20]
+#     
+#     
+#     png(file.path(outputDir,paste(compas[i],"volcano.png",sep="_")), width = 700, height = 500)
+#     plot(resF$logFC,-log10(resF$P.Value),col=colors,main = compas[i])
+#     textxy(resF[top20,'logFC'],-log10(resF[top20,'P.Value']),resFiltered[top20,'gene'],offset= -.7)
+#     dev.off()
+#     
+#   }else{
+#     print(paste("pas de CpG pour",compas[i]))
+#   }
+#   
+#   
+# }
 
 
 #locis Hi conf
 
 locisHiConf<-intersect(intersect(intersect(intersect(locisComplex,locisConf),locisCRE),locisFC),locisGenes10kb) 
-length(locisHiConf) #48
+length(locisHiConf) #361
 table(res[locisHiConf,"TopCompaSig"])
-# C.I   C.L   F.M FC.FL   I.L MC.FC MC.MI MC.ML MI.FI MI.ML ML.FL 
-# 4     4     6     2     5     2     5     1     2     2    15 
-# C.I   C.L   F.M FC.FL   I.L MC.FC MC.ML MI.FI MI.ML ML.FL 
-# 4     4     7     1    10     2     3     2     1    11 
-# C.I   C.L   F.M FC.FL   I.L MC.FC MC.MI MC.ML MI.FI MI.ML ML.FL 
-# 3    15     5     7    17     1     1     4     2     1    11 
-
+# C.I   C.L   F.M FC.FI FC.FL   I.L MC.FC MC.MI MC.ML MI.FI MI.ML ML.FL 
+# 15    55    26     3    29    95    17     9    16     4    18    74 
 
 #save filtr
 #LocisF_liste<-list()
@@ -712,7 +734,8 @@ for(compa in compas){
                                              FC20=genes[genes%in%genesF_liste[[model]]$FC20],Genes10kb=genes[genes%in%genesF_liste[[model]]$Genes10kb],Genes2kb=genes[genes%in%genesF_liste[[model]]$Genes2kb])
   
 }
-saveRDS(list(locis=LocisF.compa_liste,genes=genesF.compa_liste),file = file.path(outputDir,paste0('resModel,model,LocisetGenes_AllCompas.rds')))
+
+saveRDS(list(locis=LocisF.compa_liste,genes=genesF.compa_liste),file = file.path(outputDir,'LocisetGenes_AllCompas_BasicsLocisFilteringAndSamples_F_280320.rds'))
 
 
 

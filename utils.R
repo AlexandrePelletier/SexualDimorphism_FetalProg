@@ -9,7 +9,7 @@ pctPC<-function(pca,rngPCs="all"){
   return( pct.varPCs)
 }
 
-correl<-function(x,y,ret="pval",verbose=T){
+correl<-function(x,y,ret="all",verbose=T){
   if(is.numeric(x)){
     if(verbose){
       print("linear modeling ")
