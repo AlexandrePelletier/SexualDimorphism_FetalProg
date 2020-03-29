@@ -3,6 +3,10 @@ options(stringsAsFactors = F)
 source("scripts/scoreCluster.R")
 
 source("scripts/FindInfosGenes.R")
+outputDir <- file.path("analyses","test_scRNAseq_integration")
+dir.create(path = outputDir, recursive = TRUE, showWarnings = FALSE, mode = "0777")
+
+
 #jeu de res
 res<-read.csv2("analyses/main/top1000Locis_Group.Sex__model1BasicsLocisFilteringAndSamples_F_annotated_280320.csv")
 #genes
@@ -72,14 +76,48 @@ sum(LGA_expr_by_pop["proportion",],na.rm = T)
 
 
 #ajout au res
-
+#genes
 genesInCommon<-genes[genes%in%union(rownames(CTRL_expr_by_pop),rownames(LGA_expr_by_pop))]
-genesDf<-data.frame(row.names = genesInCommon)
+genesRes<-data.frame(row.names = genesInCommon, 
+                    CTRL_expr_by_pop[genesInCommon,], 
+                    LGA_expr_by_pop[genesInCommon,]
+                    
+                    )
+colnames(genesRes)<- c("HSC.SELL2_CTRL","HSC.AVP_CTRL","HSC.Er_CTRL","HSC.SELL1_CTRL","EMP_CTRL",
+                       "GMP_CTRL","LyP_CTRL", "MkP_CTRL", "proT_CTRL", "LMPP_CTRL" ,"preB_CTRL","LT.HSC_CTRL",
+                       "Neu_CTRL","LyB_CTRL","Ly.ETS1_CTRL","DC_CTRL","bulk_CTRL",
+                       "HSC.SELL2_LGA","HSC.AVP_LGA","HSC.Er_LGA","HSC.SELL1_LGA","EMP_LGA",
+                       "GMP_LGA","LyP_LGA", "MkP_LGA", "proT_LGA", "LMPP_LGA" ,"preB_LGA","LT.HSC_LGA",
+                       "Neu_LGA","LyB_LGA","Ly.ETS1_LGA","DC_LGA","bulk_LGA")
+ncol(genesRes)
+cols<-c()
+for(i in 1:(ncol(genesRes)/2)){
+  cols<-c(cols,i,i+17)
+}
 
-genesDf[genesInCommon,"scRNA_CTRL"]<-CTRL_expr_by_pop[genesInCommon,"bulk"]
-head(genesDf)
-genesDf[genesInCommon,"scRNA_LGA"]<-LGA_expr_by_pop[genesInCommon,"bulk"]
-head(genesDf)
+
+genesRes<-genesRes[,cols]
+head(genesRes)
+
+
+#locis
+
+for(gene in genesInCommon){
+  pos<-which(res$gene==gene)
+  res[pos,"bulk_CTRL"]<-genesRes[gene,"bulk_CTRL"]
+  res[pos,"bulk_LGA"]<-genesRes[gene,"bulk_LGA"]
+  
+  ExprIn<-colnames(genesRes)[genesRes[gene,]>0]
+  ExprInOrdered<-ExprIn[order(genesRes[gene,ExprIn],decreasing = T)]
+  if(length(ExprInOrdered)>4){
+    ExprInOrdered<-ExprInOrdered[1:4]
+  }
+  
+  res[pos,"ExprIn"]<-paste(ExprInOrdered,collapse = "/")
+  res[pos,"log2Expr"]<-paste(round(genesRes[gene,ExprInOrdered],1),collapse = "/")
+}
+head(res[!(is.na(res$ExprIn)),],100)
+write.csv2(res,file=file.path(outputDir,"res_with_scRNA-seq_integration.csv"),row.names = T)
 
 
 #markers of clusters
