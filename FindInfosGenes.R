@@ -142,7 +142,7 @@ find_fonction<-function(genes,df=NULL,save=F,searchInLocal=T){
     genesDejaAnnot<-genes[genes%in%rownames(genes_infos)]
     genesDejaAnnot<-genesDejaAnnot[(!is.na(genes_infos[genesDejaAnnot,"Fonction"]))&(genes_infos[genesDejaAnnot,"Fonction"]!="")]
     if(length(genesDejaAnnot>0)){
-      print(paste("genes deja annote :", paste(genesDejaAnnot,collapse = ", ")))
+      print(paste(length(genesDejaAnnot),"genes deja annotes"))
       df[genesDejaAnnot,"Fonction"]<-genes_infos[genesDejaAnnot,"Fonction"]
       genesAAnnot<-genes[!(genes%in%genesDejaAnnot)]
     }else{
@@ -156,23 +156,29 @@ find_fonction<-function(genes,df=NULL,save=F,searchInLocal=T){
   
   #I) trouver fonction description de UNIPROT
   #1) trouver uniprotID des genes
+  print(paste(length(genesAAnnot),"genes a annoter"))
   genesUniprots<-uniprotID(genesAAnnot)
-  
+  print(paste(length(genesUniprots$UNIPROT),"uniprotID trouves"))
   #2) chercher la description de la fonction par requete url grace une fonction python
   library(reticulate)
   #try(use_python("C:/ProgramData/Anaconda3/",required = T))
   
   source_python("../../../Alexandre_SC/analyses/scripts/GetUniprotFunction.py")
-  if (length(genesUniprots$uniprotswissprot)>0){
-    
-    for (uniprotID in genesUniprots$uniprotswissprot){
-      
-      
-      fonction<-getFonctionUniProt(uniprotID)
-      
-      genesUniprots[ which(genesUniprots$uniprotswissprot==uniprotID),"Fonction"]<-fonction
+  if (length(genesUniprots$UNIPROT)>0){
+    n<-0
+    for (uniprot in na.omit(genesUniprots$UNIPROT)){
+      print(uniprot)
+      print(paste("recherche fonction de ",genesUniprots$SYMBOL[genesUniprots$UNIPROT==uniprot]))
+      fonction<-getFonctionUniProt(uniprot)
+      print(fonction)
+      genesUniprots[ which(genesUniprots$UNIPROT==uniprot),"Fonction"]<-fonction
+      if(!is.empty(fonction)){
+        print(paste("fonction de",genesUniprots$SYMBOL[genesUniprots$UNIPROT==uniprot],"ajoute"))
+        n<-n+1
+      }
       
     }
+    print(paste(n,"nouveaux genes annotes pour leur fonction"))
   }
   
   if (is.null(df)){
@@ -180,11 +186,11 @@ find_fonction<-function(genes,df=NULL,save=F,searchInLocal=T){
   }
   else{
     #df[genesUniprots$hgnc_symbol,"uniprotID"]<-genesUniprots$uniprotswissprot
-    df[genesUniprots$hgnc_symbol,"Fonction"]<-genesUniprots$Fonction
+    df[genesUniprots$SYMBOL,"Fonction"]<-genesUniprots$Fonction
     
     if(save){
-      print(paste("sauvegarde de ",length(genesAAnnot),"nouveau genes annotes pour leur fonction dans ref/genes_infos.csv"))
-      genes_infos[genesAAnnot,"uniprotID"]<-genesUniprots[genesAAnnot,"uniprotswissprot"] 
+      print(paste("sauvegarde dans ref/genes_infos.csv"))
+      genes_infos[genesAAnnot,"uniprotID"]<-genesUniprots[genesAAnnot,"UNIPROT"] 
       genes_infos[genesAAnnot,"Fonction"]<-df[genesAAnnot,"Fonction"]
       write.csv2(genes_infos,file="D:/Profils/apelletier/Dropbox/LAB_Delahaye/Alexandre_SC/analyses/ref/genes_infos.csv",na = "")
     }
@@ -333,15 +339,17 @@ findCbStemRelated<-function(genes,genes_infos=NULL,save=F){ #! a finir
 }
 
 uniprotID<-function(genes){
+  genesDF<-read.csv2("../../../Alexandre_SC/analyses/ref/ENSEMBL_SYMBOL_UNIPROT.csv")
   
-  result_BM <- biomartr::biomart( genes      = genes, # genes that we wanted info
-                                  mart       = "ENSEMBL_MART_ENSEMBL", # marts were selected with biomartr::getMarts()
-                                  dataset    = "hsapiens_gene_ensembl", # datasets were selected with biomartr::getDatasets()
-                                  attributes = "uniprotswissprot", # attributes were selected with biomartr::getAttributes()
-                                  filters    = "hgnc_symbol",) # specify what ID type was stored in the fasta file retrieved with biomartr::getGenome()
-  
-  result_BM<-result_BM[which(result_BM$uniprotswissprot!=""),]
-  return(result_BM[!duplicated(result_BM$hgnc_symbol),])
+  # result_BM <- biomartr::biomart( genes      = genes, # genes that we wanted info
+  #                                 mart       = "ENSEMBL_MART_ENSEMBL", # marts were selected with biomartr::getMarts()
+  #                                 dataset    = "hsapiens_gene_ensembl", # datasets were selected with biomartr::getDatasets()
+  #                                 attributes = "uniprotswissprot", # attributes were selected with biomartr::getAttributes()
+  #                                 filters    = "hgnc_symbol",) # specify what ID type was stored in the fasta file retrieved with biomartr::getGenome()
+  # 
+  # result_BM<-result_BM[which(result_BM$uniprotswissprot!=""),]
+  # return(result_BM[!duplicated(result_BM$hgnc_symbol),])
+  return(genesDF[genesDF$SYMBOL%in%genes & genesDF$UNIPROT!="",c("SYMBOL","UNIPROT")])
   
 }
 
@@ -588,25 +596,6 @@ suppr_comment<-function(genes, comment, df=NULL, saveOnFile=T,retourner=T){
   }
 }
 
-
-findMarqueursPops<-function(genes,df=NULL){
-  source("scripts/ManagePopMarqueurs.R")
-  if(is.null(df)){
-    df<-data.frame()
-  }
-  
-  for (gene in genes){
-    pops<-GetPopDe(gene)
-    if(!is.null(pops)){
-      df[gene,"MarqueurPops"]<-paste(pops,collapse = ";")
-    }else{
-      df[gene,"MarqueurPops"]<-""
-    }
-      
-    }
-  
-  return(df)
-}
 
 
 

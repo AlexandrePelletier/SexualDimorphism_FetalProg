@@ -1,156 +1,81 @@
 
-options(stringsAsFactors = F)
-source("scripts/scoreCluster.R")
-
-source("scripts/FindInfosGenes.R")
-outputDir <- file.path("analyses","test_scRNAseq_integration")
-dir.create(path = outputDir, recursive = TRUE, showWarnings = FALSE, mode = "0777")
-
-
-#jeu de res
-res<-read.csv2("analyses/main/top1000Locis_Group.Sex__model1BasicsLocisFilteringAndSamples_F_annotated_280320.csv",row.names = 1)
-#genes
-genes<-na.omit(unique(res$gene))
-head(genes)
-
-#scRNA-seq Data
-samples<-readRDS("../../../Alexandre_SC/analyses/test_batch_integration/CTRLandLGA_SCTransform_Integrated.rds")
-samples
-
-head(samples[["SCT"]])[,1:10]
-tail(samples[["SCT"]])[,1:10]
-samples[["SCT"]] #9k cells donc LGA+CTRL
-head(samples@meta.data)
-tail(samples@meta.data)
-#annoter cluster 
-unique(samples@meta.data$seurat_clusters)
-# 0, 1,2,3 : HSC; 4 : EMP, 5 : GMP, 6 : LyP, 7 : MkP, 8 :pro T, 9 : LMPP, 10 : pre B, 11 : LT-HSC, 12 : Neu, 13 : Ly B, 14 Ly-ETS1, 15 : DC
-new.cluster.ids <- c("HSC-SELL2", "HSC-AVP", "HSC-Er", "HSC-SELL1", "EMP", "GMP", 
-                     "LyP", "MkP", "proT","LMPP","preB","LT-HSC","Neu","LyB","Ly-ETS1","DC")
-names(new.cluster.ids) <- levels(samples)
-samples <- RenameIdents(samples, new.cluster.ids)
-DimPlot(samples, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
-
-#genes expr in CTRL
-CTRL<-subset(samples, orig.ident=="freshCD34_CBP547_CTRL")
-head(CTRL@meta.data)
-DimPlot(CTRL, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
-levels(CTRL)
-CTRL_expr_by_pop <- data.frame(row.names = rownames(CTRL[["SCT"]]@data))
-
-for (pop in levels(CTRL) ){
-  CTRL_expr_by_pop[,pop] <- as.vector(rowMeans(x = as.matrix(CTRL[["SCT"]]@data[,Idents(CTRL)==pop])))
-}
-#bulk expr in CTRL : 
-CTRL_expr_by_pop[,"bulk"]<-rowMeans(as.matrix(CTRL[["SCT"]]@data))
-head(CTRL_expr_by_pop)
-
-#proportion of cells in each cluster : 
-for (pop in levels(CTRL) ){
-  CTRL_expr_by_pop["proportion",pop]<-sum(Idents(CTRL)==pop)/ncol(CTRL)
-}
-CTRL_expr_by_pop["proportion",]
-sum(CTRL_expr_by_pop["proportion",],na.rm = T)
-
-#ya til des des genes ds matrix  pas du tout expr ?
-sum(rowSums(CTRL_expr_by_pop,na.rm = T)==0) #75, on les flag
-CTRL_expr_by_pop[,"expr"]<-F
-CTRL_expr_by_pop[rowSums(CTRL_expr_by_pop,na.rm = T)!=0,"expr"]<-T
-sum(CTRL_expr_by_pop$expr) #7518
-
-#genes expr in LGA
-LGA<-subset(samples, orig.ident=="freshCD34_CBP552_LGA")
-head(LGA@meta.data)
-DimPlot(LGA, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
-levels(LGA)
-LGA_expr_by_pop <- data.frame(row.names = rownames(LGA[["SCT"]]@data))
-
-for (pop in levels(LGA) ){
-  LGA_expr_by_pop[,pop] <- as.vector(rowMeans(x = as.matrix(LGA[["SCT"]]@data[,Idents(LGA)==pop])))
-}
-#bulk expr in LGA : 
-LGA_expr_by_pop[,"bulk"]<-rowMeans(as.matrix(LGA[["SCT"]]@data))
-head(LGA_expr_by_pop)
-
-#proportion of cells in each cluster : 
-for (pop in levels(LGA) ){
-  LGA_expr_by_pop["proportion",pop]<-sum(Idents(LGA)==pop)/ncol(LGA)
-}
-LGA_expr_by_pop["proportion",]
-sum(LGA_expr_by_pop["proportion",],na.rm = T)
-
-#ya til des des genes ds matrix  pas du tout expr ?
-sum(rowSums(LGA_expr_by_pop,na.rm = T)==0) #1886, on les flag
-LGA_expr_by_pop[,"expr"]<-F
-LGA_expr_by_pop[rowSums(LGA_expr_by_pop,na.rm = T)!=0,"expr"]<-T
-sum(LGA_expr_by_pop$expr) #5749
-
-write.csv2(CTRL_expr_by_pop,file.path(outputDir,"geneExprInCTRL.csv"),row.names = T)
-write.csv2(LGA_expr_by_pop,file.path(outputDir,"geneExprInLGA.csv"),row.names = T)
-
-#ajout au res
-#genes res
-genesInCommon<-intersect(genes,union(rownames(CTRL_expr_by_pop[CTRL_expr_by_pop$expr]),rownames(LGA_expr_by_pop[LGA_expr_by_pop$expr])))
-length(genesInCommon) #2511
-#count locis par genes
-table(res$gene)[1:10]
-genes[1:10]
-genesRes<-data.frame(row.names =genes,count=table(res$gene)[genes])
-colnames(genesRes)<-c("gene","nLocis")
-head(genesRes)
-genesResExpr<-data.frame(row.names = genesInCommon,
-                         nLocis = genesRes[genesInCommon,"nLocis"],
-                    CTRL_expr_by_pop[genesInCommon,], 
-                    LGA_expr_by_pop[genesInCommon,]
-                    
-                    )
-head(genesResExpr)
-ncol(genesResExpr)
-colnames(genesResExpr)<- c("nLocis","HSC.SELL2_CTRL","HSC.AVP_CTRL","HSC.Er_CTRL","HSC.SELL1_CTRL","EMP_CTRL",
-                       "GMP_CTRL","LyP_CTRL", "MkP_CTRL", "proT_CTRL", "LMPP_CTRL" ,"preB_CTRL","LT.HSC_CTRL",
-                       "Neu_CTRL","LyB_CTRL","Ly.ETS1_CTRL","DC_CTRL","bulk_CTRL","exprIn_CTRL",
-                       "HSC.SELL2_LGA","HSC.AVP_LGA","HSC.Er_LGA","HSC.SELL1_LGA","EMP_LGA",
-                       "GMP_LGA","LyP_LGA", "MkP_LGA", "proT_LGA", "LMPP_LGA" ,"preB_LGA","LT.HSC_LGA",
-                       "Neu_LGA","LyB_LGA","Ly.ETS1_LGA","DC_LGA","bulk_LGA","exprIn_LGA")
-ncol(genesResExpr)
-cols<-c(1)
-for(i in 1:(ncol(genesResExpr[2:length(genesResExpr)])/2)){
-  cols<-c(cols,i+1,i+19)
-}
-
-head(genesResExpr[,cols[4:5]])
-
-genesResExpr<-genesResExpr[,cols]
-head(genesResExpr)
-
-#markers of clusters
-markers<-read.csv2("../../../Alexandre_SC/analyses/test_batch_integration/all.markers_SCTransform_CTRLandLGA_integrated.csv")
-head(markers)
-for(i in 1:length(new.cluster.ids)){
-  markers$cluster[markers$cluster==as.numeric(names(new.cluster.ids)[i])]<-new.cluster.ids[i]
+resLocisToGenes<-function(resLocis){
+  genes<-na.omit(unique(resLocis$gene))
+  df<-data.frame(row.names =genes,nLocis=table(resLocis$gene)[genes])
+  colnames(df)<-c("gene","nLocis")
+  return(df)
 }
 
 
-scoresCluster<-scoreMarquageCluster(markers,samples,seuil = "intraClusterFixe",filtreMin = 2)
-head(scoresCluster)
+findGenesExpr<-function(resGenes,listExprMat,retourne="all"){
+  #retourne df avec expr des genes dans chaque pop (colonnes des mat)
+  allGenes<-unique(as.vector(sapply(listExprMat, rownames)))
+  genesInCommon<-intersect(rownames(resGenes),allGenes)
+  
+  print(paste(length(genesInCommon),"genes en commun")) 
+  popNames<-paste(colnames(listExprMat[[1]]),names(listExprMat)[1],sep = "_")
+  
+  resGenesExpr<-data.frame(row.names = genesInCommon,
+                           
+                           listExprMat[[1]][genesInCommon,])
+  cols<-c(popNames)
+  colnames(resGenesExpr)<- cols
+  
+  for(i in 2:length(listExprMat)){
+    resGenesExpr<-data.frame(row.names = genesInCommon,
+                             resGenesExpr[genesInCommon,],
+                             listExprMat[[i]][genesInCommon,])
+    popNames<-paste(colnames(listExprMat[[i]]),names(listExprMat)[i],sep = "_")
+    cols<-c(cols,popNames)
+    colnames(resGenesExpr)<- cols
 
-genesMarqueurs<-intersect(rownames(scoresCluster),genesInCommon)
-length(genesMarqueurs) #633
-genesResExpr[genesMarqueurs,"marqueur_de"]<-scoresCluster[genesMarqueurs,"dans_clusters_"]
-
-clusters<-colnames(scoresCluster)[str_detect(colnames(scoresCluster),"^cluster")]
-
-for(gene in genesMarqueurs){
-  genesResExpr[gene,"scores"]<-paste(scoresCluster[gene,clusters][scoresCluster[gene,clusters]>0],collapse = "/")
+    
+  }
+  #mettre les cols d'une meme pop a coté
+  
+  cols<-c() #colone "nLocis" a conserver au debut
+  decalcols<-1:(length(listExprMat)-1)
+  ncols.ech<-ncol(listExprMat[[1]]) #nb de colonne par ech pour faire le decallage
+  
+  for(i in 1:ncols.ech){
+    pos1st<-i
+    newCols<-c(pos1st,pos1st+ncols.ech*decalcols)
+    cols<-c(cols,newCols)
+    
+  }
+  resGenesExpr<-resGenesExpr[,cols]
+  
+  if(retourne=="all"){
+    df<-merge.data.frame(resGenes,resGenesExpr,by="row.names",all.x = T,all.y = T)
+    rownames(df)<-df$gene
+    return(df)
+  }else{
+    return(data.frame(row.names = genesInCommon,nLocis=resGenes[genesInCommon,"nLocis"],resGenesExpr[genesInCommon,]))
+  }
+                           
+  
+  
 }
-head(genesResExpr[,c("marqueur_de","scores")],100)
-head(genesResExpr,100)
+
+
+
+addMarqueursClusters<-function(scores,resGenes){
+  genesMarqueurs<-intersect(rownames(scores),rownames(resGenes))
+  print(paste(length(genesMarqueurs),"marqueurs de cluster"))
+  resGenes[genesMarqueurs,"marqueur_de"]<-scores[genesMarqueurs,"dans_clusters_"]
+  clusters<-colnames(scores)[str_detect(colnames(scores),"^cluster")]
+  
+  for(gene in genesMarqueurs){
+    resGenes[gene,"scores"]<-paste(scores[gene,clusters][scores[gene,clusters]>0],collapse = "/")
+  }
+  return(resGenes)
+}
 
 
 #markers known
-source("scripts/ManagePopMarqueurs.R")
+
 findMarqueursPops<-function(genes,df=NULL){
-  
+  source("scripts/ManagePopMarqueurs.R")
   if(is.null(df)){
     df<-data.frame()
   }
@@ -158,72 +83,82 @@ findMarqueursPops<-function(genes,df=NULL){
   for (gene in genes){
     pops<-GetPopDe(gene)
     if(!is.null(pops)){
+      print(paste(gene,"marqueurs de ",paste(pops,collapse = ", ")))
       df[gene,"MarqueurPops"]<-paste(pops,collapse = ";")
     }else{
-      df[gene,"MarqueurPops"]<-""
+      df[gene,"MarqueurPops"]<-NA
     }
     
   }
-  
+  print(paste(sum(!is.na(df$MarqueurPops)),"genes sont des marqueurs connus de sous-population"))
   return(df)
 }
 
-genesResExpr<-findMarqueursPops(genesInCommon,df = genesResExpr)
-head(genesResExpr[!sapply(genesResExpr$MarqueurPops,is.empty),])
-sum(!sapply(genesResExpr$MarqueurPops,is.empty)) #25
-
-
-#TF et fct
-genesResExpr
-
-genesInfos<-find_fonction(genesInCommon,df = genesResExpr,save=T)
-head(genesInfos)
-genesInfos<-findIfTF(genesInCommon,genesInfos,save=F,large = T)
-
-head(genesInfos)
-genesInfos<-findCbIn(genesInCommon,
-                     listeKeywords = list(HSPC="hematopo|myeloid|lymphoid|HSC|HSPC",
-                                          lineage="lineage decision|differentiation|cell fate",
-                                          stress="stress",
-                                          signaling="kinase|signaling|pathway"),
-                     genes_infos=genesInfos)
-head(genesInfos)
-genesResExpr<-data.frame(row.names = genesInCommon,genesResExpr[genesInCommon,],genesInfos[genesInCommon,c("TF", "HSPC", "lineage" ,"stress","Fonction")])
-head(genesResExpr)
-
-write.csv2(genesResExpr2,file.path(outputDir,"resGenesIntegration.csv"),row.names = T)
 
 #locis : 
 
-for(gene in genesInCommon){
-  pos<-which(res$gene==gene)
-  #ajout expr in bulk
-  res[pos,"bulk_CTRL"]<-genesResExpr[gene,"bulk_CTRL"]
-  res[pos,"bulk_LGA"]<-genesResExpr[gene,"bulk_LGA"]
-  
-  #ajout expr in pop
-  pops<-colnames(genesResExpr)[2:(which((colnames(genesResExpr)=="exprIn_CTRL"))-1)]
-  ExprIn<-pops[genesResExpr[gene,pops]>0]
-  ExprInOrdered<-ExprIn[order(genesResExpr[gene,ExprIn],decreasing = T)]
-  if(length(ExprInOrdered)>4){
-    ExprInOrdered<-ExprInOrdered[1:4]
+mergeCols<-function(df,colsToMerge,mergeColsName,top=NULL,filter=0,roundNum=1){
+  #use top=4 pour garder que les 4 plus grosses valeurs des cols tomerge (numeriques)
+  newDf<-data.frame(row.names = rownames(df),df[,!(colnames(df)%in%colsToMerge)])
+  if(is.numeric(top)){
+    for(line in rownames(df)){
+      colsToMergeF<-colsToMerge[df[line,colsToMerge]>filter]
+      
+      colsToMergeOrdered<-colsToMergeF[order(df[line,colsToMergeF],decreasing = T)]
+      
+      if(length(colsToMergeOrdered)>abs(top)){
+        if(top>0){
+          colsToMergeOrdered<-colsToMergeOrdered[1:top]
+        }else if(top<0){
+          colsToMergeOrdered<-colsToMergeOrdered[(length(colsToMergeOrdered)+(top-1)):length(colsToMergeOrdered)]
+        }
+        
+        
+      }
+      subColNames<-paste0("top",top,mergeColsName)
+      newDf[line,subColNames]<-paste(colsToMergeOrdered,collapse = "/")
+      newDf[line,paste0(subColNames,"Vals")]<-paste(round(df[line,colsToMergeOrdered],roundNum),collapse = "/")
+    }
+    return(newDf)
+    
+  }else{
+    
+    newDf[,paste0(mergeColsName,"Cols")]<-paste(colsToMerge,collapse = "/")
+    newDf[,mergeColsName]<-apply(df[,colsToMerge],1,paste,collapse = "/")
+    return(newDf)
+    
   }
-  res[pos,"ExprIn"]<-paste(ExprInOrdered,collapse = "/")
-  res[pos,"log2Expr"]<-paste(round(genesResExpr[gene,ExprInOrdered],1),collapse = "/")
-  
-  #ajout top DEmarkers
-  
-  res[pos,"marqueur_de"]<-genesResExpr[gene,"marqueur_de"]
-  res[pos,"scores"]<-genesResExpr[gene,"scores"]
-  res[pos,"marqueur_connu_de"]<-genesResExpr[gene,"MarqueurPops"]
-  res[pos,"TF"]<-genesResExpr[gene,"TF"]
-  res[pos,"HSPC"]<-genesResExpr[gene,"HSPC"]
-  res[pos,"lineage"]<-genesResExpr[gene,"lineage"]
-  res[pos,"stress"]<-genesResExpr[gene,"stress"]
-  res[pos,"fonction"]<-genesResExpr[gene,"Fonction"]
 }
-head(res[!(is.na(res$ExprIn)),],100)
-write.csv2(res,file=file.path(outputDir,"res_with_scRNA-seq_integration.csv"),row.names = T)
+
+
+#annot locis 
+annotLocis<-function(resLocis,resGenes,annots=NULL,genes=NULL,filter=T){
+  if(is.null(annots)){
+    annots<-colnames(resGenes)
+  }
+  if(is.null(genes)){
+    genes<-rownames(resGenes)
+  }
+  poss<-c()
+  for(gene in genes){
+    pos<-which(resLocis$gene==gene)
+    poss<-union(poss,pos)
+    for(annot in annots){
+      resLocis[pos,annot]<-resGenesMerge[pos,annot]
+      
+      
+    }
+   
+  }
+  if(filter){
+    return(resLocis[poss,])
+  }else{
+    return(resLocis)
+  }
+  
+
+}
+
 
 
 # #! a faire : 

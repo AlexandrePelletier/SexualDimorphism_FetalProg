@@ -196,6 +196,7 @@ deterSeuilDtPct<-function(pct0){
 # 
 
 scoreMarquageCluster<-function(markersDE,ObjetSeurat,clusters="all",seuil="fixe", bonusExclu=T,filtreMin=2,Dfimportances=NULL){
+  library(stringr)
   if (seuil=="fixe"){
     seuilPval=deterSeuilPval(ncol(ObjetSeurat))
     mat<-as.matrix(ObjetSeurat[["RNA"]]@counts)
@@ -276,7 +277,7 @@ scoreMarquageCluster<-function(markersDE,ObjetSeurat,clusters="all",seuil="fixe"
         }
         
         #recuperer le numero de ligne du resultats de signif marker
-        ligne=which(markersDE$cluster==num_cluster & markersDE$gene ==gene)
+        ligne<-which(markersDE$cluster==num_cluster & markersDE$gene ==gene)
         
         #on recupere pct1, pct2, pval et logFC
         
