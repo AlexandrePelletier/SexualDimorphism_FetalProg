@@ -8,7 +8,7 @@ dir.create(path = outputDir, recursive = TRUE, showWarnings = FALSE, mode = "077
 
 
 #jeu de res
-res<-read.csv2("analyses/main/top1000Locis_Group.Sex__model1BasicsLocisFilteringAndSamples_F_annotated_280320.csv")
+res<-read.csv2("analyses/main/top1000Locis_Group.Sex__model1BasicsLocisFilteringAndSamples_F_annotated_280320.csv",row.names = 1)
 #genes
 genes<-na.omit(unique(res$gene))
 head(genes)
