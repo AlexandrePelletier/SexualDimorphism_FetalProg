@@ -144,131 +144,175 @@ for(gene in genesMarqueurs){
   genesResExpr[gene,"scores"]<-paste(scoresCluster[gene,clusters][scoresCluster[gene,clusters]>0],collapse = "/")
 }
 head(genesResExpr[,c("marqueur_de","scores")],100)
-#markers known
-write.csv2(genesResExpr,file.path(outputDir,"resGenesIntegration.csv"),row.names = T)
+head(genesResExpr,100)
 
-#locis
+
+#markers known
+source("scripts/ManagePopMarqueurs.R")
+findMarqueursPops<-function(genes,df=NULL){
+  
+  if(is.null(df)){
+    df<-data.frame()
+  }
+  
+  for (gene in genes){
+    pops<-GetPopDe(gene)
+    if(!is.null(pops)){
+      df[gene,"MarqueurPops"]<-paste(pops,collapse = ";")
+    }else{
+      df[gene,"MarqueurPops"]<-""
+    }
+    
+  }
+  
+  return(df)
+}
+
+genesResExpr<-findMarqueursPops(genesInCommon,df = genesResExpr)
+head(genesResExpr[!sapply(genesResExpr$MarqueurPops,is.empty),])
+sum(!sapply(genesResExpr$MarqueurPops,is.empty)) #25
+
+
+#TF et fct
+genesResExpr
+
+genesInfos<-find_fonction(genesInCommon,df = genesResExpr,save=T)
+head(genesInfos)
+genesInfos<-findIfTF(genesInCommon,genesInfos,save=F,large = T)
+
+head(genesInfos)
+genesInfos<-findCbIn(genesInCommon,
+                     listeKeywords = list(HSPC="hematopo|myeloid|lymphoid|HSC|HSPC",
+                                          lineage="lineage decision|differentiation|cell fate",
+                                          stress="stress",
+                                          signaling="kinase|signaling|pathway"),
+                     genes_infos=genesInfos)
+head(genesInfos)
+genesResExpr<-data.frame(row.names = genesInCommon,genesResExpr[genesInCommon,],genesInfos[genesInCommon,c("TF", "HSPC", "lineage" ,"stress","Fonction")])
+head(genesResExpr)
+
+write.csv2(genesResExpr2,file.path(outputDir,"resGenesIntegration.csv"),row.names = T)
+
+#locis : 
 
 for(gene in genesInCommon){
   pos<-which(res$gene==gene)
-  res[pos,"bulk_CTRL"]<-genesRes[gene,"bulk_CTRL"]
-  res[pos,"bulk_LGA"]<-genesRes[gene,"bulk_LGA"]
+  #ajout expr in bulk
+  res[pos,"bulk_CTRL"]<-genesResExpr[gene,"bulk_CTRL"]
+  res[pos,"bulk_LGA"]<-genesResExpr[gene,"bulk_LGA"]
   
-  ExprIn<-colnames(genesRes)[genesRes[gene,]>0]
-  ExprInOrdered<-ExprIn[order(genesRes[gene,ExprIn],decreasing = T)]
+  #ajout expr in pop
+  pops<-colnames(genesResExpr)[2:(which((colnames(genesResExpr)=="exprIn_CTRL"))-1)]
+  ExprIn<-pops[genesResExpr[gene,pops]>0]
+  ExprInOrdered<-ExprIn[order(genesResExpr[gene,ExprIn],decreasing = T)]
   if(length(ExprInOrdered)>4){
     ExprInOrdered<-ExprInOrdered[1:4]
   }
-  
   res[pos,"ExprIn"]<-paste(ExprInOrdered,collapse = "/")
-  res[pos,"log2Expr"]<-paste(round(genesRes[gene,ExprInOrdered],1),collapse = "/")
+  res[pos,"log2Expr"]<-paste(round(genesResExpr[gene,ExprInOrdered],1),collapse = "/")
+  
+  #ajout top DEmarkers
+  
+  res[pos,"marqueur_de"]<-genesResExpr[gene,"marqueur_de"]
+  res[pos,"scores"]<-genesResExpr[gene,"scores"]
+  res[pos,"marqueur_connu_de"]<-genesResExpr[gene,"MarqueurPops"]
+  res[pos,"TF"]<-genesResExpr[gene,"TF"]
+  res[pos,"HSPC"]<-genesResExpr[gene,"HSPC"]
+  res[pos,"lineage"]<-genesResExpr[gene,"lineage"]
+  res[pos,"stress"]<-genesResExpr[gene,"stress"]
+  res[pos,"fonction"]<-genesResExpr[gene,"Fonction"]
 }
 head(res[!(is.na(res$ExprIn)),],100)
 write.csv2(res,file=file.path(outputDir,"res_with_scRNA-seq_integration.csv"),row.names = T)
 
 
+# #! a faire : 
+# #pour scorer les markers selon leur proximité phenotypique avec les autre markers, need bioprocess infos
+# genes<-unique(DEmarkers$gene)
+# genesInfos<-find_description(genes)
+# genesInfos<-find_GoBioProcess(rownames(scoresCluster),df = genesInfos,save = T)
+# #que l'on nettoir (pour eviter redondance de terme)
+# genesInfos<-cleanBioProcess(genes, genesInfos)
+# 
+# clusters<-names(scoresCluster)[str_detect(names(scoresCluster),"cluster[0-9]")]
+# linksScore<-data.frame(row.names =rownames(scoresCluster) )
+# 
+# 
+# for (cluster in clusters){
+#   numCluster<-as.numeric(strsplit(cluster,"ster")[[1]][2])
+#   
+#   genes<-rownames(scoresCluster)[scoresCluster[,cluster]!=0]
+#   
+#   for (gene in genes){
+#     DEmarkers[DEmarkers$gene == gene & DEmarkers$cluster== numCluster, "score"]<-scoresCluster[gene,cluster]
+#     DEmarkers[DEmarkers$gene == gene & DEmarkers$cluster== numCluster, "dans_clusters"]<-scoresCluster[gene,"dans_clusters_"]
+#     #trouve genes links between genes
+#     linkedGenes<-TrouveGenesLinks(gene,genes,genesInfos)
+#     DEmarkers[DEmarkers$gene == gene & DEmarkers$cluster== numCluster,"LinkedGenes"]<-paste(linkedGenes,collapse = ";")
+#     if(length(linkedGenes)<5){
+#       score<-length(linkedGenes)
+#     }else{
+#       score<-5
+#     }
+#     
+#     DEmarkers[DEmarkers$gene == gene & DEmarkers$cluster== numCluster,"PhenotLinksScore"]<-score
+#     linksScore[gene,cluster]<-score
+#   }
+#   print(numCluster)
+#   
+# }
+# 
+# DEmarkers<-subset(DEmarkers,!is.na(score))
+# 
+# DEmarkers<-subset(DEmarkers,score>=scoreMin)
+# head(DEmarkers)
+# linksScore<-as.matrix(linksScore)
+# linksScore[is.na(linksScore)]<-0
+# 
+# ##annotation genes
+# 
+# #genesinfos<-annotation_auto_genes(genes = unique(DEmarkers$gene))
+# #ùettre Fonction, description, TF, tissue match
+# genes<-unique(DEmarkers$gene)
+# genesInfos<-subset(genesInfos,rownames(genesInfos)%in%genes)
+# 
+# 
+# genesInfos<-find_fonction(genes,genesInfos,save=T)
+# genesInfos<-findIfTF(genes,genesInfos,save=T,large = T)
+# 
+# 
+# genesInfos<-findCbIn(genes,
+#                      listeKeywords = list(neuron="neur(o|a)",astrocyte="astro(c|g)|macrogli",oligodendrocyte="oligodendrocyt",progenitor="progen|precur",gliale="glial"),genes_infos=genesInfos)
+# 
+# 
+# View(genesInfos)
+# 
+# for(gene in rownames(genesInfos)){
+#   for (annotation in annotationsDesGenes){
+#     
+#     if(gene %in% DEmarkers$gene){
+#       DEmarkers[DEmarkers$gene==gene,annotation]<-genesInfos[gene,annotation]
+#     }
+#     
+#     
+#   }
+#   
+# }
+# View(DEmarkers)
+# #top10 par cluster selon leur scoreCLuster+scorePhenotLinks
+# topN<-DEmarkers %>% group_by(cluster) %>%arrange(desc(score)) %>% top_n(n = NbTopMarkerDansHeatmap, wt = score + PhenotLinksScore)
+# topN<-topN %>% group_by(cluster) %>% top_n(n = NbTopMarkerDansHeatmap, wt = avg_logFC)%>%arrange(cluster)
+# 
+# DEmarkersTop<-data.frame(topN)
+# View(DEmarkersTop)
+# 
+# #enlever col pas informative
+# names(DEmarkersTop)
+# colToRm<-c("astrocyte","p_val")
+# cols<-setdiff(names(DEmarkersTop),colToRm)
+# cols<-cols[c(6,1:5,7,10,9,11:17,8)]
+# colsSansAnnot<-cols[1:7]
+# #sauvegarder
+# write.csv2(DEmarkersTop[cols], file =file.path(outputDir,paste(sample_desc,"TopMarkersAvecAnnotation_resol",resol,".csv",sep="_")))
+# write.csv2(DEmarkersTop[colsSansAnnot], file =file.path(outputDir,paste(sample_desc,"TopMarkers_resol",resol,".csv",sep="_")))
 
-#pour scorer les markers selon leur proximité phenotypique avec les autre markers, need bioprocess infos
-genes<-unique(DEmarkers$gene)
-genesInfos<-find_description(genes)
-genesInfos<-find_GoBioProcess(rownames(scoresCluster),df = genesInfos,save = T)
-#que l'on nettoir (pour eviter redondance de terme)
-genesInfos<-cleanBioProcess(genes, genesInfos)
-
-clusters<-names(scoresCluster)[str_detect(names(scoresCluster),"cluster[0-9]")]
-linksScore<-data.frame(row.names =rownames(scoresCluster) )
-
-
-for (cluster in clusters){
-  numCluster<-as.numeric(strsplit(cluster,"ster")[[1]][2])
-  
-  genes<-rownames(scoresCluster)[scoresCluster[,cluster]!=0]
-  
-  for (gene in genes){
-    DEmarkers[DEmarkers$gene == gene & DEmarkers$cluster== numCluster, "score"]<-scoresCluster[gene,cluster]
-    DEmarkers[DEmarkers$gene == gene & DEmarkers$cluster== numCluster, "dans_clusters"]<-scoresCluster[gene,"dans_clusters_"]
-    #trouve genes links between genes
-    linkedGenes<-TrouveGenesLinks(gene,genes,genesInfos)
-    DEmarkers[DEmarkers$gene == gene & DEmarkers$cluster== numCluster,"LinkedGenes"]<-paste(linkedGenes,collapse = ";")
-    if(length(linkedGenes)<5){
-      score<-length(linkedGenes)
-    }else{
-      score<-5
-    }
-    
-    DEmarkers[DEmarkers$gene == gene & DEmarkers$cluster== numCluster,"PhenotLinksScore"]<-score
-    linksScore[gene,cluster]<-score
-  }
-  print(numCluster)
-  
-}
-
-DEmarkers<-subset(DEmarkers,!is.na(score))
-
-DEmarkers<-subset(DEmarkers,score>=scoreMin)
-head(DEmarkers)
-linksScore<-as.matrix(linksScore)
-linksScore[is.na(linksScore)]<-0
-
-##annotation genes
-
-#genesinfos<-annotation_auto_genes(genes = unique(DEmarkers$gene))
-#ùettre Fonction, description, TF, tissue match
-genes<-unique(DEmarkers$gene)
-genesInfos<-subset(genesInfos,rownames(genesInfos)%in%genes)
-
-
-genesInfos<-find_fonction(genes,genesInfos,save=T)
-genesInfos<-findIfTF(genes,genesInfos,save=T,large = T)
-
-
-genesInfos<-findCbIn(genes,
-                     listeKeywords = list(neuron="neur(o|a)",astrocyte="astro(c|g)|macrogli",oligodendrocyte="oligodendrocyt",progenitor="progen|precur",gliale="glial"),genes_infos=genesInfos)
-
-
-View(genesInfos)
-
-for(gene in rownames(genesInfos)){
-  for (annotation in annotationsDesGenes){
-    
-    if(gene %in% DEmarkers$gene){
-      DEmarkers[DEmarkers$gene==gene,annotation]<-genesInfos[gene,annotation]
-    }
-    
-    
-  }
-  
-}
-View(DEmarkers)
-#top10 par cluster selon leur scoreCLuster+scorePhenotLinks
-topN<-DEmarkers %>% group_by(cluster) %>%arrange(desc(score)) %>% top_n(n = NbTopMarkerDansHeatmap, wt = score + PhenotLinksScore)
-topN<-topN %>% group_by(cluster) %>% top_n(n = NbTopMarkerDansHeatmap, wt = avg_logFC)%>%arrange(cluster)
-
-DEmarkersTop<-data.frame(topN)
-View(DEmarkersTop)
-
-#enlever col pas informative
-names(DEmarkersTop)
-colToRm<-c("astrocyte","p_val")
-cols<-setdiff(names(DEmarkersTop),colToRm)
-cols<-cols[c(6,1:5,7,10,9,11:17,8)]
-colsSansAnnot<-cols[1:7]
-#sauvegarder
-write.csv2(DEmarkersTop[cols], file =file.path(outputDir,paste(sample_desc,"TopMarkersAvecAnnotation_resol",resol,".csv",sep="_")))
-write.csv2(DEmarkersTop[colsSansAnnot], file =file.path(outputDir,paste(sample_desc,"TopMarkers_resol",resol,".csv",sep="_")))
-
-topScores<-scoresCluster[unique(topN$gene),clusters]
-#rownames(topScores)<-paste(rownames(topScores),genesinfos[rownames(topScores),"MarqueurPops"],sep = ",")
-
-ngenes<-nrow(topScores)
-dfAnnot<-data.frame(row.names =rownames(topScores),
-                    Expr_TopCluster=apply(norm.data[rownames(topScores),],1,max),
-                    TF=as.numeric(genesInfos[rownames(topScores),"TF"]),
-                    neuron_rel=genesInfos[rownames(topScores),"neuron"])
-
-#juste score Cluster
-pm<-pheatmap(topScores,fontsize = 9,
-             
-             annotation_row = dfAnnot
-             
-)

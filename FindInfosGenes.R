@@ -138,9 +138,9 @@ find_fonction<-function(genes,df=NULL,save=F,searchInLocal=T){
     
   }
   if(searchInLocal){
-    genes_infos<-read.csv2("ref/genes_infos.csv",row.names = 1,na.strings = "")
+    genes_infos<-read.csv2("../../../Alexandre_SC/analyses/ref/genes_infos.csv",row.names = 1,na.strings = "")
     genesDejaAnnot<-genes[genes%in%rownames(genes_infos)]
-    genesDejaAnnot<-genesDejaAnnot[(!is.na(genesInfos[genesDejaAnnot,"Fonction"]))&(genesInfos[genesDejaAnnot,"Fonction"]!="")]
+    genesDejaAnnot<-genesDejaAnnot[(!is.na(genes_infos[genesDejaAnnot,"Fonction"]))&(genes_infos[genesDejaAnnot,"Fonction"]!="")]
     if(length(genesDejaAnnot>0)){
       print(paste("genes deja annote :", paste(genesDejaAnnot,collapse = ", ")))
       df[genesDejaAnnot,"Fonction"]<-genes_infos[genesDejaAnnot,"Fonction"]
@@ -162,7 +162,7 @@ find_fonction<-function(genes,df=NULL,save=F,searchInLocal=T){
   library(reticulate)
   #try(use_python("C:/ProgramData/Anaconda3/",required = T))
   
-  source_python("scripts/GetUniprotFunction.py")
+  source_python("../../../Alexandre_SC/analyses/scripts/GetUniprotFunction.py")
   if (length(genesUniprots$uniprotswissprot)>0){
     
     for (uniprotID in genesUniprots$uniprotswissprot){
