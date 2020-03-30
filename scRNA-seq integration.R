@@ -52,6 +52,11 @@ for (pop in levels(CTRL) ){
 CTRL_expr_by_pop["proportion",]
 sum(CTRL_expr_by_pop["proportion",],na.rm = T)
 
+#ya til des des genes ds matrix  pas du tout expr ?
+sum(rowSums(CTRL_expr_by_pop,na.rm = T)==0) #75, on les flag
+CTRL_expr_by_pop[,"expr"]<-F
+CTRL_expr_by_pop[rowSums(CTRL_expr_by_pop,na.rm = T)!=0,"expr"]<-T
+sum(CTRL_expr_by_pop$expr) #7518
 
 #genes expr in LGA
 LGA<-subset(samples, orig.ident=="freshCD34_CBP552_LGA")
@@ -74,31 +79,73 @@ for (pop in levels(LGA) ){
 LGA_expr_by_pop["proportion",]
 sum(LGA_expr_by_pop["proportion",],na.rm = T)
 
+#ya til des des genes ds matrix  pas du tout expr ?
+sum(rowSums(LGA_expr_by_pop,na.rm = T)==0) #1886, on les flag
+LGA_expr_by_pop[,"expr"]<-F
+LGA_expr_by_pop[rowSums(LGA_expr_by_pop,na.rm = T)!=0,"expr"]<-T
+sum(LGA_expr_by_pop$expr) #5749
+
+write.csv2(CTRL_expr_by_pop,file.path(outputDir,"geneExprInCTRL.csv"),row.names = T)
+write.csv2(LGA_expr_by_pop,file.path(outputDir,"geneExprInLGA.csv"),row.names = T)
 
 #ajout au res
-#genes
-genesInCommon<-genes[genes%in%union(rownames(CTRL_expr_by_pop),rownames(LGA_expr_by_pop))]
-genesRes<-data.frame(row.names = genesInCommon, 
+#genes res
+genesInCommon<-intersect(genes,union(rownames(CTRL_expr_by_pop[CTRL_expr_by_pop$expr]),rownames(LGA_expr_by_pop[LGA_expr_by_pop$expr])))
+length(genesInCommon) #2511
+#count locis par genes
+table(res$gene)[1:10]
+genes[1:10]
+genesRes<-data.frame(row.names =genes,count=table(res$gene)[genes])
+colnames(genesRes)<-c("gene","nLocis")
+head(genesRes)
+genesResExpr<-data.frame(row.names = genesInCommon,
+                         nLocis = genesRes[genesInCommon,"nLocis"],
                     CTRL_expr_by_pop[genesInCommon,], 
                     LGA_expr_by_pop[genesInCommon,]
                     
                     )
-colnames(genesRes)<- c("HSC.SELL2_CTRL","HSC.AVP_CTRL","HSC.Er_CTRL","HSC.SELL1_CTRL","EMP_CTRL",
+head(genesResExpr)
+ncol(genesResExpr)
+colnames(genesResExpr)<- c("nLocis","HSC.SELL2_CTRL","HSC.AVP_CTRL","HSC.Er_CTRL","HSC.SELL1_CTRL","EMP_CTRL",
                        "GMP_CTRL","LyP_CTRL", "MkP_CTRL", "proT_CTRL", "LMPP_CTRL" ,"preB_CTRL","LT.HSC_CTRL",
-                       "Neu_CTRL","LyB_CTRL","Ly.ETS1_CTRL","DC_CTRL","bulk_CTRL",
+                       "Neu_CTRL","LyB_CTRL","Ly.ETS1_CTRL","DC_CTRL","bulk_CTRL","exprIn_CTRL",
                        "HSC.SELL2_LGA","HSC.AVP_LGA","HSC.Er_LGA","HSC.SELL1_LGA","EMP_LGA",
                        "GMP_LGA","LyP_LGA", "MkP_LGA", "proT_LGA", "LMPP_LGA" ,"preB_LGA","LT.HSC_LGA",
-                       "Neu_LGA","LyB_LGA","Ly.ETS1_LGA","DC_LGA","bulk_LGA")
-ncol(genesRes)
-cols<-c()
-for(i in 1:(ncol(genesRes)/2)){
-  cols<-c(cols,i,i+17)
+                       "Neu_LGA","LyB_LGA","Ly.ETS1_LGA","DC_LGA","bulk_LGA","exprIn_LGA")
+ncol(genesResExpr)
+cols<-c(1)
+for(i in 1:(ncol(genesResExpr[2:length(genesResExpr)])/2)){
+  cols<-c(cols,i+1,i+19)
+}
+
+head(genesResExpr[,cols[4:5]])
+
+genesResExpr<-genesResExpr[,cols]
+head(genesResExpr)
+
+#markers of clusters
+markers<-read.csv2("../../../Alexandre_SC/analyses/test_batch_integration/all.markers_SCTransform_CTRLandLGA_integrated.csv")
+head(markers)
+for(i in 1:length(new.cluster.ids)){
+  markers$cluster[markers$cluster==as.numeric(names(new.cluster.ids)[i])]<-new.cluster.ids[i]
 }
 
 
-genesRes<-genesRes[,cols]
-head(genesRes)
+scoresCluster<-scoreMarquageCluster(markers,samples,seuil = "intraClusterFixe",filtreMin = 2)
+head(scoresCluster)
 
+genesMarqueurs<-intersect(rownames(scoresCluster),genesInCommon)
+length(genesMarqueurs) #633
+genesResExpr[genesMarqueurs,"marqueur_de"]<-scoresCluster[genesMarqueurs,"dans_clusters_"]
+
+clusters<-colnames(scoresCluster)[str_detect(colnames(scoresCluster),"^cluster")]
+
+for(gene in genesMarqueurs){
+  genesResExpr[gene,"scores"]<-paste(scoresCluster[gene,clusters][scoresCluster[gene,clusters]>0],collapse = "/")
+}
+head(genesResExpr[,c("marqueur_de","scores")],100)
+#markers known
+write.csv2(genesResExpr,file.path(outputDir,"resGenesIntegration.csv"),row.names = T)
 
 #locis
 
@@ -120,15 +167,7 @@ head(res[!(is.na(res$ExprIn)),],100)
 write.csv2(res,file=file.path(outputDir,"res_with_scRNA-seq_integration.csv"),row.names = T)
 
 
-#markers of clusters
-markers<-read.csv2("../../../Alexandre_SC/analyses/test_batch_integration/all.markers_SCTransform_CTRLandLGA_integrated.csv")
-head(markers)
-for(i in 1:length(new.cluster.ids)){
-  markers$cluster[markers$cluster==as.numeric(names(new.cluster.ids)[i])]<-new.cluster.ids[i]
-}
 
-  
-scoresCluster<-scoreMarquageCluster(markers,samples,seuil = "intraClusterFixe",filtreMin = 2)
 #pour scorer les markers selon leur proximité phenotypique avec les autre markers, need bioprocess infos
 genes<-unique(DEmarkers$gene)
 genesInfos<-find_description(genes)
