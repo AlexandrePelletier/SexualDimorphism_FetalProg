@@ -475,6 +475,12 @@ group_sex<-revalue(group_sex,c("1"="FC","2"="MC","3"="FI","4"="MI","5"="FL","6"=
 group_complexity<-as.numeric(batch[samples_F_F,"Group_Complexity"])
 group_complexity_fac<-as.numeric(batch[samples_F_F,"Group_Complexity_Fac"])
 
+
+complexity<-as.numeric(batch[samples_F_F,"Library_Complexity"])
+group.complexity<-group:complexity
+
+
+
 models<-list()
 model<-1
 formule<-~0 + group_sex + sequencing +batches + group_complexity_fac 
@@ -542,6 +548,17 @@ colSums(apply(res[,compas],2, function(x)return(x<max(top12000$P.Value)))) #asse
 # 1750  2676  5756  1670  2987  4387  2435  1404  1683  3180   844  1163 
 
 
+#RES LOCIS GENERALE
+#topFC by locis
+
+FCm<-mergeCols(FCs,mergeColsName = "FC",top = 4,filter = 20,abs = T,roundNum = 0)
+
+res<-data.frame(row.names = rownames(res),res,FCm[rownames(res),])
+
+head(res)
+write.csv2(res,paste(output,"res_locis_top",nrow(res),filtres,"model",model,".csv",sep = "_"),row.names = T)
+
+#RES PAR COMPAS
 #1) df FC et res par compas:
 FCs<-data.frame()
 resParCompa<-list()
@@ -605,16 +622,21 @@ for(compa in compas){
                                           stress="stress",
                                           signaling="kinase|signaling|pathway"),
                      genes_infos=resGenes))
-  #garder seulement expr des 5 plus grande pop pour save ds csv
-  colsToMerge<-colnames(resGenes)[2:(which(colnames(resGenes)=="expr_CTRL")-1)]
-  resGenes.merge<-mergeCols(df = resGenes,colsToMerge = colsToMerge,mergeColsName = "Expr",filter = 0.1,top = 5,abs = F)
-  
   #save 
   resGenesParCompa[[compa]]<-resGenes
   
-  write.csv2(resGenes.merge,paste(output,"res_genes_in",compa,"top",nrow(resGenes),filtres,"model",model,".csv",sep = "_"),row.names = T,na = "")
   
+}
+head(resGenesParCompa[[compa]])
+#write resLocis
+colsToMerge<-colnames(resGenes)[2:(which(colnames(resGenes)=="bulk_CTRL")-1)]
+for(compa in compas){
   
+  print(compa)
+  resGenes<-resGenesParCompa[[compa]]
+  #garder seulement expr des 5 plus grande pop pour save ds csv
+  resGenes.merge<-mergeCols(df = resGenes,colsToMerge = colsToMerge,mergeColsName = "Expr",filter = 0.1,top = 5,abs = F)
+
   #RES PAR LOCIS
   resLocis<-annotLocis(resLocis = resParCompa[[compa]],resGenes =resGenes.merge )
   #save
@@ -623,19 +645,10 @@ for(compa in compas){
 
 }
 
-#RES LOCIS GENERALE
-#topFC by locis
-locisSansMax<-c()
-compasTop<-colnames(FCs)[which(sapply(FCs[locus,],abs)>20)]
-FCm<-mergeCols(FCs,mergeColsName = "FC",top = 4,filter = 20,abs = T,roundNum = 0)
-res<-data.frame(row.names = rownames(res),res,FCm[rownames(res),])
-                                    
-head(res)
-write.csv2(res,paste(output,"res_locis_top",nrow(res),filtre,"model",model,".csv",sep = "_"),row.names = T)
 
-#LES FILTRATIONS DES LOCIS SIG
+#LES FILTRATIONS DES LOCIS SIG 
 #FC>30
-locisFC<-na.exclude(rownames(res)[res$topFC>30])
+locisFC<-na.exclude(rownames(res)[res$topFC>30]) #!revoir car pour filtration generale, ça na pas dint de filtrer selon topFC dune compa alors 
 locisConf<-na.omit(rownames(res)[res$RankConfidenceScore>750000])
 #dist from TSS
 locisGenes30kb<-rownames(res)[res$posAvant>-30000&res$posAvant<30000]
@@ -660,14 +673,17 @@ resModels[[model]]<-list(model=models[[model]],
                          res.compas=resParCompa,
                          resGenes.compas=resGenesParCompa,
                          locisF=list(complex=locisComplex,conf=locisConf, CRE=locisCRE,
-                              FC20=locisFC,Genes10kb=locisGenes10kb,Genes2kb=locisGenes2kb,HiConf= locisHiConf),
-                         distrib.hi.conf=table(res[locisHiConf,"topCompa"]),
+                              FC20=locisFC,Genes30kb=locisGenes30kb,Genes2kb=locisGenes2kb,HiConf= locisHiConf),
+                         distrib.hi.conf=table(res[locisHiConf,"topCompa"])
                          
                          
 )
-
+resModels[[1]]$model
+resModels[[1]]$seuilSig
+head(resModels[[1]]$locisSig)
+head(resModels[[1]]$distrib.compas)
 saveRDS(resModels[[model]],file = paste(output,'LocisetGenes_AllCompas',filtres,"model",model,'.rds'))
-
+#...
 
 
 #VISUALISATION RES

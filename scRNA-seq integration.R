@@ -175,7 +175,7 @@ annotLocis<-function(resLocis,resGenes,annots=NULL,genes=NULL,filter=T){
     pos<-which(resLocis$gene==gene)
     poss<-union(poss,pos)
     for(annot in annots){
-      resLocis[pos,annot]<-resGenes[pos,annot]
+      resLocis[pos,annot]<-resGenes[gene,annot]
       
       
     }
