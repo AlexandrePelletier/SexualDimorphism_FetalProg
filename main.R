@@ -15,7 +15,8 @@ set.seed(12345)
 source("scripts/deterDataQual.R")
 source("scripts/visual_function.R")
 source("scripts/utils.R")
-
+source("scripts/FindInfosGenes.R")
+source("scripts/scRNA-seq integration.R")
 #output dir 
 script_name <- "main"
 outputDir <- file.path("analyses",script_name)
@@ -37,6 +38,8 @@ samples<-names(data_all)[str_detect(names(data_all),"CBP")]
 
 batch<-read.csv2("../../ref/batch_CD34_library_date_032520.csv",header=T,row.names = 1)
 
+
+head(batch)
 # #add date(v2), sequencing, dnaextraction, 
 # batch2<-read.csv2("../../ref/batch_CD34_library_date_032520.csv",header = T)
 # head(batch2[,25:30],30)
@@ -73,7 +76,8 @@ plot(density(data_all$pct0))
 mat<-as.matrix(data_all[,samples])
 data_F<-data_all[data_all$msp1c>10^-7&
                    rowSums(is.na(mat))==0&
-                   rowSums(data_all[,samples]>10,na.rm = T)>3,]
+                   ,]
+data_F<-data_F[rowSums(data_F[,samples]>10)>3,]
 nrow(data_F) #1029401
 locisF<-rownames(data_F)
 #gain en qualité
@@ -403,8 +407,15 @@ plot(batch[CTRL,"Mat.Age"],batch[CTRL,"pct0ApresF2"],col=batch$Mat.Age_Fac)
 plot(batch[IUGR,"Mat.Age"],batch[IUGR,"pct0ApresF2"],col=batch$Mat.Age_Fac) 
 
 
-# LIMMA CHOIX MODEL
-# model de ! group_sex, sequencing, batch, group_comp_fac
+# LIMMA CHOIX MODEL 
+# model de ! group_sex, sequencing, batch, group_comp_fac , latino, 
+#coix bas" sur l'enrichissement enh /prom et en distance du gene le plus proche
+annot<-read.table("../annotation_CpG_HELP_ALL_011520.txt",sep="\t",header=T)
+colnames(annot)<-c("chr","start","stop","id","V5","posAvant","ENSEMBL_ID","gene","type")
+rownames(annot)<-annot$id
+head(annot)
+
+
 varToModel<-c("Group_Sex","sequencing",'batch',"Group_Complexity_Fac","Mat.Age","latino","GroupBatch_Complexity_Fac")
 samples_F_F<-samples[rowSums(is.na(batch[samples,varToModel]))==0] 
 length(samples_F_F) #107
@@ -417,16 +428,15 @@ mat.age<-as.numeric(batch[samples_F_F,"Mat.Age"])
 batches<-factor(batch[samples_F_F,"batch"])
 group_sex<-factor(batch[samples_F_F,"Group_Sex"])
 group_sex<-revalue(group_sex,c("1"="FC","2"="MC","3"="FI","4"="MI","5"="FL","6"="ML"))
-#group_complexity<-as.numeric(batch[samples_F_F,"Group_Complexity"])
+group_complexity<-as.numeric(batch[samples_F_F,"Group_Complexity"])
 group_complexity_fac<-factor(batch[samples_F_F,"Group_Complexity_Fac"])
 latino<-factor(batch[samples_F_F,"latino"])
 #complexity<-as.numeric(batch[samples_F_F,"Library_Complexity"])
 
-#models<-list()
-model<-1
-formule<-~0 + group_sex  +batches +latino +mat.age + groupBatch_complexity_fac 
+models<-list()
+model<-6
+formule<- ~0 + group_sex  + batches + group_complexity + latino + mat.age
 models[[model]]<-formule
-
 design<-model.matrix(models[[model]])
 #resModels<-list()
 
@@ -451,34 +461,106 @@ cont.matrix <- makeContrasts(C.I="(group_sexFC+group_sexMC)-(group_sexFI+group_s
 fit2  <- contrasts.fit(fit, cont.matrix)
 fit2  <- eBayes(fit2) #warning message :Zero sample variances detected, have been offset away from zero 
 
-results <- decideTests(fit2,p.value = 0.15)
-results
-sum(abs(results)) 
+results <- decideTests(fit2)
+
+sum(abs(results)) #>7>1268 > 2 >15
 colSums(abs(results))
 
+
+# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
+# 0     3     1     1     0     0     0     0     1     1     0     0 
+# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
+# 0    45  1196     0     0     9     4     0     7     7     0     0 
+
+# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
+# 0     0     0     0     0     0     0     0     1     1     0     0 
+
+# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
+# 0     0     4     0     2     0     0     0     3     6     0     0 
+
+
 #bon model ? 1) enrichissment en enh et prom, 2) prox du gene
-locis<-rownames(fit2$p.value)[apply(fit2$p.value<0.001,1,any)]
-length(locis) #15017
-resSig<-data.frame(row.names = locis,fit2$p.value[locis,],annot[locis,c("chr","start","posAvant","gene","type")],
-                   data_F[locis,c("confidenceScore","confidenceScoreNorm","complexity","msp1c","RankConfidenceScore")])
+locisSig<-rownames(fit2$p.value)[apply(fit2$p.value<0.001,1,any)]
+length(locisSig) #8617 > 18k > 26k > 12k > 15k
+resSig<-data.frame(row.names = locisSig,fit2$p.value[locisSig,],annot[locisSig,c("chr","start","posAvant","gene","type")],
+                   data_F[locisSig,c("confidenceScore","confidenceScoreNorm","complexity","msp1c","RankConfidenceScore")])
 
 
+head(resSig,100)
 #nb C-L 
-sum(resSig$C.L<0.001) 
-#en moyenne sont cb de fois enrichi en bon locis ?
-mean(resSig$RankConfidenceScore)/mean(na.omit(data_F$RankConfidenceScore))
+sum(resSig$C.L<0.001)  #>3692>>869> 1079
+
+#enrichissement en bon locis :
+mean(resSig$RankConfidenceScore)/mean(na.omit(data_all$RankConfidenceScore)) #>1.35>1.39>1.28 > 1.31
+
+#enh et prom
+
+locisRall<-sample(rownames(data_all),100000)
+locisRF<-sample(rownames(data_F),100000)
+
+table(annot[locisRall,"type"])/length(locisRall)*100
+# 0      1      2      3      4      5      6 
+# 30.383 10.877 10.145 11.730 14.485  7.131 14.735 
+table(annot[locisRF,"type"])/length(locisRF)*100
+# 0      1      2      3      4      5      6 
+# 25.488 10.194  9.289 10.180 17.424  7.017 19.974 
+
+table(resSig$type)/length(resSig$type)*100
+# 0         1         2         3         4         5         6 
+# 25.089938 10.154346  9.144714  9.423233 18.324243  7.229894 20.262272 
+
+# 0         1         2         3         4         5         6 
+# 17.098901  7.780220  6.659341  6.967033 22.620879  6.098901 32.478022 
+
+# 0         1         2         3         4         5         6 
+# 13.877926  6.417870  5.076823  5.670715 23.893636  4.915897 39.840607 
+
+# 0         1         2         3         4         5         6 
+# 21.650452  9.097116  7.817034  8.474142 19.994880  6.716163 25.849121 
+
+# 0         1         2         3         4         5         6 
+# 19.981805  8.148678  6.888037  7.602833 20.865553  5.965300 30.092924 
 
 
-#cb de locis en dessous mediane globale ?
-sum(resSig$RankConfidenceScore<median(na.omit(data_F$RankConfidenceScore)))/nrow(resSig) # 40% > 35% >27%
+#locis around5k of the gene
+locis5k<-na.omit(rownames(annot)[annot$posAvant<5000&annot$posAvant>-5000])
+
+sum(locisRall%in%locis5k)/length(locisRall) # 0.26
+
+sum(locisRF%in%locis5k)/length(locisRF) #0.32
+
+sum(locisSig%in%locis5k)/length(locisSig)  #0.34 > 0.46 > 0.54 > 0.39 > 0.43
+
+hist(annot[locisRall[locisRall%in%locis5k],"posAvant"],breaks = 100)
+hist(annot[locisRF[locisRF%in%locis5k],"posAvant"],breaks = 100)
+hist(annot[locisSig[locisSig%in%locis5k],"posAvant"],breaks = 100)
 
 
+#MODEL De confiance : 3 et 4
+model<-2
+formule<-~0 + group_sex  +batches +latino +mat.age  + group_complexity_fac +sequencing
+models[[model]]<-formule
+design<-model.matrix(models[[model]])
+colnames(design)<-make.names(colnames(design))
+fit <- lmFit(data_F[,samples_F_F], design)  
+
+cont.matrix <- makeContrasts(C.I="(group_sexFC+group_sexMC)-(group_sexFI+group_sexMI)",
+                             C.L = "(group_sexFC+group_sexMC)-(group_sexFL+group_sexML)",
+                             I.L = "(group_sexFI+group_sexMI)-(group_sexFL+group_sexML)",
+                             MC.ML="group_sexMC-group_sexML",
+                             MC.MI="group_sexMC-group_sexMI",
+                             MI.ML="group_sexMI-group_sexML",
+                             FC.FL="group_sexFC-group_sexFL",
+                             FC.FI="group_sexFC-group_sexFI",
+                             ML.FL="group_sexML-group_sexFL",
+                             MI.FI="group_sexMI-group_sexFI",
+                             MC.FC="group_sexMC-group_sexFC",
+                             F.M="(group_sexFC+group_sexFL+group_sexFI)-(group_sexMI+group_sexMC+group_sexML)",
+                             levels=design)
 
 
-
-#MODEL DEFINITIF : 
-
-
+fit2  <- contrasts.fit(fit, cont.matrix)
+fit2  <- eBayes(fit2) #warning message :Zero sample variances detected, have been offset away from zero 
 
 #concentrons nous sur le top1000 par compa
 compas<-colnames(fit2$p.value)
@@ -487,8 +569,8 @@ compas<-colnames(fit2$p.value)
 for(compa in compas){
   print(compa)
   top1000<-topTable(fit2,coef = compa, adjust="BH",number = 1000)
-  #remove F si pval <0.0001
-  print(sum(top1000$P.Value<0.0005))
+  #remove F si pval <0.001
+  print(sum(top1000$P.Value<0.001))
  
   
 }
@@ -496,7 +578,7 @@ for(compa in compas){
 
 FCs<-data.frame()
 resParCompa<-list()
-seuilPval<-0.0005
+seuilPval<-0.001
 for(compa in compas){
   print(compa)
   res<- topTable(fit2,coef=compa,n =Inf)
@@ -510,7 +592,7 @@ for(compa in compas){
                                          FC=resF$logFC,
                                          pval=resF$P.Value,
                                          pval.adj=resF$adj.P.Val,
-                                         topCompa=compas[as.vector(apply(fit2$p.value[locis,compas],1,which.min))],annot[locis,c("chr","start","posAvant","gene","type","mean","Expr","Variable")],
+                                         topCompa=compas[as.vector(apply(fit2$p.value[locis,compas],1,which.min))],annot[locis,c("chr","start","posAvant","gene","type")],
                                          data_F[locis,c("confidenceScore","complexity","msp1c","RankConfidenceScore")]
                                          
                                          )
@@ -530,10 +612,29 @@ for(compa in compas){
 head(resParCompa)
 
 
-
-
 #RES PAR COMPAS
 #scRNA-seq annot
+#genes Expr
+CTRL_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInCTRL.csv",row.names = 1)
+LGA_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInLGA.csv",row.names = 1)
+
+listExprMat<-list(CTRL=CTRL_expr_by_pop,LGA=LGA_expr_by_pop)
+markers<-read.csv2("../../../Alexandre_SC/analyses/test_batch_integration/all.markers_SCTransform_CTRLandLGA_integrated.csv",row.names = 1)
+head(markers)
+#reannot 
+library(Seurat)
+source("scripts/scoreCluster.R")
+samples<-readRDS("../../../Alexandre_SC/analyses/test_batch_integration/CTRLandLGA_SCTransform_Integrated.rds")
+new.cluster.ids <- c("HSC-SELL2", "HSC-AVP", "HSC-Er", "HSC-SELL1", "EMP", "GMP",
+                     "LyP", "MkP", "proT","LMPP","preB","LT-HSC","Neu","LyB","Ly-ETS1","DC")
+names(new.cluster.ids) <- levels(samples)
+samples <- RenameIdents(samples, new.cluster.ids)
+
+for(i in 1:length(new.cluster.ids)){
+  markers$cluster[markers$cluster==as.numeric(names(new.cluster.ids)[i])]<-new.cluster.ids[i]
+}
+head(markers)
+scoresCluster<-scoreMarquageCluster(markers,samples,seuil = "intraClusterFixe",filtreMin = 2)
 
 resGenesParCompa<-list()
 for(compa in compas){
@@ -587,243 +688,62 @@ for(compa in compas){
   write.csv2(resLocis,paste(output,"res_locis_in",compa,"top",nrow(resLocis),"pval",seuilPval,filtres,"model",model,".csv",sep = "_"),row.names = T,na = "")
   
 }
-
-
-#LES FILTRATIONS DES LOCIS SIG 
-#FC>30
-locisFC<-na.exclude(rownames(res)[res$topFC>30]) #!revoir car pour filtration generale, ça na pas dint de filtrer selon topFC dune compa alors 
-locisConf<-na.omit(rownames(res)[res$RankConfidenceScore>750000])
-#dist from TSS
-locisGenes30kb<-rownames(res)[res$posAvant>-30000&res$posAvant<30000]
-locisGenes2kb<-rownames(res)[res$posAvant>-2000&res$posAvant<2000]
-#CRE (enhancer 4, prom 6)
-locisCRE<-na.exclude(rownames(res)[res$type%in%c(4,6)])
-#complexity >60 : 
-locisComplex<-rownames(res)[res$complexity>60]
-#locis Hi conf
-locisHiConf<-intersect(intersect(intersect(intersect(locisComplex,locisConf),locisCRE),locisFC),locisGenes30kb) 
-#locis Expr in sc
-
-
-
 #SAVE ALL RES DU MODEL
+#resModels<-list()
 resModels[[model]]<-list(model=models[[model]],
-                         locisSig=rownames(top12000),
-                         res=res,
-                         seuilSig=max(top12000$P.Value),
-                         distrib.compas=colSums(apply(res[,compas],2, function(x)return(x<max(top12000$P.Value)))),
-                         distrib.features=round(table(res$type)/length(res$type)*100,1),
+                         locisSig=locisSig,
+                         res=resSig,
+                         seuilSig=seuilPval,
+                         distrib.compas=colSums(apply(resSig[,compas],2, function(x)return(x<seuilPval))),
+                         distrib.features=round(table(resSig$type)/length(resSig$type)*100,1),
                          res.compas=resParCompa,
-                         resGenes.compas=resGenesParCompa,
-                         locisF=list(complex=locisComplex,conf=locisConf, CRE=locisCRE,
-                                     FC20=locisFC,Genes30kb=locisGenes30kb,Genes2kb=locisGenes2kb,HiConf= locisHiConf),
-                         distrib.hi.conf=table(res[locisHiConf,"topCompa"])
+                         resGenes.compas=resGenesParCompa
+                         
+                         )
                          
                          
-)
-resModels[[model]]$model
-resModels[[model]]$seuilSig
-head(resModels[[model]]$locisSig)
-head(resModels[[model]]$distrib.compas)
+resModels[[model]]$distrib.compas
 saveRDS(resModels[[model]],file = paste(output,"LocisetGenes_AllCompas_pval",seuilPval,filtres,"model",model,'.rds'))
 
 
-# LIMMA MODEL 4 : AVEC COMPLEXITY et sans mat.age
-# model de ! group_sex, sequencing, batch, group_comp_fac
-varToModel<-c("Group_Sex","sequencing",'batch',"Group_Complexity_Fac","latino")
-samples_F_F<-samples[rowSums(is.na(batch[samples,varToModel]))==0] 
-length(samples_F_F) #107
-sequencing<-as.factor(batch[samples_F_F,"sequencing"])
-group<-as.factor(batch[samples_F_F,"Group_name"])
-#sex<-as.factor(batch[samples_F_F,"Gender"])
-mat.age<-as.numeric(batch[samples_F_F,"Mat.Age"])
-
-batches<-as.factor(batch[samples_F_F,"batch"])
-group_sex<-as.factor(batch[samples_F_F,"Group_Sex"])
-group_sex<-revalue(group_sex,c("1"="FC","2"="MC","3"="FI","4"="MI","5"="FL","6"="ML"))
-#group_complexity<-as.numeric(batch[samples_F_F,"Group_Complexity"])
-group_complexity_fac<-as.factor(batch[samples_F_F,"Group_Complexity_Fac"])
-latino<-as.factor(batch[samples_F_F,"latino"])
-#complexity<-as.numeric(batch[samples_F_F,"Library_Complexity"])
-
-
-#models<-list()
-model<-4
-formule<-~0 + group_sex + sequencing +batches +latino + group_complexity_fac
-models[[model]]<-formule
-
-design<-model.matrix(models[[model]])
-#resModels<-list()
-
-colnames(design)<-make.names(colnames(design))
-fit <- lmFit(data_F[,samples_F_F], design)  
-
-cont.matrix <- makeContrasts(C.I="(group_sexFC+group_sexMC)-(group_sexFI+group_sexMI)",
-                             C.L = "(group_sexFC+group_sexMC)-(group_sexFL+group_sexML)",
-                             I.L = "(group_sexFI+group_sexMI)-(group_sexFL+group_sexML)",
-                             MC.ML="group_sexMC-group_sexML",
-                             MC.MI="group_sexMC-group_sexMI",
-                             MI.ML="group_sexMI-group_sexML",
-                             FC.FL="group_sexFC-group_sexFL",
-                             FC.FI="group_sexFC-group_sexFI",
-                             ML.FL="group_sexML-group_sexFL",
-                             MI.FI="group_sexMI-group_sexFI",
-                             MC.FC="group_sexMC-group_sexFC",
-                             F.M="(group_sexFC+group_sexFL+group_sexFI)-(group_sexMI+group_sexMC+group_sexML)",
-                             levels=design)
-
-
-fit2  <- contrasts.fit(fit, cont.matrix)
-fit2  <- eBayes(fit2) #pour formule1 et 2 : warning message :Zero sample variances detected, have been offset away from zero 
-#concentrons nous sur le top12k (en moy 1000 locis signif par compa)
-
-
-top12000<-topTable(fit2, adjust="BH",number = 12000)
-max(top12000$P.Value)#0.0044
-plot(density(log10(fit2$p.value[fit2$p.value<0.05]))) #seuil de signifiance : p0.001
-abline(v=log10(max(top12000$P.Value))) #top12000 trop peu signif
-abline(v=log10(0.0001)) #mieux 
-seuilPval<-0.0001
-
-
-#qui corespond au quantile : 
-pctBestLocis<-round((sum(apply(fit2$p.value<seuilPval,1,any))/nrow(fit2$p.value)*100),1)#1,6%
-
-##ANNOT RES
-#annot<-read.table("../annotation_EtExpr_CpG_HELP_ALL_011520.txt",sep="\t",header=T)
-compas<-colnames(fit2$p.value)
-
-locis<-rownames(fit2$p.value)[apply(fit2$p.value<seuilPval,1,any)]
-length(locis) #2900
-
-res<-data.frame(row.names = locis,fit2$p.value[locis,],topCompa=compas[as.vector(apply(fit2$p.value[locis,compas],1,which.min))],annot[locis,c("chr","start","posAvant","gene","type","mean","Expr","Variable")],
-                data_F_S[locis,c("confidenceScore","complexity","msp1c","RankConfidenceScore")])
-head(res)
-results <- decideTests(fit2)
-sum(abs(results)) #7
-colSums(abs(results))
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 0    10    24     0     0     0     0     0     1     1     0     0 
-#enh/prom distrib
-round(table(res$type)/length(res$type)*100,1) # pas d'enrich net en 4 et 6.
-# 0    1    2    3    4    5    6 
-# 29.4 10.2  9.8 11.2 15.4  7.1 16.7 
-
-
-colSums(apply(res[,compas],2, function(x)return(x<0.001))) 
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 595   845   645   891  1232   941  1108   675  1300  1934   457   556 
-
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 966  3692  3983  1690  1897  2656  3360   871  1727  2403   732   717 
-
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 1131  4083  6281  1573  1724  2930  3685  1220  1809  2250   672   735 
-
-colSums(apply(res[,compas],2, function(x)return(x<seuilPval))) #assez de locis dans chaque compas
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 966  3692  3983  1690  1897  2656  3360   871  1727  2403   732   717 
-
-#RES LOCIS GENERALE
-#topFC by locis et res par compas
-FCs<-data.frame()
-resParCompa<-list()
-
-for(i in 1:length(compas)){
-  print(compas[i])
-  res2<- topTable(fit2,coef=compas[i],n =12000)
-  if(any(res2$P.Value<max(top12000$P.Value))){
-    resF<-res2[(rownames(res2)%in%rownames(res)),]
-    FCs[rownames(resF),compas[i]]<-resF$logFC
-    
-    print(paste(compas[i],"nb de locis ds top12000 :",nrow(resF)))
-    resParCompa[[compas[i]]]<-data.frame(row.names = rownames(resF), FC=resF$logFC,
-                                         pval=resF$P.Value,
-                                         res[rownames(resF),!(colnames(res)%in%compas)])
-    
-    
-  }else{
-    print(paste("pas de CpG pour",compas[i]))
-  }
-  
-  
-}
-head(resParCompa)
-
-FCm<-mergeCols(FCs,mergeColsName = "FC",top = 4,filter = 20,abs = T,roundNum = 0)
-
-res<-data.frame(row.names = rownames(res),res,FCm[rownames(res),])
-
-head(res)
-write.csv2(res,paste(output,"res_locis_top",nrow(res),"pval",seuilPval,filtres,"model",model,".csv",sep = "_"),row.names = T)
-
-#RES PAR COMPAS
-#scRNA-seq annot
-
-resGenesParCompa<-list()
-for(compa in compas){
-  print(compa)
-  #RES PAR GENES
-  #make a df with rownames = genes, and  count of locis by genes 
-  resGenes<-resLocisToGenes(resParCompa[[compa]])
-  
-  #add genes Expr in bulk scrnaseq and in subpop
-  resGenes<-findGenesExpr(resGenes,listExprMat)
-  #add markers of clusters
-  resGenes<-addMarqueursClusters(scoresCluster,resGenes)
-  #add canonical/published markers of cell types
-  resGenes<-findMarqueursPops(rownames(resGenes),df = resGenes)
-  
-  #add fct and tags
-  try(resGenes<-find_fonction(rownames(resGenes),df = resGenes,save=T))
-  try(resGenes<-findIfTF(rownames(resGenes),resGenes,save=F,large = T))
-  try(resGenes<-findCbIn(rownames(resGenes),
-                         listeKeywords = list(HSPC="hematopo|myeloid|lymphoid|HSC|HSPC",
-                                              lineage="lineage decision|differentiation|cell fate",
-                                              stress="stress",
-                                              signaling="kinase|signaling|pathway"),
-                         genes_infos=resGenes))
-  #save 
-  resGenesParCompa[[compa]]<-resGenes
-  
-  
-}
-
-
-#write resLocis
-colsToMerge<-colnames(resGenes)[2:(which(colnames(resGenes)=="bulk_CTRL")-1)]
-for(compa in compas){
-  
-  print(compa)
-  resGenes<-resGenesParCompa[[compa]]
-  #garder seulement expr des 5 plus grande pop pour save ds csv
-  resGenes.merge<-mergeCols(df = resGenes,colsToMerge = colsToMerge,mergeColsName = "Expr",filter = 0.1,top = 5,abs = F)
-  
-  #RES PAR LOCIS
-  resLocis<-annotLocis(resLocis = resParCompa[[compa]],resGenes =resGenes.merge )
-  #save
-  resParCompa[[compa]]<-resLocis
-  write.csv2(resLocis,paste(output,"res_locis_in",compa,"top",nrow(resLocis),"pval",seuilPval,filtres,"model",model,".csv",sep = "_"),row.names = T,na = "")
-  
-}
-
-
-#LES FILTRATIONS DES LOCIS SIG 
-#FC>30
-locisFC<-na.exclude(rownames(res)[res$topFC>30]) #!revoir car pour filtration generale, ça na pas dint de filtrer selon topFC dune compa alors 
-locisConf<-na.omit(rownames(res)[res$RankConfidenceScore>750000])
-#dist from TSS
-locisGenes30kb<-rownames(res)[res$posAvant>-30000&res$posAvant<30000]
-locisGenes2kb<-rownames(res)[res$posAvant>-2000&res$posAvant<2000]
-#CRE (enhancer 4, prom 6)
-locisCRE<-na.exclude(rownames(res)[res$type%in%c(4,6)])
-#complexity >60 : 
-locisComplex<-rownames(res)[res$complexity>60]
-#locis Hi conf
-locisHiConf<-intersect(intersect(intersect(intersect(locisComplex,locisConf),locisCRE),locisFC),locisGenes30kb) 
-#locis Expr in sc
-
-
+#LES FILTRATIONS DES LOCIS SIG  : !a revoir 
+# #res generales
+# locisSig<-c()
+# for(compa in compas){
+#   locisSig<-union(locisSig,rownames(resParCompa[[compa]]))
+# }
+# 
+# length(locisSig) #25k
+# resSig<-data.frame(row.names = locisSig,)
+# #FC>30
+# 
+# locisFC<-list()
+# for (compa in compas){
+#   locisFC[[compa]]<-na.omit(rownames(resParCompa[[compa]])[resParCompa[[compa]]$FC>20]) 
+#   
+#   
+# }
+# 
+# 
+# locisConf<-na.omit(rownames(res)[res$RankConfidenceScore>750000])
+# #dist from TSS
+# locisGenes30kb<-rownames(res)[res$posAvant>-30000&res$posAvant<30000]
+# locisGenes2kb<-rownames(res)[res$posAvant>-2000&res$posAvant<2000]
+# #CRE (enhancer 4, prom 6)
+# locisCRE<-na.exclude(rownames(res)[res$type%in%c(4,6)])
+# #complexity >60 : 
+# locisComplex<-rownames(res)[res$complexity>60]
+# 
+# #locis Expr in sc
+# locisExpr<-annot[]
+# 
+# 
+# #locis change in sc
+# locisExpr
+# 
+# #locis Hi conf
+# locisHiConf<-intersect(intersect(intersect(intersect(locisComplex,locisConf),locisCRE),locisFC),locisGenes30kb) 
+# 
 
 #SAVE ALL RES DU MODEL
 resModels[[model]]<-list(model=models[[model]],
