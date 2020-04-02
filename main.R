@@ -8,9 +8,6 @@ library(plyr)
 library(calibrate)
 library(pheatmap)
 library(limma)
-library('clusterProfiler')
-library(org.Hs.eg.db)
-library(VennDiagram)
 set.seed(12345)
 source("scripts/deterDataQual.R")
 source("scripts/visual_function.R")
@@ -841,10 +838,156 @@ library(clusterProfiler)
 library(org.Hs.eg.db)
 keytypes(org.Hs.eg.db)
 
+
 genes<-CM.CF$gene[CM.CF$pval<seuilpval & abs(CM.CF$FC)>seuilFC]
 length(genes)
-genes
-enrichKEGG(genes,organism = )
+#trad en entrez ID
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+head(gene.df)
+kk_CM.CF <- enrichKEGG(gene         = gene.df$ENTREZID,
+                       pAdjustMethod = "BH",
+                       pvalueCutoff  = 0.05,
+                       qvalueCutoff  = 0.15)
+head(kk_CM.CF)
+
+#non
+#GO
+GO_CM.CF <- enrichGO(gene         = gene.df$ENTREZID,
+               OrgDb         = org.Hs.eg.db,
+                    pAdjustMethod = "BH",
+                    pvalueCutoff  = 0.01,
+                    qvalueCutoff  = 0.05,
+               readable = T)
+head(GO_CM.CF)
+
+
+#no
+
+#sexual dim in response to stress
+
+#C.L
+genes<-na.omit(C.L$gene[C.L$pval<seuilpval & abs(C.L$FC)>seuilFC])
+length(genes)
+#trad en entrez ID
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+head(gene.df)
+kk_C.L <- enrichKEGG(gene         = gene.df$ENTREZID,
+                       pAdjustMethod = "BH",
+                       pvalueCutoff  = 0.05,
+                       qvalueCutoff  = 0.15)
+head(kk_C.L) #2 : Transcriptional misregulation in cancer and Signaling pathways regulating pluripotency of stem cells
+#non
+
+#GO
+GO_C.L <- enrichGO(gene         = gene.df$ENTREZID,
+                     OrgDb         = org.Hs.eg.db,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.01,
+                     qvalueCutoff  = 0.05,
+                     readable = T)
+head(GO_C.L)
+#3 : 1) DNA-binding transcription repressor activity, RNA polymerase II-specific, 
+#2) glucocorticoid receptor binding, 
+#and 3) DNA-binding transcription activator activity, RNA polymerase II-specific
+
+# in 1) AEBP2/ASCL1/CDX2/CREB3L1/DACH1/DMBX1/ETV6/FOXO1/GSX1/HAND1/HES3/HOXB13/IRF8/IRX2/JDP2/KLF12/MNT/NR2E1/SATB1/SNAI1/SOX6/TBX3/YY1/ZBTB16/ZBTB7A/ZFHX3/ZNF217/ZNF281
+#in 2) FKBP4/FLT3/NCOR2/SMAD3/STAT3/STAT5B
+#in 3) ARNTL/BARX2/CREB3L1/CREB3L4/EBF3/EGR2/ESRRB/ESRRG/ETV4/ETV6/FOXD2/GBX2/GMEB1/GSX1/IER2/IKZF3/IRF2BP2/KLF13/MAF/NFIA/NHLH2/NKX2-8/NR2E1/ONECUT1/RFX5/SIX1/SMAD3/SOX1/SOX21/STAT3/STAT5B/TBX3/TLX1/TP73
+
+genesin1<-strsplit(head(GO_C.L)['GO:0001227',"geneID"],"/")[[1]]
+length(genesin1)
+genesin2<-c("FKBP4","FLT3","NCOR2","SMAD3","STAT3","STAT5B")
+genesin3<-strsplit(head(GO_C.L)['GO:0001227',"geneID"],"/")[[1]]
+length(genesin3)
+length(intersect(genesin1,genesin3)) #all
+
+intersect(genesin1,genesin2)  #none
+#in top
+
+
+#CM.LM
+genes<-na.omit(CM.LM$gene[CM.LM$pval<seuilpval & abs(CM.LM$FC)>seuilFC])
+length(genes)
+#trad en entrez ID
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+head(gene.df)
+kk_CM.LM <- enrichKEGG(gene         = gene.df$ENTREZID,
+                       pAdjustMethod = "BH",
+                       pvalueCutoff  = 0.05,
+                       qvalueCutoff  = 0.15)
+head(kk_CM.LM)
+#non
+
+#GO
+GO_CM.LM <- enrichGO(gene         = gene.df$ENTREZID,
+                     OrgDb         = org.Hs.eg.db,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.01,
+                     qvalueCutoff  = 0.05,
+                     readable = T)
+head(GO_CM.LM)
+#no
+
+#CF.LF
+genes<-na.omit(CF.LF$gene[CF.LF$pval<seuilpval & abs(CF.LF$FC)>seuilFC])
+length(genes) #604
+#trad en entrez ID
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+head(gene.df)
+kk_CF.LF <- enrichKEGG(gene         = gene.df$ENTREZID,
+                       pAdjustMethod = "BH",
+                       pvalueCutoff  = 0.05,
+                       qvalueCutoff  = 0.15)
+head(kk_CF.LF,20) #7 pathway passe cutoff : 
+cat(paste(head(kk_CF.LF,20)$Description,collapse = "\n"))
+# Signaling pathways regulating pluripotency of stem cells
+# Basal cell carcinoma
+# Cushing syndrome
+# Hippo signaling pathway
+# Axon guidance
+# Wnt signaling pathway
+# Melanogenesis
+
+
+#top1 : Signaling pathways regulating pluripotency of stem cells avec genes : 
+genesSigPath<-gene.df$SYMBOL[gene.df$ENTREZID%in%as.character(c(48,652,1856,2261,8321,9421,4088,4093,7473,54361,7474,7477,463 ))]
+genesSigPath # "BMP4"  "DVL2"  "FGFR3" "FZD1"  "HAND1" "SMAD3" "SMAD9" "WNT3"  "WNT4"  "WNT5A" "WNT7B" "ZFHX3"
+
+#genes in Hippo signaling pathway
+genesHippo<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa04390',"geneID"],"/")[[1]])]
+genesHippo #"BMP4"   "CSNK1D" "DVL2"   "FZD1"   "PRKCZ"  "SMAD3"  "STK3"   "TP73"   "WNT3"   "WNT4"   "WNT5A"  "WNT7B" 
+
+
+#genes in Wnt signaling pathway
+genesWnt<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa04310',"geneID"],"/")[[1]])]
+genesWnt #"CUL1"   "DVL2"   "FZD1"   "MMP7"   "PRKACB" "RUVBL1" "SIAH1"  "SMAD3"  "WNT3"   "WNT4"   "WNT5A"  "WNT7B" 
+
+#venn de ses genes de pathways
+allgenes<-Reduce(union,list(genesSigPath,genesHippo,genesWnt))
+
+SigPath<-as.numeric(allgenes%in%genesSigPath)
+Hippo<-as.numeric(allgenes%in%genesHippo)
+Wnt<-as.numeric(allgenes%in%genesWnt)
+c3<-cbind(SigPath,Hippo,Wnt)
+c3
+a<-vennCounts(c3)
+vennDiagram(a)
+#pathway visual
+
+#le reste : "Signaling pathways regulating pluripotency of stem cells ; Basal cell carcinoma ; Cushing syndrome ;
+#Hippo signaling pathway ; Axon guidance ; Wnt signaling pathway ; Melanogenesis"
+
+
+
+#GO
+GO_CF.LF <- enrichGO(gene         = gene.df$ENTREZID,
+                     OrgDb         = org.Hs.eg.db,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.01,
+                     qvalueCutoff  = 0.05,
+                     readable = T)
+head(GO_CF.LF) # DNA-binding transcription activator activity, RNA polymerase II-specific 
+#no
 
 
 
