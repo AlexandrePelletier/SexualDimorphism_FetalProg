@@ -767,6 +767,87 @@ head(resModels[[model]]$distrib.compas)
 saveRDS(resModels[[model]],file = paste(output,"LocisetGenes_AllCompas_pval",seuilPval,filtres,"model",model,'.rds'))
 
 
+##F.M
+#vulcano 
+CM.CF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.FC_top_1224_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+C.L<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_C.L_top_4878_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+CM.LM<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.ML_top_1758_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+CF.LF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_FC.FL_top_4495_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+
+##F.M in ctrl
+library(calibrate)
+names(CM.CF)
+seuilFC<-30
+seuilpval<-10^-4
+colors<-as.numeric(CM.CF$pval<seuilpval & abs(CM.CF$FC)>seuilFC)+1
+#plot(1:7,col=1:7)
+#top30<-(rownames(CM.CF)[order((length(CM.CF$FC)/rank(CM.CF$FC))+rank(CM.CF$pval))])[1:30]
+png(paste(output,"CM.CF","vulcano.png",sep="_"), width = 700, height = 500)
+    
+    plot(CM.CF$FC,-log10(CM.CF$pval),col=colors,main = "CM.CF",pch=18)
+    
+    abline(h=-log10(seuilpval))
+    abline(v=seuilFC)
+    abline(v=-seuilFC)
+    #textxy(CM.CF[top30,'FC'],-log10(CM.CF[top30,'pval']),CM.CF[top30,'gene'],offset= -.7)
+    
+dev.off()
+    
+#C.L 
+colors<-as.numeric(C.L$pval<seuilpval & abs(C.L$FC)>seuilFC)+1
+png(paste(output,"C.L","vulcano.png",sep="_"), width = 700, height = 500)
+
+plot(C.L$FC,-log10(C.L$pval),col=colors,main = "C.L",pch=18)
+
+abline(h=-log10(seuilpval))
+abline(v=seuilFC)
+abline(v=-seuilFC)
+#textxy(C.L[top30,'FC'],-log10(C.L[top30,'pval']),C.L[top30,'gene'],offset= -.7)
+
+dev.off()
+
+#CM.LM 
+colors<-as.numeric(CM.LM$pval<seuilpval & abs(CM.LM$FC)>seuilFC)+1
+png(paste(output,"CM.LM","vulcano.png",sep="_"), width = 700, height = 500)
+
+plot(CM.LM$FC,-log10(CM.LM$pval),col=colors,main = "CM.LM",pch=18)
+
+abline(h=-log10(seuilpval))
+abline(v=seuilFC)
+abline(v=-seuilFC)
+#textxy(CM.LM[top30,'FC'],-log10(CM.LM[top30,'pval']),CM.LM[top30,'gene'],offset= -.7)
+
+dev.off()
+
+#CF.LF 
+colors<-as.numeric(CF.LF$pval<seuilpval & abs(CF.LF$FC)>seuilFC)+1
+png(paste(output,"CF.LF","vulcano.png",sep="_"), width = 700, height = 500)
+
+plot(CF.LF$FC,-log10(CF.LF$pval),col=colors,main = "CF.LF",pch=18)
+
+abline(h=-log10(seuilpval))
+abline(v=seuilFC)
+abline(v=-seuilFC)
+#textxy(CM.LM[top30,'FC'],-log10(CM.LM[top30,'pval']),CM.LM[top30,'gene'],offset= -.7)
+
+dev.off()
+
+#very more locis in CF.LF than in CM.LM, 
+#pathways analysis
+#lets see pathway enrichment in the windows for gene of locis with FC>30 and pval<10-4
+#M.F
+library(clusterProfiler)
+
+library(org.Hs.eg.db)
+keytypes(org.Hs.eg.db)
+
+genes<-CM.CF$gene[CM.CF$pval<seuilpval & abs(CM.CF$FC)>seuilFC]
+length(genes)
+genes
+enrichKEGG(genes,organism = )
+
+
+
 
 #VISUALISATION RES
 #vulcano #! a faire
