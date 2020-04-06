@@ -862,7 +862,7 @@ CF.LF<-resParCompa[["FC.FL"]]
 LM.LF<-resParCompa[["ML.FL"]]
 #C.L
 genes<-na.omit(C.L$gene[C.L$pval<seuilpval & abs(C.L$FC)>seuilFC])
-length(genes)
+length(genes)#874
 #trad en entrez ID
 gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
 head(gene.df)
@@ -870,21 +870,29 @@ kk_C.L <- enrichKEGG(gene         = gene.df$ENTREZID,
                        pAdjustMethod = "BH",
                        pvalueCutoff  = 0.05,
                        qvalueCutoff  = 0.15)
-head(kk_C.L) #model 4 : 2 path: Transcriptional misregulation in cancer and Signaling pathways regulating pluripotency of stem cells
+head(kk_C.L) #model 4 : 3 path: Transcriptional misregulation in cancer, 
+#Acute myeloid leukemia
+#and Signaling pathways regulating pluripotency of stem cells
+
 #genes de Transcriptional misregulation in cancer
+
 genesTransc<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_C.L,20)['hsa05202',"geneID"],"/")[[1]])]
 cat(paste(genesTransc,collapse = ", ")) #BMI1, CCNA1, ETV4, ETV6, FCGR1A, FLT1, FLT3, FOXO1, FUS, JUP, LDB1, MAF, PAX7, PRCC, SIX1, SPINT1, TLX1, TRAF1, ZBTB16
 #genes de Signaling pathways regulating pluripotency
 genesSigPath1<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_C.L,20)['hsa04550',"geneID"],"/")[[1]])]
 cat(paste(genesSigPath1))
+#genes acute myeloid leukemia
+genesLeuke<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_C.L,20)['hsa05221',"geneID"],"/")[[1]])]
+cat(paste(genesLeuke)) #CCNA1 FCGR1A FLT3 JUP NRAS SOS2 STAT3 STAT5A STAT5B ZBTB16
+
 intersect(genesTransc,genesSigPath1) #BMI1
-allgenes<-Reduce(union,list(genesTransc,genesSigPath1))
+allgenes<-Reduce(union,list(genesTransc,genesSigPath1, genesLeuke))
 SigPath1<-as.numeric(allgenes%in%genesSigPath1)
 Transc<-as.numeric(allgenes%in%genesTransc)
+Leuke<-as.numeric(allgenes%in%genesLeuke)
+c3<-cbind(SigPath1,Transc,Leuke)
 
-c2<-cbind(SigPath1,Transc)
-
-a<-vennCounts(c2)
+a<-vennCounts(c3)
 vennDiagram(a)
 
 #GO
@@ -946,7 +954,7 @@ head(GO_CM.LM)
 
 #CF.LF
 genes<-na.omit(CF.LF$gene[CF.LF$pval<seuilpval & abs(CF.LF$FC)>seuilFC])
-length(genes) #604
+length(genes) #635
 #trad en entrez ID
 gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
 head(gene.df)
@@ -954,10 +962,12 @@ kk_CF.LF <- enrichKEGG(gene         = gene.df$ENTREZID,
                        pAdjustMethod = "BH",
                        pvalueCutoff  = 0.05,
                        qvalueCutoff  = 0.15)
-head(kk_CF.LF,20) #7 pathway passe cutoff : 
+head(kk_CF.LF,20) #2 pathway passe cutoff : 
 cat(paste(head(kk_CF.LF,20)$Description,collapse = "\n"))
 # Signaling pathways regulating pluripotency of stem cells
 # Basal cell carcinoma
+
+#avant inclusion du sample sans sequencing data on avait aussi :
 # Cushing syndrome
 # Hippo signaling pathway
 # Axon guidance
@@ -1003,39 +1013,76 @@ GO_CF.LF <- enrichGO(gene         = gene.df$ENTREZID,
                      qvalueCutoff  = 0.05,
                      readable = T)
 head(GO_CF.LF) # DNA-binding transcription activator activity, RNA polymerase II-specific 
-#no
+
+#LM.LF
+genes<-na.omit(LM.LF$gene[LM.LF$pval<seuilpval & abs(LM.LF$FC)>seuilFC])
+length(genes) #180
+sum(duplicated(genes))
+genes[duplicated(genes)] #"FRMD1"
+#trad en entrez ID
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+head(gene.df)
+kk_LM.LF <- enrichKEGG(gene         = gene.df$ENTREZID,
+                       pAdjustMethod = "BH",
+                       pvalueCutoff  = 0.05,
+                       qvalueCutoff  = 0.15)
+head(kk_CF.LF,20) #14 pathway passe cutoff : 
+cat(paste(head(kk_CF.LF,20)$Description,collapse = "\n"))
+# Gastric cancer
+# Cushing syndrome
+# Hippo signaling pathway
+# Proteoglycans in cancer
+# Basal cell carcinoma
+# Breast cancer
+# Hepatocellular carcinoma
+# Signaling pathways regulating pluripotency of stem cells
+# Endocytosis
+# mTOR signaling pathway
+# Human papillomavirus infection
+# Axon guidance
+# Melanogenesis
+# Non-small cell lung cancer
+
+
+
+#top1 : Signaling pathways regulating pluripotency of stem cells avec genes : 
+genesSigPath2<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa04550',"geneID"],"/")[[1]])]
+genesSigPath2 # "FZD1"   "FZD4"   "FZD7"   "HAND1"  "PIK3CD" "WNT2B"  "WNT7A" 
+
+#genes in proteoGlycnans
+genesProteoGly<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa05205',"geneID"],"/")[[1]])]
+genesProteoGly #"CDC42"  "FZD1"   "FZD4"   "FZD7"   "MRAS"   "PIK3CD" "SHH"    "SRC"    "WNT2B"  "WNT7A"
+
+#genes in mTor signaling pathway
+genesmTor<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa04150',"geneID"],"/")[[1]])]
+genesmTor #"FZD1"   "FZD4"   "FZD7"   "PIK3CD" "STK11"  "WNT2B"  "WNT7A" 
+
+#GO
+GO_LM.LF <- enrichGO(gene         = gene.df$ENTREZID,
+                     OrgDb         = org.Hs.eg.db,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.01,
+                     qvalueCutoff  = 0.05,
+                     readable = T)
+head(GO_LM.LF) # none
 
 
 
 
-#VISUALISATION RES
-#vulcano #! a faire
-# for(i in 1:length(compas)){
-#   print(compas[i])
-#   res2<- topTable(fit2,coef=compas[i],n =1000)
-#   if(any(res2$P.Value<0.01)){
-#     resF<-res2[(rownames(res2)%in%rownames(res)),]
-#     
-#     AllLocisP4F20[[compas[i]]]<-rownames(resFF)
-#     
-#     colors<-resFiltered[rownames(resF),"type"]+1
-#     
-#     
-#     top20<-(rownames(resF)[order((length(resF$logFC)/rank(resF$logFC))+rank(resF$P.Value))])[1:20]
-#     
-#     
-#     png(file.path(outputDir,paste(compas[i],"volcano.png",sep="_")), width = 700, height = 500)
-#     plot(resF$logFC,-log10(resF$P.Value),col=colors,main = compas[i])
-#     textxy(resF[top20,'logFC'],-log10(resF[top20,'P.Value']),resFiltered[top20,'gene'],offset= -.7)
-#     dev.off()
-#     
-#   }else{
-#     print(paste("pas de CpG pour",compas[i]))
-#   }
-#   
-#   
-# }
+#! pathway visual (To do)
 
+
+
+#DMR : 
+
+
+#WHY THIS SEX SPE RESPONSE ?
+#parce que femelle ont les plus gros poids ?
+LGA<-batch[samples_F_F[samples_F_F%in%rownames(batch)[batch$Group_name=="L"]],]
+dim(LGA)
+plot(factor(LGA$Gender),as.numeric(LGA$PI)) 
+#non, distrib pareil
+plot(as.factor(LGA$Gender),as.numeric(LGA$Weight..g.)) 
 
 
 
