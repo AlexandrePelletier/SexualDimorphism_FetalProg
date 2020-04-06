@@ -1074,7 +1074,43 @@ head(GO_LM.LF) # none
 
 
 #DMR : 
+#quelle algo prendre ?
+#from An evaluation of supervised methods for identifying differentially methylated regions in Illumina methylation arrays
+#(https://academic.oup.com/bib/article/20/6/2224/5096828#191593271) : 
+#comb-p showed the best sensitivity as well as good control of FP rate across all simulation scenarios
+#comb-p identified substantially more TP DMRs than other methods, especially when effect sizes were small
 
+#1) COMB-P
+#command-line tool and a Python library [16].
+#principe : corrected P-value at a CpG site will be smaller than the original P-value if the neighboring CpG sites also have comparatively small P-values
+#input of comb-p is a .BED file with P-values and chromosome locations of the CpG sites
+resAll<-list()
+compas
+res<-topTable(fit2,coef = "FC.FL",n=Inf)
+head(res) 
+#need add chr start et stop
+res<-data.frame(row.names =rownames(res),annot[rownames(res),c("chr","start","stop")],pval=res$P.Value )
+#need rm NA : 
+dim(res)
+res2<-na.omit(res)
+head(res2)
+#need sort by genomic location
+res2<-arrange(res2,chr,start)
+head(res2)
+dim(res2)
+write.table(res2,file = "analyses/DMR_with_comb_p/FC.FL_allLocis_and_pval.bed",col.names = F,row.names = F,sep = "\t",quote = F)
+
+#in shell (dir : analyses/DMR_with_comb_p) :
+# comb-p pipeline \
+# -c 4 \          # p-values in 4th column
+# --seed 1e-3 \   # require a p-value of 1e-3 to start a region
+# --dist 200      # extend region if find another p-value within this dist
+# -p FC.FL \
+# --region-filter-p 0.1 \ # post-filter reported regions
+# --anno hg38 \            # annotate with genome hg38 from UCSC
+# FC.FL_allLocis_and_pval.bed                  # sorted BED file with pvals in 4th column
+
+comb-p pipeline -c 4 --seed 1e-3 --dist 200 -p FC.FL --region-filter-p 0.1 --anno hg38 FC.FL_allLocis_and_pval.bed 
 
 #WHY THIS SEX SPE RESPONSE ?
 #parce que femelle ont les plus gros poids ?
@@ -1262,59 +1298,4 @@ head(GO_CF.LF)
 #   
 # }
 
-
-
-
-#FOCUS sur LGAvs ctrl
-#lga_CTRL
-g<-genesF.compa_liste[[model]]$C.L$all
-gM<-genesF.compa_liste[[model]]$MC.ML$all
-gF<-genesF.compa_liste[[model]]$FC.FL$all
-
-
-venn.diagram(
-  x = list(g, gM, gF),
-  category.names = c("C.L" , "CM.LM" , "CF.LF"),
-  filename = file.path(outputDir,paste0('vennGenesCTRLvsLGA_model',model,'.png')),
-  output=TRUE
-)
-
-intersect(g,gM)
-intersect(g,gF)
-intersect(gF,gM)
-
-
-#COMPA MODEL
-g1<-genesF.compa_liste[[1]]$C.L$all
-gM1<-genesF.compa_liste[[1]]$MC.ML$all
-gF1<-genesF.compa_liste[[1]]$FC.FL$all
-
-
-g2<-genesF.compa_liste[[2]]$C.L$all
-gM2<-genesF.compa_liste[[2]]$MC.ML$all
-gF2<-genesF.compa_liste[[2]]$FC.FL$all
-
-g3<-genesF.compa_liste[[3]]$C.L$all
-gM3<-genesF.compa_liste[[3]]$MC.ML$all
-gF3<-genesF.compa_liste[[3]]$FC.FL$all
-
-venn.diagram(
-  x = list(g1,g2, g3),
-  category.names = c("noComplexity" , "Group_Complexity" , "Group_Complexity_Fac"),
-  filename = file.path(outputDir,paste0('vennGenesCTRLvsLGA_compa_model1-3.png')),
-  output=T
-)
-
-venn.diagram(
-  x = list(gM1,gM2, gM3),
-  category.names = c("noComplexity" , "Group_Complexity" , "Group_Complexity_Fac"),
-  filename = file.path(outputDir,'vennGenesCTRLMvsLGAM_compa_model1-3.png'),
-  output=T
-)
-venn.diagram(
-  x = list(gF1,gF2, gF3),
-  category.names = c("noComplexity" , "Group_Complexity" , "Group_Complexity_Fac"),
-  filename = file.path(outputDir,'vennGenesCTRLFvsLGAF_compa_model1-3.png'),
-  output=T
-)
 
