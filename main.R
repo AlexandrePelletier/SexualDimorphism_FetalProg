@@ -30,6 +30,7 @@ data_all<-fread("../../ref/CD34_angle_119_noEmptyLocis_withConfScore_withoutChrX
 data_all<-data.frame(data_all)
 rownames(data_all)<-data_all$id
 head(data_all)
+
 dim(data_all) #1709224     132
 samples<-names(data_all)[str_detect(names(data_all),"CBP")]
 
@@ -72,8 +73,7 @@ plot(density(data_all$pct0))
 #FILTRATION DES LOCIS
 mat<-as.matrix(data_all[,samples])
 data_F<-data_all[data_all$msp1c>10^-7&
-                   rowSums(is.na(mat))==0&
-                   ,]
+                   rowSums(is.na(mat))==0,]
 data_F<-data_F[rowSums(data_F[,samples]>10)>3,]
 nrow(data_F) #1029401
 locisF<-rownames(data_F)
@@ -412,10 +412,13 @@ colnames(annot)<-c("chr","start","stop","id","V5","posAvant","ENSEMBL_ID","gene"
 rownames(annot)<-annot$id
 head(annot)
 
-
-varToModel<-c("Group_Sex","sequencing",'batch',"Group_Complexity_Fac","Mat.Age","latino","GroupBatch_Complexity_Fac")
+models<-list()
+model<-7
+names(batch)
+varToModel<-c("Group_Sex",'batch',"Mat.Age","latino")
 samples_F_F<-samples[rowSums(is.na(batch[samples,varToModel]))==0] 
-length(samples_F_F) #107
+length(samples_F_F) #107 > 108 (sans sequencing)
+table(batch[samples_F_F,"Group_name"])
 sequencing<-factor(batch[samples_F_F,"sequencing"])
 group<-factor(batch[samples_F_F,"Group_name"])
 groupBatch_complexity_fac<-factor(batch[samples_F_F,"GroupBatch_Complexity_Fac"])
@@ -430,9 +433,8 @@ group_complexity_fac<-factor(batch[samples_F_F,"Group_Complexity_Fac"])
 latino<-factor(batch[samples_F_F,"latino"])
 #complexity<-as.numeric(batch[samples_F_F,"Library_Complexity"])
 
-models<-list()
-model<-6
-formule<- ~0 + group_sex  + batches + group_complexity + latino + mat.age
+
+formule<- ~0 + group_sex  + batches  + latino + mat.age
 models[[model]]<-formule
 design<-model.matrix(models[[model]])
 #resModels<-list()
@@ -460,7 +462,7 @@ fit2  <- eBayes(fit2) #warning message :Zero sample variances detected, have bee
 
 results <- decideTests(fit2)
 
-sum(abs(results)) #>7>1268 > 2 >15
+sum(abs(results)) #>7>1268 > 2 >15 >6
 colSums(abs(results))
 
 
@@ -475,20 +477,23 @@ colSums(abs(results))
 # C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
 # 0     0     4     0     2     0     0     0     3     6     0     0 
 
+#7:
+# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
+# 0     0     3     0     0     0     0     0     0     3     0     0 
 
 #bon model ? 1) enrichissment en enh et prom, 2) prox du gene
 locisSig<-rownames(fit2$p.value)[apply(fit2$p.value<0.001,1,any)]
-length(locisSig) #8617 > 18k > 26k > 12k > 15k
+length(locisSig) #8617 > 18k > 26k > 12k > 15k >11k
 resSig<-data.frame(row.names = locisSig,fit2$p.value[locisSig,],annot[locisSig,c("chr","start","posAvant","gene","type")],
                    data_F[locisSig,c("confidenceScore","confidenceScoreNorm","complexity","msp1c","RankConfidenceScore")])
 
 
 head(resSig,100)
 #nb C-L 
-sum(resSig$C.L<0.001)  #>3692>>869> 1079
+sum(resSig$C.L<0.001)  #>3692>>869> 1079 >936
 
 #enrichissement en bon locis :
-mean(resSig$RankConfidenceScore)/mean(na.omit(data_all$RankConfidenceScore)) #>1.35>1.39>1.28 > 1.31
+mean(resSig$RankConfidenceScore)/mean(na.omit(data_all$RankConfidenceScore)) #>1.35>1.39>1.28 > 1.31 > 1.33
 
 #enh et prom
 
@@ -509,6 +514,7 @@ table(resSig$type)/length(resSig$type)*100
 # 0         1         2         3         4         5         6 
 # 17.098901  7.780220  6.659341  6.967033 22.620879  6.098901 32.478022 
 
+#4:
 # 0         1         2         3         4         5         6 
 # 13.877926  6.417870  5.076823  5.670715 23.893636  4.915897 39.840607 
 
@@ -518,6 +524,10 @@ table(resSig$type)/length(resSig$type)*100
 # 0         1         2         3         4         5         6 
 # 19.981805  8.148678  6.888037  7.602833 20.865553  5.965300 30.092924 
 
+#7:
+# 0         1         2         3         4         5         6 
+# 20.428667  8.481246  7.083054  8.079370 20.478902  6.279303 28.667113 
+
 
 #locis around5k of the gene
 locis5k<-na.omit(rownames(annot)[annot$posAvant<5000&annot$posAvant>-5000])
@@ -526,16 +536,16 @@ sum(locisRall%in%locis5k)/length(locisRall) # 0.26
 
 sum(locisRF%in%locis5k)/length(locisRF) #0.32
 
-sum(locisSig%in%locis5k)/length(locisSig)  #0.34 > 0.46 > 0.54 > 0.39 > 0.43
+sum(locisSig%in%locis5k)/length(locisSig)  #0.34 > 0.46 > 0.54 > 0.39 > 0.43 > 0.42
 
 hist(annot[locisRall[locisRall%in%locis5k],"posAvant"],breaks = 100)
 hist(annot[locisRF[locisRF%in%locis5k],"posAvant"],breaks = 100)
 hist(annot[locisSig[locisSig%in%locis5k],"posAvant"],breaks = 100)
 
 
-#MODEL De confiance : 3 et 4
-model<-2
-formule<-~0 + group_sex  +batches +latino +mat.age  + group_complexity_fac +sequencing
+#MODEL De confiance : 3 et 4, et 7
+model<-7
+formule<-~0 + group_sex  +batches +latino +mat.age
 models[[model]]<-formule
 design<-model.matrix(models[[model]])
 colnames(design)<-make.names(colnames(design))
@@ -597,7 +607,11 @@ for(compa in compas){
     resParCompa[[compa]]<-resA
     
     #enh/prom distrib
+    
     barplot(table(resA$type)/length(resA$type)*100,main = compa)
+    png(paste(output,compa,"enh.prom_distrib_top",length(locis),"locis_pval",seuilPval,"model",model,".png",sep="_"), width = 700, height = 500)
+    barplot(table(resA$type)/length(resA$type)*100,main = compa)
+    dev.off()
   }else{
     print(paste("pas de CpG pour",compa))
     resParCompa[[compa]]<-NA
@@ -686,7 +700,7 @@ for(compa in compas){
   
 }
 #SAVE ALL RES DU MODEL
-#resModels<-list()
+resModels<-list()
 resModels[[model]]<-list(model=models[[model]],
                          locisSig=locisSig,
                          res=resSig,
@@ -766,20 +780,32 @@ saveRDS(resModels[[model]],file = paste(output,"LocisetGenes_AllCompas_pval",seu
 
 ##F.M
 #vulcano 
-CM.CF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.FC_top_1224_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-C.L<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_C.L_top_4878_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-CM.LM<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.ML_top_1758_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-CF.LF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_FC.FL_top_4495_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+# CM.CF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.FC_top_1224_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+# C.L<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_C.L_top_4878_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+# CM.LM<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.ML_top_1758_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+# CF.LF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_FC.FL_top_4495_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+names(resParCompa)
+CM.CF<-resParCompa[["MC.FC"]]
+
+C.L<-resParCompa[["C.L"]]
+
+CM.LM<-resParCompa[["MC.ML"]]
+CF.LF<-resParCompa[["FC.FL"]]
+LM.LF<-resParCompa[["ML.FL"]]
 
 ##F.M in ctrl
 library(calibrate)
+compa<-"CM.CF"
 names(CM.CF)
 seuilFC<-30
 seuilpval<-10^-4
 colors<-as.numeric(CM.CF$pval<seuilpval & abs(CM.CF$FC)>seuilFC)+1
+#nb locis hypermeth chez M : 
+sum(CM.CF$pval<seuilpval & CM.CF$FC<(-seuilFC)) #52
+sum(CM.CF$pval<seuilpval & CM.CF$FC>+seuilFC)
 #plot(1:7,col=1:7)
 #top30<-(rownames(CM.CF)[order((length(CM.CF$FC)/rank(CM.CF$FC))+rank(CM.CF$pval))])[1:30]
-png(paste(output,"CM.CF","vulcano.png",sep="_"), width = 700, height = 500)
+png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 500)
     
     plot(CM.CF$FC,-log10(CM.CF$pval),col=colors,main = "CM.CF",pch=18)
     
@@ -791,8 +817,13 @@ png(paste(output,"CM.CF","vulcano.png",sep="_"), width = 700, height = 500)
 dev.off()
     
 #C.L 
+compa<-"C.L"
 colors<-as.numeric(C.L$pval<seuilpval & abs(C.L$FC)>seuilFC)+1
-png(paste(output,"C.L","vulcano.png",sep="_"), width = 700, height = 500)
+
+sum(C.L$pval<seuilpval & C.L$FC<(-seuilFC)) #1
+sum(C.L$pval<seuilpval & C.L$FC>(+seuilFC)) #825
+
+png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 500)
 
 plot(C.L$FC,-log10(C.L$pval),col=colors,main = "C.L",pch=18)
 
@@ -804,9 +835,12 @@ abline(v=-seuilFC)
 dev.off()
 
 #CM.LM 
+compa<-"CM.LM"
 colors<-as.numeric(CM.LM$pval<seuilpval & abs(CM.LM$FC)>seuilFC)+1
-png(paste(output,"CM.LM","vulcano.png",sep="_"), width = 700, height = 500)
+sum(CM.LM$pval<seuilpval & CM.LM$FC<(-seuilFC)) #4 >4
+sum(CM.LM$pval<seuilpval & CM.LM$FC>(+seuilFC)) #130 > 40
 
+png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 500)
 plot(CM.LM$FC,-log10(CM.LM$pval),col=colors,main = "CM.LM",pch=18)
 
 abline(h=-log10(seuilpval))
@@ -817,8 +851,11 @@ abline(v=-seuilFC)
 dev.off()
 
 #CF.LF 
+compa<-"CF.LF"
 colors<-as.numeric(CF.LF$pval<seuilpval & abs(CF.LF$FC)>seuilFC)+1
-png(paste(output,"CF.LF","vulcano.png",sep="_"), width = 700, height = 500)
+sum(CF.LF$pval<seuilpval & CF.LF$FC<(-seuilFC)) #4 > 1
+sum(CF.LF$pval<seuilpval & CF.LF$FC>(+seuilFC)) #604 > 41
+png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 500)
 
 plot(CF.LF$FC,-log10(CF.LF$pval),col=colors,main = "CF.LF",pch=18)
 
@@ -829,9 +866,31 @@ abline(v=-seuilFC)
 
 dev.off()
 
-#very more locis in CF.LF than in CM.LM, 
-#pathways analysis
-#lets see pathway enrichment in the windows for gene of locis with FC>30 and pval<10-4
+#model 4 : very more locis in CF.LF than in CM.LM, 
+#model 7 : not more locis in CF.LF than in CM.LM that pass the FC and pval threshold,
+#need to be less stringent with model 7
+
+
+#LM.LF 
+compa<-"LM.LF"
+colors<-as.numeric(LM.LF$pval<seuilpval & abs(LM.LF$FC)>seuilFC)+1
+sum(LM.LF$pval<seuilpval & LM.LF$FC<(-seuilFC)) #30
+sum(LM.LF$pval<seuilpval & LM.LF$FC>(+seuilFC)) #44
+png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 500)
+
+plot(LM.LF$FC,-log10(LM.LF$pval),col=colors,main = "LM.LF",pch=18)
+
+abline(h=-log10(seuilpval))
+abline(v=seuilFC)
+abline(v=-seuilFC)
+#textxy(CM.LM[top30,'FC'],-log10(CM.LM[top30,'pval']),CM.LM[top30,'gene'],offset= -.7)
+
+dev.off()
+
+
+
+###PATHWAY ANALYSIS
+# POUR model 4 in the windows for gene of locis with FC>30 and pval<10-4
 #M.F
 library(clusterProfiler)
 
@@ -841,6 +900,8 @@ keytypes(org.Hs.eg.db)
 
 genes<-CM.CF$gene[CM.CF$pval<seuilpval & abs(CM.CF$FC)>seuilFC]
 length(genes)
+cat(paste(genes,collapse = "\n"))
+
 #trad en entrez ID
 gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
 head(gene.df)
@@ -848,9 +909,9 @@ kk_CM.CF <- enrichKEGG(gene         = gene.df$ENTREZID,
                        pAdjustMethod = "BH",
                        pvalueCutoff  = 0.05,
                        qvalueCutoff  = 0.15)
-head(kk_CM.CF)
+head(kk_CM.CF) # none
 
-#non
+
 #GO
 GO_CM.CF <- enrichGO(gene         = gene.df$ENTREZID,
                OrgDb         = org.Hs.eg.db,
@@ -861,7 +922,7 @@ GO_CM.CF <- enrichGO(gene         = gene.df$ENTREZID,
 head(GO_CM.CF)
 
 
-#no
+#none
 
 #sexual dim in response to stress
 
@@ -875,8 +936,25 @@ kk_C.L <- enrichKEGG(gene         = gene.df$ENTREZID,
                        pAdjustMethod = "BH",
                        pvalueCutoff  = 0.05,
                        qvalueCutoff  = 0.15)
-head(kk_C.L) #2 : Transcriptional misregulation in cancer and Signaling pathways regulating pluripotency of stem cells
-#non
+head(kk_C.L) #model 4 : 2 path: Transcriptional misregulation in cancer and Signaling pathways regulating pluripotency of stem cells
+#genes de Transcriptional misregulation in cancer
+
+
+#pour model 4 :
+genesTransc<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_C.L,20)['hsa05202',"geneID"],"/")[[1]])]
+cat(paste(genesTransc,collapse = ", ")) #BMI1, CCNA1, ETV4, ETV6, FCGR1A, FLT1, FLT3, FOXO1, FUS, JUP, LDB1, MAF, PAX7, PRCC, SIX1, SPINT1, TLX1, TRAF1, ZBTB16
+#genes de Signaling pathways regulating pluripotency
+genesSigPath1<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_C.L,20)['hsa04550',"geneID"],"/")[[1]])]
+cat(paste(genesSigPath1))
+intersect(genesTransc,genesSigPath1) #BMI1
+allgenes<-Reduce(union,list(genesTransc,genesSigPath1))
+SigPath1<-as.numeric(allgenes%in%genesSigPath1)
+Transc<-as.numeric(allgenes%in%genesTransc)
+
+c2<-cbind(SigPath1,Transc)
+
+a<-vennCounts(c2)
+vennDiagram(a)
 
 #GO
 GO_C.L <- enrichGO(gene         = gene.df$ENTREZID,
@@ -886,7 +964,7 @@ GO_C.L <- enrichGO(gene         = gene.df$ENTREZID,
                      qvalueCutoff  = 0.05,
                      readable = T)
 head(GO_C.L)
-#3 : 1) DNA-binding transcription repressor activity, RNA polymerase II-specific, 
+# 3 : 1) DNA-binding transcription repressor activity, RNA polymerase II-specific, 
 #2) glucocorticoid receptor binding, 
 #and 3) DNA-binding transcription activator activity, RNA polymerase II-specific
 
@@ -896,13 +974,20 @@ head(GO_C.L)
 
 genesin1<-strsplit(head(GO_C.L)['GO:0001227',"geneID"],"/")[[1]]
 length(genesin1)
+cat(paste(genesin1,collapse = " "))
 genesin2<-c("FKBP4","FLT3","NCOR2","SMAD3","STAT3","STAT5B")
-genesin3<-strsplit(head(GO_C.L)['GO:0001227',"geneID"],"/")[[1]]
+genesin3<-strsplit(head(GO_C.L)['GO:0001228',"geneID"],"/")[[1]]
 length(genesin3)
-length(intersect(genesin1,genesin3)) #all
 
-intersect(genesin1,genesin2)  #none
-#in top
+allgenes<-Reduce(union,list(genesin1,genesin2,genesin3))
+
+DNA_Bind_Trs_repr<-as.numeric(allgenes%in%genesin1)
+glucocor_R_bind<-as.numeric(allgenes%in%genesin2)
+DNA_Bind_Trs_activ<-as.numeric(allgenes%in%genesin3)
+c3<-cbind(DNA_Bind_Trs_repr,DNA_Bind_Trs_activ,glucocor_R_bind)
+c3
+a<-vennCounts(c3)
+vennDiagram(a)
 
 
 #CM.LM
@@ -1042,7 +1127,184 @@ intersect(g,gF)
 intersect(gF,gM)
 
 
-locisListe
+###POUR MODEL 7, seuil moins stringeant sinon on ne capture rien
+seuilFC<-20
+seuilpval<-10^-3
+#M.F
+library(clusterProfiler)
+library(org.Hs.eg.db)
+keytypes(org.Hs.eg.db)
+
+genes<-CM.CF$gene[CM.CF$pval<seuilpval & abs(CM.CF$FC)>seuilFC]
+length(genes) #331
+cat(paste(genes,collapse = "\n"))
+
+#trad en entrez ID
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+head(gene.df)
+kk_CM.CF <- enrichKEGG(gene         = gene.df$ENTREZID,
+                       pAdjustMethod = "BH",
+                       pvalueCutoff  = 0.05,
+                       qvalueCutoff  = 0.15)
+head(kk_CM.CF) # none
+
+
+#GO
+GO_CM.CF <- enrichGO(gene         = gene.df$ENTREZID,
+                     OrgDb         = org.Hs.eg.db,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.01,
+                     qvalueCutoff  = 0.05,
+                     readable = T)
+head(GO_CM.CF)
+
+
+#none
+
+#sexual dim in response to stress
+
+#C.L
+genes<-na.omit(C.L$gene[C.L$pval<seuilpval & abs(C.L$FC)>seuilFC])
+length(genes) #899
+#trad en entrez ID
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+head(gene.df) 
+kk_C.L <- enrichKEGG(gene         = gene.df$ENTREZID,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.05,
+                     qvalueCutoff  = 0.15)
+head(kk_C.L) #none
+
+
+#GO
+GO_C.L <- enrichGO(gene         = gene.df$ENTREZID,
+                   OrgDb         = org.Hs.eg.db,
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.01,
+                   qvalueCutoff  = 0.05,
+                   readable = T)
+head(GO_C.L)
+#none
+
+genesin1<-strsplit(head(GO_C.L)['GO:0001227',"geneID"],"/")[[1]]
+length(genesin1)
+cat(paste(genesin1,collapse = " "))
+genesin2<-c("FKBP4","FLT3","NCOR2","SMAD3","STAT3","STAT5B")
+genesin3<-strsplit(head(GO_C.L)['GO:0001228',"geneID"],"/")[[1]]
+length(genesin3)
+
+allgenes<-Reduce(union,list(genesin1,genesin2,genesin3))
+
+DNA_Bind_Trs_repr<-as.numeric(allgenes%in%genesin1)
+glucocor_R_bind<-as.numeric(allgenes%in%genesin2)
+DNA_Bind_Trs_activ<-as.numeric(allgenes%in%genesin3)
+c3<-cbind(DNA_Bind_Trs_repr,DNA_Bind_Trs_activ,glucocor_R_bind)
+c3
+a<-vennCounts(c3)
+vennDiagram(a)
+
+
+#CM.LM
+genes<-na.omit(CM.LM$gene[CM.LM$pval<seuilpval & abs(CM.LM$FC)>seuilFC])
+length(genes)#624
+#trad en entrez ID
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+head(gene.df)
+kk_CM.LM <- enrichKEGG(gene         = gene.df$ENTREZID,
+                       pAdjustMethod = "BH",
+                       pvalueCutoff  = 0.05,
+                       qvalueCutoff  = 0.15)
+head(kk_CM.LM)
+#none
+
+#GO
+GO_CM.LM <- enrichGO(gene         = gene.df$ENTREZID,
+                     OrgDb         = org.Hs.eg.db,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.01,
+                     qvalueCutoff  = 0.05,
+                     readable = T)
+
+head(GO_CM.LM)
+# cell-cell adhesion mediator activity with BAIAP2/CNTN2/CNTN6/IZUMO1/LRRC4C/PDLIM5/PPP1CA/STXBP6/TMOD3
+
+#CF.LF
+genes<-na.omit(CF.LF$gene[CF.LF$pval<seuilpval & abs(CF.LF$FC)>seuilFC])
+length(genes) #604
+#trad en entrez ID
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+head(gene.df)
+kk_CF.LF <- enrichKEGG(gene         = gene.df$ENTREZID,
+                       pAdjustMethod = "BH",
+                       pvalueCutoff  = 0.05,
+                       qvalueCutoff  = 0.15)
+head(kk_CF.LF,20) #Axon guidance with : 
+gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa04360',"geneID"],"/")[[1]])]
+#"ABLIM2" "CFL2"   "DPYSL5" "EFNA5"  "EFNB2"  "NTN1"   "NTNG2"  "PAK1"   "PLCG2"  "PLXNA4" "PLXNC1" "PRKCZ"  "PTCH1"  "SHH"    "SLIT2" 
+
+
+#GO
+GO_CF.LF <- enrichGO(gene         = gene.df$ENTREZID,
+                     OrgDb         = org.Hs.eg.db,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.01,
+                     qvalueCutoff  = 0.05,
+                     readable = T)
+head(GO_CF.LF)
+#no
+
+
+
+
+#VISUALISATION RES
+#vulcano #! a faire
+# for(i in 1:length(compas)){
+#   print(compas[i])
+#   res2<- topTable(fit2,coef=compas[i],n =1000)
+#   if(any(res2$P.Value<0.01)){
+#     resF<-res2[(rownames(res2)%in%rownames(res)),]
+#     
+#     AllLocisP4F20[[compas[i]]]<-rownames(resFF)
+#     
+#     colors<-resFiltered[rownames(resF),"type"]+1
+#     
+#     
+#     top20<-(rownames(resF)[order((length(resF$logFC)/rank(resF$logFC))+rank(resF$P.Value))])[1:20]
+#     
+#     
+#     png(file.path(outputDir,paste(compas[i],"volcano.png",sep="_")), width = 700, height = 500)
+#     plot(resF$logFC,-log10(resF$P.Value),col=colors,main = compas[i])
+#     textxy(resF[top20,'logFC'],-log10(resF[top20,'P.Value']),resFiltered[top20,'gene'],offset= -.7)
+#     dev.off()
+#     
+#   }else{
+#     print(paste("pas de CpG pour",compas[i]))
+#   }
+#   
+#   
+# }
+
+
+
+
+#FOCUS sur LGAvs ctrl
+#lga_CTRL
+g<-genesF.compa_liste[[model]]$C.L$all
+gM<-genesF.compa_liste[[model]]$MC.ML$all
+gF<-genesF.compa_liste[[model]]$FC.FL$all
+
+
+venn.diagram(
+  x = list(g, gM, gF),
+  category.names = c("C.L" , "CM.LM" , "CF.LF"),
+  filename = file.path(outputDir,paste0('vennGenesCTRLvsLGA_model',model,'.png')),
+  output=TRUE
+)
+
+intersect(g,gM)
+intersect(g,gF)
+intersect(gF,gM)
+
 
 #COMPA MODEL
 g1<-genesF.compa_liste[[1]]$C.L$all
