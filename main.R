@@ -413,12 +413,14 @@ rownames(annot)<-annot$id
 head(annot)
 
 models<-list()
-model<-7
+model<-4
 names(batch)
-varToModel<-c("Group_Sex",'batch',"Mat.Age","latino")
+varToModel<-c("Group_Sex",'batch',"Mat.Age","latino","Group_Complexity_Fac")
 samples_F_F<-samples[rowSums(is.na(batch[samples,varToModel]))==0] 
-length(samples_F_F) #107 > 108 (sans sequencing)
+length(samples_F_F) # 108 (sans sequencing)
 table(batch[samples_F_F,"Group_name"])
+# C  I  L 
+# 34 38 36 
 sequencing<-factor(batch[samples_F_F,"sequencing"])
 group<-factor(batch[samples_F_F,"Group_name"])
 groupBatch_complexity_fac<-factor(batch[samples_F_F,"GroupBatch_Complexity_Fac"])
@@ -434,7 +436,7 @@ latino<-factor(batch[samples_F_F,"latino"])
 #complexity<-as.numeric(batch[samples_F_F,"Library_Complexity"])
 
 
-formule<- ~0 + group_sex  + batches  + latino + mat.age
+formule<- ~0 + group_sex  + batches  + latino + mat.age + group_complexity_fac
 models[[model]]<-formule
 design<-model.matrix(models[[model]])
 #resModels<-list()
@@ -462,14 +464,16 @@ fit2  <- eBayes(fit2) #warning message :Zero sample variances detected, have bee
 
 results <- decideTests(fit2)
 
-sum(abs(results)) #>7>1268 > 2 >15 >6
+sum(abs(results)) #>7>2039 > 2 >15 >6
 colSums(abs(results))
 
 
 # C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
 # 0     3     1     1     0     0     0     0     1     1     0     0 
+
+#4:
 # C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 0    45  1196     0     0     9     4     0     7     7     0     0 
+# 0    71  1955     0     0     0     4     0     7     2     0     0 
 
 # C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
 # 0     0     0     0     0     0     0     0     1     1     0     0 
@@ -483,17 +487,17 @@ colSums(abs(results))
 
 #bon model ? 1) enrichissment en enh et prom, 2) prox du gene
 locisSig<-rownames(fit2$p.value)[apply(fit2$p.value<0.001,1,any)]
-length(locisSig) #8617 > 18k > 26k > 12k > 15k >11k
+length(locisSig) #8617 > 18k > 27k (4) > 12k > 15k >11k
 resSig<-data.frame(row.names = locisSig,fit2$p.value[locisSig,],annot[locisSig,c("chr","start","posAvant","gene","type")],
                    data_F[locisSig,c("confidenceScore","confidenceScoreNorm","complexity","msp1c","RankConfidenceScore")])
 
 
 head(resSig,100)
 #nb C-L 
-sum(resSig$C.L<0.001)  #>3692>>869> 1079 >936
+sum(resSig$C.L<0.001)  #>3692>5069>869> 1079 >936
 
 #enrichissement en bon locis :
-mean(resSig$RankConfidenceScore)/mean(na.omit(data_all$RankConfidenceScore)) #>1.35>1.39>1.28 > 1.31 > 1.33
+mean(resSig$RankConfidenceScore)/mean(na.omit(data_all$RankConfidenceScore)) #>1.35>1.40>1.28 > 1.31 > 1.33
 
 #enh et prom
 
@@ -544,8 +548,8 @@ hist(annot[locisSig[locisSig%in%locis5k],"posAvant"],breaks = 100)
 
 
 #MODEL De confiance : 3 et 4, et 7
-model<-7
-formule<-~0 + group_sex  +batches +latino +mat.age
+model<-4
+formule<-~0 + group_sex  +batches +latino +mat.age + 
 models[[model]]<-formule
 design<-model.matrix(models[[model]])
 colnames(design)<-make.names(colnames(design))
@@ -755,148 +759,74 @@ saveRDS(resModels[[model]],file = paste(output,"LocisetGenes_AllCompas_pval",seu
 # #locis Hi conf
 # locisHiConf<-intersect(intersect(intersect(intersect(locisComplex,locisConf),locisCRE),locisFC),locisGenes30kb) 
 # 
-
-#SAVE ALL RES DU MODEL
-resModels[[model]]<-list(model=models[[model]],
-                         locisSig=rownames(top12000),
-                         res=res,
-                         seuilSig=max(top12000$P.Value),
-                         distrib.compas=colSums(apply(res[,compas],2, function(x)return(x<max(top12000$P.Value)))),
-                         distrib.features=round(table(res$type)/length(res$type)*100,1),
-                         res.compas=resParCompa,
-                         resGenes.compas=resGenesParCompa,
-                         locisF=list(complex=locisComplex,conf=locisConf, CRE=locisCRE,
-                                     FC20=locisFC,Genes30kb=locisGenes30kb,Genes2kb=locisGenes2kb,HiConf= locisHiConf),
-                         distrib.hi.conf=table(res[locisHiConf,"topCompa"])
-                         
-                         
-)
-resModels[[model]]$model
-resModels[[model]]$seuilSig
-head(resModels[[model]]$locisSig)
-head(resModels[[model]]$distrib.compas)
-saveRDS(resModels[[model]],file = paste(output,"LocisetGenes_AllCompas_pval",seuilPval,filtres,"model",model,'.rds'))
+# 
+# #SAVE ALL RES DU MODEL
+# resModels[[model]]<-list(model=models[[model]],
+#                          locisSig=rownames(top12000),
+#                          res=res,
+#                          seuilSig=max(top12000$P.Value),
+#                          distrib.compas=colSums(apply(res[,compas],2, function(x)return(x<max(top12000$P.Value)))),
+#                          distrib.features=round(table(res$type)/length(res$type)*100,1),
+#                          res.compas=resParCompa,
+#                          resGenes.compas=resGenesParCompa,
+#                          locisF=list(complex=locisComplex,conf=locisConf, CRE=locisCRE,
+#                                      FC20=locisFC,Genes30kb=locisGenes30kb,Genes2kb=locisGenes2kb,HiConf= locisHiConf),
+#                          distrib.hi.conf=table(res[locisHiConf,"topCompa"])
+#                          
+#                          
+# )
+# resModels[[model]]$model
+# resModels[[model]]$seuilSig
+# head(resModels[[model]]$locisSig)
+# head(resModels[[model]]$distrib.compas)
+# saveRDS(resModels[[model]],file = paste(output,"LocisetGenes_AllCompas_pval",seuilPval,filtres,"model",model,'.rds'))
 
 
 ##F.M
 #vulcano 
-# CM.CF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.FC_top_1224_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-# C.L<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_C.L_top_4878_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-# CM.LM<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.ML_top_1758_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-# CF.LF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_FC.FL_top_4495_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-names(resParCompa)
-CM.CF<-resParCompa[["MC.FC"]]
-
-C.L<-resParCompa[["C.L"]]
-
-CM.LM<-resParCompa[["MC.ML"]]
-CF.LF<-resParCompa[["FC.FL"]]
-LM.LF<-resParCompa[["ML.FL"]]
-
-##F.M in ctrl
 library(calibrate)
-compa<-"CM.CF"
-names(CM.CF)
 seuilFC<-30
 seuilpval<-10^-4
-colors<-as.numeric(CM.CF$pval<seuilpval & abs(CM.CF$FC)>seuilFC)+1
-#nb locis hypermeth chez M : 
-sum(CM.CF$pval<seuilpval & CM.CF$FC<(-seuilFC)) #52
-sum(CM.CF$pval<seuilpval & CM.CF$FC>+seuilFC)
-#plot(1:7,col=1:7)
-#top30<-(rownames(CM.CF)[order((length(CM.CF$FC)/rank(CM.CF$FC))+rank(CM.CF$pval))])[1:30]
-png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 500)
-    
-    plot(CM.CF$FC,-log10(CM.CF$pval),col=colors,main = "CM.CF",pch=18)
-    
-    abline(h=-log10(seuilpval))
-    abline(v=seuilFC)
-    abline(v=-seuilFC)
-    #textxy(CM.CF[top30,'FC'],-log10(CM.CF[top30,'pval']),CM.CF[top30,'gene'],offset= -.7)
-    
-dev.off()
-    
-#C.L 
-compa<-"C.L"
-colors<-as.numeric(C.L$pval<seuilpval & abs(C.L$FC)>seuilFC)+1
+for(compa in compas){
+  print(compa)
+  res<-resParCompa[[compa]]
+  colors<-as.numeric(res$pval<seuilpval & abs(res$FC)>seuilFC)+1
+  
+  down<-sum(res$pval<seuilpval & res$FC<(-seuilFC))
+  up<-sum(res$pval<seuilpval & res$FC>(+seuilFC)) 
+  
+  png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 700)
+  
+  plot(res$FC,-log10(res$pval),col=colors,main = compa,sub=paste0(nrow(res)," locis, with",up+down," locis sig. : ",down,"hypoM and",up," hyperM"),pch=18)
+  abline(h=-log10(seuilpval))
+  abline(v=seuilFC)
+  abline(v=-seuilFC)
+  #textxy(C.L[top30,'FC'],-log10(C.L[top30,'pval']),C.L[top30,'gene'],offset= -.7)
+  
+  dev.off()
+}
 
-sum(C.L$pval<seuilpval & C.L$FC<(-seuilFC)) #1
-sum(C.L$pval<seuilpval & C.L$FC>(+seuilFC)) #825
 
-png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 500)
-
-plot(C.L$FC,-log10(C.L$pval),col=colors,main = "C.L",pch=18)
-
-abline(h=-log10(seuilpval))
-abline(v=seuilFC)
-abline(v=-seuilFC)
-#textxy(C.L[top30,'FC'],-log10(C.L[top30,'pval']),C.L[top30,'gene'],offset= -.7)
-
-dev.off()
-
-#CM.LM 
-compa<-"CM.LM"
-colors<-as.numeric(CM.LM$pval<seuilpval & abs(CM.LM$FC)>seuilFC)+1
-sum(CM.LM$pval<seuilpval & CM.LM$FC<(-seuilFC)) #4 >4
-sum(CM.LM$pval<seuilpval & CM.LM$FC>(+seuilFC)) #130 > 40
-
-png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 500)
-plot(CM.LM$FC,-log10(CM.LM$pval),col=colors,main = "CM.LM",pch=18)
-
-abline(h=-log10(seuilpval))
-abline(v=seuilFC)
-abline(v=-seuilFC)
-#textxy(CM.LM[top30,'FC'],-log10(CM.LM[top30,'pval']),CM.LM[top30,'gene'],offset= -.7)
-
-dev.off()
-
-#CF.LF 
-compa<-"CF.LF"
-colors<-as.numeric(CF.LF$pval<seuilpval & abs(CF.LF$FC)>seuilFC)+1
-sum(CF.LF$pval<seuilpval & CF.LF$FC<(-seuilFC)) #4 > 1
-sum(CF.LF$pval<seuilpval & CF.LF$FC>(+seuilFC)) #604 > 41
-png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 500)
-
-plot(CF.LF$FC,-log10(CF.LF$pval),col=colors,main = "CF.LF",pch=18)
-
-abline(h=-log10(seuilpval))
-abline(v=seuilFC)
-abline(v=-seuilFC)
-#textxy(CM.LM[top30,'FC'],-log10(CM.LM[top30,'pval']),CM.LM[top30,'gene'],offset= -.7)
-
-dev.off()
 
 #model 4 : very more locis in CF.LF than in CM.LM, 
 #model 7 : not more locis in CF.LF than in CM.LM that pass the FC and pval threshold,
 #need to be less stringent with model 7
 
 
-#LM.LF 
-compa<-"LM.LF"
-colors<-as.numeric(LM.LF$pval<seuilpval & abs(LM.LF$FC)>seuilFC)+1
-sum(LM.LF$pval<seuilpval & LM.LF$FC<(-seuilFC)) #30
-sum(LM.LF$pval<seuilpval & LM.LF$FC>(+seuilFC)) #44
-png(paste(output,compa,"vulcano_model",model,".png",sep="_"), width = 700, height = 500)
-
-plot(LM.LF$FC,-log10(LM.LF$pval),col=colors,main = "LM.LF",pch=18)
-
-abline(h=-log10(seuilpval))
-abline(v=seuilFC)
-abline(v=-seuilFC)
-#textxy(CM.LM[top30,'FC'],-log10(CM.LM[top30,'pval']),CM.LM[top30,'gene'],offset= -.7)
-
-dev.off()
-
-
 
 ###PATHWAY ANALYSIS
 # POUR model 4 in the windows for gene of locis with FC>30 and pval<10-4
-#M.F
 library(clusterProfiler)
-
 library(org.Hs.eg.db)
 keytypes(org.Hs.eg.db)
 
+#M.F
+# CM.CF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.FC_top_1224_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+# C.L<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_C.L_top_4878_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+# CM.LM<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.ML_top_1758_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+# CF.LF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_FC.FL_top_4495_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
+names(resParCompa)
+CM.CF<-resParCompa[["MC.FC"]]
 
 genes<-CM.CF$gene[CM.CF$pval<seuilpval & abs(CM.CF$FC)>seuilFC]
 length(genes)
@@ -925,7 +855,11 @@ head(GO_CM.CF)
 #none
 
 #sexual dim in response to stress
+C.L<-resParCompa[["C.L"]]
 
+CM.LM<-resParCompa[["MC.ML"]]
+CF.LF<-resParCompa[["FC.FL"]]
+LM.LF<-resParCompa[["ML.FL"]]
 #C.L
 genes<-na.omit(C.L$gene[C.L$pval<seuilpval & abs(C.L$FC)>seuilFC])
 length(genes)
@@ -938,9 +872,6 @@ kk_C.L <- enrichKEGG(gene         = gene.df$ENTREZID,
                        qvalueCutoff  = 0.15)
 head(kk_C.L) #model 4 : 2 path: Transcriptional misregulation in cancer and Signaling pathways regulating pluripotency of stem cells
 #genes de Transcriptional misregulation in cancer
-
-
-#pour model 4 :
 genesTransc<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_C.L,20)['hsa05202',"geneID"],"/")[[1]])]
 cat(paste(genesTransc,collapse = ", ")) #BMI1, CCNA1, ETV4, ETV6, FCGR1A, FLT1, FLT3, FOXO1, FUS, JUP, LDB1, MAF, PAX7, PRCC, SIX1, SPINT1, TLX1, TRAF1, ZBTB16
 #genes de Signaling pathways regulating pluripotency
