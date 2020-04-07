@@ -590,6 +590,10 @@ for(compa in compas){
 FCs<-data.frame()
 resParCompa<-list()
 seuilPval<-0.001
+#add quantile msp1c et conf plutot qua valeur brut (car illisible)
+q9Msp1c<-quantile(data_F$msp1c,1:9/10)
+q9ConfScore<-quantile(data_F$confidenceScore,1:9/10)
+
 for(compa in compas){
   print(compa)
   res<- topTable(fit2,coef=compa,n =Inf)
@@ -599,22 +603,34 @@ for(compa in compas){
     print(paste(nrow(resF),"locis passe filtre pval"))
     FCs[rownames(resF),compa]<-resF$logFC
     locis<-rownames(resF)
-    resA<-data.frame(row.names = locis,
+    res<-data.frame(row.names = locis,
                                          FC=resF$logFC,
                                          pval=resF$P.Value,
                                          pval.adj=resF$adj.P.Val,
-                                         topCompa=compas[as.vector(apply(fit2$p.value[locis,compas],1,which.min))],annot[locis,c("chr","start","posAvant","gene","type")],
-                                         data_F[locis,c("confidenceScore","complexity","msp1c","RankConfidenceScore")]
+                                         topCompa=compas[as.vector(apply(fit2$p.value[locis,compas],1,which.min))],
+                     annot[locis,c("chr","start","posAvant","gene","type")],
+                                         complexity=data_F[locis,"complexity"],
+                    msp1Conf=sapply(res$msp1c,function(x){
+                      return(sum(x>q9Msp1c))
+                    }),
+                    ConfScore=sapply(res$confidenceScore,function(x){
+                      return(sum(x>q9ConfScore))
+                    }),
+                    pubHSPC_expr=rowMeans(annot[rownames(res),c("HSPC1","HSPC2")])
+                    
+                    
+                    
                                          
                                          )
     
-    resParCompa[[compa]]<-resA
+    
+    resParCompa[[compa]]<-res
     
     #enh/prom distrib
     
-    barplot(table(resA$type)/length(resA$type)*100,main = compa)
+    barplot(table(res$type)/length(res$type)*100,main = compa)
     png(paste(output,compa,"enh.prom_distrib_top",length(locis),"locis_pval",seuilPval,"model",model,".png",sep="_"), width = 700, height = 500)
-    barplot(table(resA$type)/length(resA$type)*100,main = compa)
+    barplot(table(res$type)/length(res$type)*100,main = compa)
     dev.off()
   }else{
     print(paste("pas de CpG pour",compa))
@@ -1098,7 +1114,11 @@ head(res2)
 res2<-arrange(res2,chr,start)
 head(res2)
 dim(res2)
-write.table(res2,file = "analyses/DMR_with_comb_p/FC.FL_allLocis_and_pval.bed",col.names = F,row.names = F,sep = "\t",quote = F)
+
+#need chrom, start, end header
+colnames(res2)<-c("chrom","start","end","p-value")
+
+write.table(res2,file = "analyses/DMR_with_comb_p/FC.FL_allLocis_and_pval.bed",row.names = F,sep = "\t",quote = F)
 
 #in shell (dir : analyses/DMR_with_comb_p) :
 # comb-p pipeline \
