@@ -1099,27 +1099,29 @@ head(GO_LM.LF) # none
 #command-line tool and a Python library [16].
 #principe : corrected P-value at a CpG site will be smaller than the original P-value if the neighboring CpG sites also have comparatively small P-values
 #input of comb-p is a .BED file with P-values and chromosome locations of the CpG sites
-resAll<-list()
-compas
-res<-topTable(fit2,coef = "FC.FL",n=Inf)
-head(res) 
-#need add chr start et stop
-res<-data.frame(row.names =rownames(res),annot[rownames(res),c("chr","start","stop")],pval=res$P.Value )
-#need rm NA : 
-dim(res)
-res2<-na.omit(res)
-head(res2)
-#need sort by genomic location
-res2<-arrange(res2,chr,start) #tjr pas bon, car commence apres chr1 il y a chr10
-#revalue levels chr
-res2$chrom
-tail(res2)
-dim(res2)
+for (compa in compas){
+  res<-topTable(fit2,coef = compa,n=Inf)
+  head(res) 
+  #need add chr start et stop
+  res<-data.frame(row.names =rownames(res),annot[rownames(res),c("chr","start","stop")],pval=res$P.Value )
+  #need rm NA : 
+  dim(res)
+  res2<-na.omit(res)
+  head(res2)
+  #need sort by genomic location
+  res2<-arrange(res2,chr,start) #tjr pas bon, car commence apres chr1 il y a chr10
+  #revalue levels chr
+  res2$chrom
+  tail(res2)
+  dim(res2)
+  
+  #need chrom, start, end header
+  colnames(res2)<-c("chrom","start","end","p-value")
+  
+  write.table(res2,file = paste0("analyses/DMR_with_comb_p/",compa,"model",model,"_allLocis_and_pval.bed"),row.names = F,sep = "\t",quote = F)
+  
+}
 
-#need chrom, start, end header
-colnames(res2)<-c("chrom","start","end","p-value")
-
-write.table(res2,file = "analyses/DMR_with_comb_p/FC.FL_allLocis_and_pval.bed",row.names = F,sep = "\t",quote = F)
 
 #in shell (dir : analyses/DMR_with_comb_p) :
 # comb-p pipeline \
@@ -1131,14 +1133,14 @@ write.table(res2,file = "analyses/DMR_with_comb_p/FC.FL_allLocis_and_pval.bed",r
 # --anno hg38 \            # annotate with genome hg38 from UCSC
 # FC.FL_allLocis_and_pval.bed                  # sorted BED file with pvals in 4th column
 
-#comb-p pipeline -c 4 --seed 0.01 --dist 5000 -p FC.FL2 --region-filter-p 0.01 FC.FL_allLocis_and_pval.bed
-# wrote: FC.FL2.regions-t.bed, (regions with region-p < 0.010 and n-probes >= 0: 25) 
+#comb-p pipeline -c 4 --seed 0.05 --dist 750 -p FC.FL2 --region-filter-p 0.05 FC.FL_allLocis_and_pval.bed
+# wrote: FC.FL2.regions-p.bed.gz, (regions with corrected-p < 0.05: 108)
 # Bonferonni-corrected p-value for 1024960 rows: 4.88e-08     values less than Bonferonni-corrected p-value: 1 
 #get :
 resDMR<-read.table("analyses/DMR_with_comb_p/FC.FL2.regions-t.bed",sep = "\t")
 colnames(resDMR)<-c("chrom","start","end","min_p","n_probes","z_p","z_sidak_p")
 head(resDMR)
-nrow(resDMR) #25 region
+nrow(resDMR) #108 region
 #annotation :
 for(chrom in levels(as.factor(resDMR$chrom))){
   print(chrom)
@@ -1148,11 +1150,35 @@ for(chrom in levels(as.factor(resDMR$chrom))){
     genes<-annot$gene[which(annot$chr==chrom&annot$start>range[1]&annot$start<range[2])]
     print(genes)
     resDMR[region,"gene"]<-paste(unique(genes),collapse = "/")
+    resDMR[region,"nbLocis"]<-paste(table(genes),collapse = "/")
   }
 }
 resDMR
+#du sens bio ? 
+library(clusterProfiler)
+library()
+gene.df<-bitr(unique(resDMR$gene),fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)
+gene.df
+kkDMR<-enrichKEGG(gene.df$ENTREZID)
+head(kkDMR) #none
 
-#2) Bumphunter
+GO_DMR <- enrichGO(gene         = gene.df$ENTREZID,
+                     OrgDb         = org.Hs.eg.db,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.05,
+                     qvalueCutoff  = 0.2,
+                     readable = T)
+
+head(GO_DMR)
+kkDMR<-enrichGO(gene.df$ENTREZID) #none
+
+#!with parameter recommand by paper 
+#seed = 0.05, dist = 750 :
+
+
+
+
+#2) bumphunet
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install("bumphunter")
@@ -1165,9 +1191,19 @@ install.packages("dplyr")
 library(bumphunter)
 browseVignettes("bumphunter")
 help(bumphunter)
+names(data_F)
+colnames(design)
+#from 
+#Parameter settings that achieved best performance (AuPR) for each method : bumphunter 	cuttoffQ = 0.95, maxGap = 250 
+resBumpFL<-bumphunter(as.matrix(data_F[,samples_F_F]),
+                      design=design,chr=data_F$chr,
+                      pos=data_F$start,
+                      coef=5,
+                      nullMethod ="permutation",
+                      cutoff = 0.95, maxGap = 250, B=10)
 
-
-
+head(resBumpFL$table)
+nrow(resBumpFL$table)
 #WHY THIS SEX SPE RESPONSE ?
 #parce que femelle ont les plus gros poids ?
 LGA<-batch[samples_F_F[samples_F_F%in%rownames(batch)[batch$Group_name=="L"]],]
