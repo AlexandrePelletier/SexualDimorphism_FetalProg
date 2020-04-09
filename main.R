@@ -1140,13 +1140,17 @@ colnames(resDMR)<-c("chrom","start","end","min_p","n_probes","z_p","z_sidak_p")
 head(resDMR)
 nrow(resDMR) #25 region
 #annotation :
-for(chr in levels(as.factor(resDMR$chrom))){
-  for (region in which(resDMR$chrom==chr)){
+for(chrom in levels(as.factor(resDMR$chrom))){
+  print(chrom)
+  for (region in which(resDMR$chrom==chrom)){
+    print(region)
     range<-c(resDMR[region,"start"],resDMR[region,"end"])
-    genes<-annot$gene
+    genes<-annot$gene[which(annot$chr==chrom&annot$start>range[1]&annot$start<range[2])]
+    print(genes)
+    resDMR[region,"gene"]<-paste(unique(genes),collapse = "/")
   }
 }
-
+resDMR
 
 #2) Bumphunter
 if (!requireNamespace("BiocManager", quietly = TRUE))
