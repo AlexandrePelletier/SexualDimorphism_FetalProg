@@ -1111,8 +1111,10 @@ dim(res)
 res2<-na.omit(res)
 head(res2)
 #need sort by genomic location
-res2<-arrange(res2,chr,start)
-head(res2)
+res2<-arrange(res2,chr,start) #tjr pas bon, car commence apres chr1 il y a chr10
+#revalue levels chr
+res2$chrom
+tail(res2)
 dim(res2)
 
 #need chrom, start, end header
