@@ -407,10 +407,9 @@ plot(batch[IUGR,"Mat.Age"],batch[IUGR,"pct0ApresF2"],col=batch$Mat.Age_Fac)
 # LIMMA CHOIX MODEL 
 # model de ! group_sex, sequencing, batch, group_comp_fac , latino, 
 #coix bas" sur l'enrichissement enh /prom et en distance du gene le plus proche
-annot<-read.table("../annotation_CpG_HELP_ALL_011520.txt",sep="\t",header=T)
-colnames(annot)<-c("chr","start","stop","id","V5","posAvant","ENSEMBL_ID","gene","type")
-rownames(annot)<-annot$id
+annot<-read.csv2("../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = 1)
 head(annot)
+
 
 models<-list()
 model<-4
@@ -1132,7 +1131,38 @@ write.table(res2,file = "analyses/DMR_with_comb_p/FC.FL_allLocis_and_pval.bed",r
 # --anno hg38 \            # annotate with genome hg38 from UCSC
 # FC.FL_allLocis_and_pval.bed                  # sorted BED file with pvals in 4th column
 
-comb-p pipeline -c 4 --seed 1e-3 --dist 200 -p FC.FL --region-filter-p 0.1 --anno hg38 FC.FL_allLocis_and_pval.bed 
+#comb-p pipeline -c 4 --seed 0.01 --dist 5000 -p FC.FL2 --region-filter-p 0.01 FC.FL_allLocis_and_pval.bed
+# wrote: FC.FL2.regions-t.bed, (regions with region-p < 0.010 and n-probes >= 0: 25) 
+# Bonferonni-corrected p-value for 1024960 rows: 4.88e-08     values less than Bonferonni-corrected p-value: 1 
+#get :
+resDMR<-read.table("analyses/DMR_with_comb_p/FC.FL2.regions-t.bed",sep = "\t")
+colnames(resDMR)<-c("chrom","start","end","min_p","n_probes","z_p","z_sidak_p")
+head(resDMR)
+nrow(resDMR) #25 region
+#annotation :
+for(chr in levels(as.factor(resDMR$chrom))){
+  for (region in which(resDMR$chrom==chr)){
+    range<-c(resDMR[region,"start"],resDMR[region,"end"])
+    genes<-annot$gene
+  }
+}
+
+
+#2) Bumphunter
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("bumphunter")
+install.packages("locfit")
+install.packages("matrixStats")
+install.packages("Rcpp")
+install.packages("rlang")
+install.packages("vctrs")
+install.packages("dplyr")
+library(bumphunter)
+browseVignettes("bumphunter")
+help(bumphunter)
+
+
 
 #WHY THIS SEX SPE RESPONSE ?
 #parce que femelle ont les plus gros poids ?
