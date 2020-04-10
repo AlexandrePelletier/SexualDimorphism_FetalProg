@@ -1100,6 +1100,7 @@ head(GO_LM.LF) # none
 #principe : corrected P-value at a CpG site will be smaller than the original P-value if the neighboring CpG sites also have comparatively small P-values
 #input of comb-p is a .BED file with P-values and chromosome locations of the CpG sites
 for (compa in compas){
+  
   res<-topTable(fit2,coef = compa,n=Inf)
   head(res) 
   #need add chr start et stop
@@ -1154,6 +1155,33 @@ for(chrom in levels(as.factor(resDMR$chrom))){
   }
 }
 resDMR
+
+#all compas get :
+
+for(compa in compas){
+  print(compa)
+  resDMR<-read.table(paste0("analyses/DMR_with_comb_p/",compa,".regions-t.bed"),sep = "\t")
+  colnames(resDMR)<-c("chrom","start","end","min_p","n_probes","z_p","z_sidak_p")
+  print(nrow(resDMR)) #108 region
+  #annotation :
+  for(chrom in levels(as.factor(resDMR$chrom))){
+    
+    for (region in which(resDMR$chrom==chrom)){
+      
+      range<-c(resDMR[region,"start"],resDMR[region,"end"])
+      genes<-annot$gene[which(annot$chr==chrom&annot$start>range[1]&annot$start<range[2])]
+      
+      resDMR[region,"gene"]<-paste(unique(genes),collapse = "/")
+      resDMR[region,"nbLocis"]<-paste(table(genes),collapse = "/")
+    }
+  }
+  write.csv2(resDMR,file = paste(output,compa,"resDMR_comb-p_model",model,".csv",sep = "_"))
+}
+
+
+
+
+
 #du sens bio ? 
 library(clusterProfiler)
 library()
