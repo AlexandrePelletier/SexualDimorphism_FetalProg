@@ -603,13 +603,13 @@ for(compa in compas){
                                          topCompa=compas[as.vector(apply(fit2$p.value[locis,compas],1,which.min))],
                      annot[locis,c("chr","start","posAvant","gene","type")],
                                          complexity=data_F[locis,"complexity"],
-                    msp1Conf=sapply(res[locis,"msp1c"],function(x){
+                    msp1Conf=sapply(data_F[locis,"msp1c"],function(x){
                       return(sum(x>q9Msp1c))
                     }),
-                    ConfScore=sapply(res[locis,"confidenceScore"],function(x){
+                    ConfScore=sapply(data_F[locis,"confidenceScore"],function(x){
                       return(sum(x>q9ConfScore))
                     }),
-                    pubHSPC_expr=rowMeans(annot[rownames(res),c("HSPC1","HSPC2")])
+                    pubHSPC_expr=rowMeans(annot[locis,c("HSPC1","HSPC2")])
                     
                     
                     
@@ -659,6 +659,8 @@ for(i in 1:length(new.cluster.ids)){
 }
 head(markers)
 scoresCluster<-scoreMarquageCluster(markers,samples,seuil = "intraClusterFixe",filtreMin = 2)
+write.csv2(scoresCluster,"analyses/test_scRNAseq_integration/sc_scoreClustersHSPC.csv",row.names = T)
+scoresCluster<-read.csv2("analyses/test_scRNAseq_integration/sc_scoreClustersHSPC.csv")
 
 resGenesParCompa<-list()
 for(compa in compas){
@@ -1131,6 +1133,11 @@ for (compa in compas){
 #comb-p pipeline -c 4 --seed 0.05 --dist 750 -p FC.FL2 --region-filter-p 0.05 FC.FL_allLocis_and_pval.bed
 # wrote: FC.FL2.regions-p.bed.gz, (regions with corrected-p < 0.05: 108)
 # Bonferonni-corrected p-value for 1024960 rows: 4.88e-08     values less than Bonferonni-corrected p-value: 1 
+
+#with all compas : 
+# for compa in 'C.I' 'C.L' 'I.L' 'MC.ML' 'MC.MI' 'MI.ML' 'FC.FL' 'FC.FI' 'ML.FL' 'MI.FI' 'MC.FC' 'F.M'; do comb-p pipeline -c 4 --seed 0.05 --dist 750 -p $compa --region-filter-p 0.05 "$compa""model13_allLocis_and_pval.bed"; done 
+
+
 #get :
 resDMR<-read.table("analyses/DMR_with_comb_p/FC.FL2.regions-t.bed",sep = "\t")
 colnames(resDMR)<-c("chrom","start","end","min_p","n_probes","z_p","z_sidak_p")
