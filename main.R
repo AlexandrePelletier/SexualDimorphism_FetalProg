@@ -15,14 +15,14 @@ source("scripts/utils.R")
 source("scripts/FindInfosGenes.R")
 source("scripts/scRNA-seq integration.R")
 #output dir 
-script_name <- "main"
+script_name <- "newLocisF"
 outputDir <- file.path("analyses",script_name)
 dir.create(path = outputDir, recursive = TRUE, showWarnings = FALSE, mode = "0777")
 date<-Sys.Date()
 output <- file.path(outputDir,date)
 
 #PARAMS
-filtres<-"locisF.msp1.NA.fullMethyl"
+filtres<-"locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros"
 
 #data
 data_all<-fread("../../ref/CD34_angle_119_noEmptyLocis_withConfScore_withoutChrXY.txt",header = T)
@@ -34,7 +34,7 @@ head(data_all)
 dim(data_all) #1709224     132
 samples<-names(data_all)[str_detect(names(data_all),"CBP")]
 
-batch<-read.csv2("../../ref/batch_CD34_library_date_032520.csv",header=T,row.names = 1)
+batch<-read.csv2("../../ref/batch_CD34_library_date_090420.csv",header=T,row.names = 1)
 
 
 head(batch)
@@ -76,16 +76,27 @@ data_F<-data_all[data_all$msp1c>10^-7&
                    rowSums(is.na(mat))==0,]
 data_F<-data_F[rowSums(data_F[,samples]>10)>3,]
 nrow(data_F) #1029401
+#plus conf Score, nbMethylNonzeros dans pct0 elevé ?
+source("scripts/deter_seuilQC.R")
+names(data_F)
+deterSeuilQC(data_F,metrique = "confidenceScore",qTestes = 1:9/10) #exclu locis < q0.2
+deterSeuilQC(data_F[data_F$pct0>0.7,],metrique = "nbMethylNonZeros",qTestes = 0:5,test = "brut") #exclu locis avec pct0>0.7 et nbMethylVraizers==0
+
+data_F<-data_F[data_F$confidenceScore>quantile(data_F$confidenceScore,0.2),]
+nrow(data_F) #823k
+
+data_F<-data_F[!(data_F$pct0>0.7&data_F$nbMethylNonZeros==0),]
+nrow(data_F) #816k
 locisF<-rownames(data_F)
 #gain en qualité
 #avant
 deterQual(mat) #41% des locis avec Vrais zeros
-deterQual(mat[locisF,]) #54% de locis avec vrais zeros
+deterQual(mat[locisF,]) #54%>64% de locis avec vrais zeros
 
 deterQual2(mat,batch) #PC 1  ( 16.9 % de la variance) a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.3801368616723
 
 
-deterQual2(mat[locisF,],batch) #PC 1  ( 17.8 % de la variance a R2 avec Library_Complexity = 0.74 et pval = 10^ -35.5622767364567
+deterQual2(mat[locisF,],batch) #PC 1  ( 19.1 % de la variance ) a R2 avec Library_Complexity = 0.73 et pval = 10^ -34.6003151198251"
 deterQual2(mat[!(rownames(mat)%in%locisF),],batch)
 # "PC 1  ( 14.3 % de la variance a R2 avec Library_Complexity = 0.79 et pval = 10^ -40.6381624618702"
 
@@ -228,8 +239,10 @@ deterQual2(mat[locisF,samples],batch)
 # PCAlist[["pca_F_S"]]<-pc3
 # rm(pc1,pc2,pc3)
 # saveRDS(PCAlist,file.path(outputDir,"PCAlist.rds"))
-PCAlist<-readRDS(file.path(outputDir,"PCAlist.rds"))
-
+PCAlist<-readRDS("analyses/main/PCAlist.rds")
+pc2<-prcomp(t(as.matrix(data_F[,samples])),center = T)
+PCAlist[["pca_F"]]<-pc2
+rm(pc2)
 #visual PCA et INFLUENCE COVAR SUR PC
 pcaChoose<-"pca_All"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
@@ -241,14 +254,14 @@ plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group",batch = batch,showSa
 plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Sex",batch = batch,showSampleIDs=F)
 
 var_fac<-names(batch)[c(2,4,8,10,11,12,13,15,16,19,24,27,29,33,34,35)]
-var_num<-names(batch)[c(5,6,17,20,21,22,23,25,26,28,32)]
+var_num<-names(batch)[c(5,6,17,20,21,22,23,25,26,28,32,39)]
 varAdd<-c('GroupBatch_Complexity','GroupBatch_Complexity_Fac','pct0ApresF')
 vardint<-c("Group","Group_Sex","Sex","Library_Complexity","Group_Complexity","Group_Complexity_Fac")
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd ) #date PC4 et 6
 
 rowSums(-log10(resPV[rownames(resPV)%in%vardint,]))
-# Library_Complexity              Group          Group_Sex                Sex 
-# 40.975445           4.269812           5.193760           2.930691 
+# Group_Complexity   Library_Complexity                Group Group_Complexity_Fac            Group_Sex                  Sex 
+# 40.745262            40.975445             4.269812            32.048345             5.193760             2.930691 
 
 pcaChoose<-"pca_F"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
@@ -257,8 +270,7 @@ plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="date",batch = batch,showSam
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
 rowSums(-log10(resPV[rownames(resPV)%in%vardint,]))
 # Group_Complexity   Library_Complexity                Group Group_Complexity_Fac            Group_Sex                  Sex 
-# 38.669826            39.491955             7.206245            30.814766             6.855886             3.876376 
-
+# 38.053873            38.754115             7.637016            30.375926             5.377435             2.859952 
 
 
 pcaChoose<-"pca_F"
@@ -312,7 +324,7 @@ weight<-as.numeric(batch[samples,'Weight..g.'])
 weightAtTerm<-as.numeric(batch[samples,"Weight.at.term..lbs."])
 complexity<-as.numeric(batch[samples,"Library_Complexity"])
 group_complexity<-as.numeric(batch[samples,"Group_Complexity"])
-
+seqDepth<-as.numeric(batch[samples,"SeqDepth"])
 mat.age<-as.numeric(batch[samples,"Mat.Age"])
 
 
@@ -340,7 +352,7 @@ correl(complexity,mat.age,ret = "all") #signif++ p=0.001, r2= 0.08
 #donc library pas 100% independant/technique
 #group_comp ?
 correl(group_complexity,PI,ret = "all")
-correl(group_complexity,group,ret = "all") #no signif
+correl(group_complexity,group_sex,ret = "all") #no signif
 correl(group_complexity,sex,ret = "all") #no signif
 correl(group_complexity,weight,ret = "all")
 correl(group_complexity,weightAtTerm,ret = "all")
@@ -363,13 +375,13 @@ correl(batches,group_sex,ret="all") #no
 #mat.age correler avec group, le prendre dans model ou pas ?
 pc<-PCAlist[[2]]$x
 summary(lm(pc[,1]~group_complexity_fac)) #r2=0.63
-summary(lm(pc[,1]~group_complexity_fac+group)) #r2 = 0.70
-summary(lm(pc[,1]~group_complexity_fac+group+mat.age)) #r2 0.68, donc vaut mieux pas mettre mat.age
-summary(lm(pc[,1]~group+mat.age))
-summary(lm(pc[,1]~group_complexity_fac+group+mat.age+latino))  #0.79 !
+summary(lm(pc[,1]~group_complexity_fac+group_sex)) #r2 = 0.70
+summary(lm(pc[,1]~group_complexity_fac+group_sex+mat.age)) #r2 0.68, donc vaut mieux pas mettre mat.age
+
+summary(lm(pc[,1]~group_complexity_fac+group_sex+mat.age+latino))  #0.79 !
 summary(lm(pc[,1]~group_complexity_fac+group+latino))  #0.796 c'est mieux.
-summary(lm(pc[,1]~group_complexity_fac+group+latino+sequencing)) #0.82 ! 
-summary(lm(pc[,1]~group_complexity_fac+group+latino+sequencing+mat.age)) #0.83 !
+summary(lm(pc[,1]~group_complexity_fac+group+latino+seqDepth)) #0.82 ! 
+summary(lm(pc[,1]~group_complexity_fac+group+latino+seqDepth+mat.age)) #0.83 !
 
 #ccl mat.age peu nécessaire pour expliquer pc1, mais peut etre bon pour expliquer PC6
 # on capture avec group de la var que complexity library n'expliquait seul
@@ -412,7 +424,7 @@ head(annot)
 
 
 models<-list()
-model<-4
+model<-13
 names(batch)
 varToModel<-c("Group_Sex",'batch',"Mat.Age","latino","Group_Complexity_Fac")
 samples_F_F<-samples[rowSums(is.na(batch[samples,varToModel]))==0] 
@@ -421,8 +433,8 @@ table(batch[samples_F_F,"Group_name"])
 # C  I  L 
 # 34 38 36 
 sequencing<-factor(batch[samples_F_F,"sequencing"])
-group<-factor(batch[samples_F_F,"Group_name"])
-groupBatch_complexity_fac<-factor(batch[samples_F_F,"GroupBatch_Complexity_Fac"])
+#group<-factor(batch[samples_F_F,"Group_name"])
+#groupBatch_complexity_fac<-factor(batch[samples_F_F,"GroupBatch_Complexity_Fac"])
 #sex<-as.factor(batch[samples_F_F,"Gender"])
 mat.age<-as.numeric(batch[samples_F_F,"Mat.Age"])
 
@@ -463,40 +475,32 @@ fit2  <- eBayes(fit2) #warning message :Zero sample variances detected, have bee
 
 results <- decideTests(fit2)
 
-sum(abs(results)) #>7>2039 > 2 >15 >6
+sum(abs(results)) #2039 > 3137 !
 colSums(abs(results))
 
 
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 0     3     1     1     0     0     0     0     1     1     0     0 
 
 #4:
 # C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
 # 0    71  1955     0     0     0     4     0     7     2     0     0 
 
 # C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 0     0     0     0     0     0     0     0     1     1     0     0 
+# 0   105  3007     0     1     0    15     0     8     1     0     0 
 
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 0     0     4     0     2     0     0     0     3     6     0     0 
-
-#7:
-# C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 0     0     3     0     0     0     0     0     0     3     0     0 
-
+#13 : 
 #bon model ? 1) enrichissment en enh et prom, 2) prox du gene
 locisSig<-rownames(fit2$p.value)[apply(fit2$p.value<0.001,1,any)]
-length(locisSig) #8617 > 18k > 27k (4) > 12k > 15k >11k
+length(locisSig) # 27k (4) > 23k
 resSig<-data.frame(row.names = locisSig,fit2$p.value[locisSig,],annot[locisSig,c("chr","start","posAvant","gene","type")],
                    data_F[locisSig,c("confidenceScore","confidenceScoreNorm","complexity","msp1c","RankConfidenceScore")])
 
 
 head(resSig,100)
 #nb C-L 
-sum(resSig$C.L<0.001)  #>3692>5069>869> 1079 >936
+sum(resSig$C.L<0.001)  #>5069>4944
 
 #enrichissement en bon locis :
-mean(resSig$RankConfidenceScore)/mean(na.omit(data_all$RankConfidenceScore)) #>1.35>1.40>1.28 > 1.31 > 1.33
+mean(resSig$RankConfidenceScore)/mean(na.omit(data_all$RankConfidenceScore)) #1.40>1.50 !
 
 #enh et prom
 
@@ -511,25 +515,15 @@ table(annot[locisRF,"type"])/length(locisRF)*100
 # 25.488 10.194  9.289 10.180 17.424  7.017 19.974 
 
 table(resSig$type)/length(resSig$type)*100
-# 0         1         2         3         4         5         6 
-# 25.089938 10.154346  9.144714  9.423233 18.324243  7.229894 20.262272 
 
-# 0         1         2         3         4         5         6 
-# 17.098901  7.780220  6.659341  6.967033 22.620879  6.098901 32.478022 
 
 #4:
 # 0         1         2         3         4         5         6 
 # 13.877926  6.417870  5.076823  5.670715 23.893636  4.915897 39.840607 
 
+#13 :
 # 0         1         2         3         4         5         6 
-# 21.650452  9.097116  7.817034  8.474142 19.994880  6.716163 25.849121 
-
-# 0         1         2         3         4         5         6 
-# 19.981805  8.148678  6.888037  7.602833 20.865553  5.965300 30.092924 
-
-#7:
-# 0         1         2         3         4         5         6 
-# 20.428667  8.481246  7.083054  8.079370 20.478902  6.279303 28.667113 
+# 10.055055  5.625027  4.122743  4.707439 25.577227  4.319064 45.324570 
 
 
 #locis around5k of the gene
@@ -539,16 +533,16 @@ sum(locisRall%in%locis5k)/length(locisRall) # 0.26
 
 sum(locisRF%in%locis5k)/length(locisRF) #0.32
 
-sum(locisSig%in%locis5k)/length(locisSig)  #0.34 > 0.46 > 0.54 > 0.39 > 0.43 > 0.42
+sum(locisSig%in%locis5k)/length(locisSig)  #0.54 > 0.60
 
 hist(annot[locisRall[locisRall%in%locis5k],"posAvant"],breaks = 100)
 hist(annot[locisRF[locisRF%in%locis5k],"posAvant"],breaks = 100)
 hist(annot[locisSig[locisSig%in%locis5k],"posAvant"],breaks = 100)
 
 
-#MODEL De confiance : 3 et 4, et 7
-model<-4
-formule<-~0 + group_sex  +batches +latino +mat.age + 
+#MODEL De confiance : 13
+model<-13
+formule<-~0 + group_sex  +batches +latino +mat.age +group_complexity_fac
 models[[model]]<-formule
 design<-model.matrix(models[[model]])
 colnames(design)<-make.names(colnames(design))
@@ -609,10 +603,10 @@ for(compa in compas){
                                          topCompa=compas[as.vector(apply(fit2$p.value[locis,compas],1,which.min))],
                      annot[locis,c("chr","start","posAvant","gene","type")],
                                          complexity=data_F[locis,"complexity"],
-                    msp1Conf=sapply(res$msp1c,function(x){
+                    msp1Conf=sapply(res[locis,"msp1c"],function(x){
                       return(sum(x>q9Msp1c))
                     }),
-                    ConfScore=sapply(res$confidenceScore,function(x){
+                    ConfScore=sapply(res[locis,"confidenceScore"],function(x){
                       return(sum(x>q9ConfScore))
                     }),
                     pubHSPC_expr=rowMeans(annot[rownames(res),c("HSPC1","HSPC2")])
