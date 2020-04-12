@@ -609,13 +609,13 @@ for(compa in compas){
                                          topCompa=compas[as.vector(apply(fit2$p.value[locis,compas],1,which.min))],
                      annot[locis,c("chr","start","posAvant","gene","type")],
                                          complexity=data_F[locis,"complexity"],
-                    msp1Conf=sapply(res$msp1c,function(x){
+                    msp1Conf=sapply(data_F[locis,"msp1c"],function(x){
                       return(sum(x>q9Msp1c))
                     }),
-                    ConfScore=sapply(res$confidenceScore,function(x){
+                    ConfScore=sapply(data_F[locis,"confidenceScore"],function(x){
                       return(sum(x>q9ConfScore))
                     }),
-                    pubHSPC_expr=rowMeans(annot[rownames(res),c("HSPC1","HSPC2")])
+                    pubHSPC_expr=rowMeans(annot[locis,c("HSPC1","HSPC2")])
                     
                     
                     
@@ -647,25 +647,26 @@ head(resParCompa)
 #genes Expr
 CTRL_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInCTRL.csv",row.names = 1)
 LGA_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInLGA.csv",row.names = 1)
-
 listExprMat<-list(CTRL=CTRL_expr_by_pop,LGA=LGA_expr_by_pop)
-markers<-read.csv2("../../../Alexandre_SC/analyses/test_batch_integration/all.markers_SCTransform_CTRLandLGA_integrated.csv",row.names = 1)
-head(markers)
-#reannot 
-library(Seurat)
-source("scripts/scoreCluster.R")
-samples<-readRDS("../../../Alexandre_SC/analyses/test_batch_integration/CTRLandLGA_SCTransform_Integrated.rds")
-new.cluster.ids <- c("HSC-SELL2", "HSC-AVP", "HSC-Er", "HSC-SELL1", "EMP", "GMP",
-                     "LyP", "MkP", "proT","LMPP","preB","LT-HSC","Neu","LyB","Ly-ETS1","DC")
-names(new.cluster.ids) <- levels(samples)
-samples <- RenameIdents(samples, new.cluster.ids)
 
-for(i in 1:length(new.cluster.ids)){
-  markers$cluster[markers$cluster==as.numeric(names(new.cluster.ids)[i])]<-new.cluster.ids[i]
-}
-head(markers)
-scoresCluster<-scoreMarquageCluster(markers,samples,seuil = "intraClusterFixe",filtreMin = 2)
-
+#markersCluster
+# markers<-read.csv2("../../../Alexandre_SC/analyses/test_batch_integration/all.markers_SCTransform_CTRLandLGA_integrated.csv",row.names = 1)
+# head(markers)
+# #reannot 
+# library(Seurat)
+# source("scripts/scoreCluster.R")
+# samples<-readRDS("../../../Alexandre_SC/analyses/test_batch_integration/CTRLandLGA_SCTransform_Integrated.rds")
+# new.cluster.ids <- c("HSC-SELL2", "HSC-AVP", "HSC-Er", "HSC-SELL1", "EMP", "GMP",
+#                      "LyP", "MkP", "proT","LMPP","preB","LT-HSC","Neu","LyB","Ly-ETS1","DC")
+# names(new.cluster.ids) <- levels(samples)
+# samples <- RenameIdents(samples, new.cluster.ids)
+# 
+# for(i in 1:length(new.cluster.ids)){
+#   markers$cluster[markers$cluster==as.numeric(names(new.cluster.ids)[i])]<-new.cluster.ids[i]
+# }
+# head(markers)
+# scoresCluster<-scoreMarquageCluster(markers,samples,seuil = "intraClusterFixe",filtreMin = 2)
+scoresCluster<-read.csv2("analyses/test_scRNAseq_integration/sc_scoreClustersHSPC.csv")
 resGenesParCompa<-list()
 for(compa in compas){
   print(compa)
@@ -1137,6 +1138,10 @@ for (compa in compas){
 #comb-p pipeline -c 4 --seed 0.05 --dist 750 -p FC.FL2 --region-filter-p 0.05 FC.FL_allLocis_and_pval.bed
 # wrote: FC.FL2.regions-p.bed.gz, (regions with corrected-p < 0.05: 108)
 # Bonferonni-corrected p-value for 1024960 rows: 4.88e-08     values less than Bonferonni-corrected p-value: 1 
+#with all compas : 
+#for compa in 'C.I' 'C.L' 'I.L' 'MC.ML' 'MC.MI' 'MI.ML' 'FC.FL' 'FC.FI' 'ML.FL' 'MI.FI' 'MC.FC' 'F.M'; do comb-p pipeline -c 4 --seed 0.05 --dist 750 -p $compa --region-filter-p 0.05 "$compa""model13_allLocis_and_pval.bed"; done 
+
+
 #get :
 resDMR<-read.table("analyses/DMR_with_comb_p/FC.FL2.regions-t.bed",sep = "\t")
 colnames(resDMR)<-c("chrom","start","end","min_p","n_probes","z_p","z_sidak_p")
