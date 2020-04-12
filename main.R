@@ -193,9 +193,10 @@ abline(h=0.845)
 
 
 #apres F
-y<-batch$pct0ApresF
+y<-batch$newComplexityScore3
 o<-order(y)
 plot(x=1:nrow(batch),y[o],col=(batch$Group[o]+1))
+table(batch$Group_name[batch$pct0ApresF>0.8])
 plot(x=1:nrow(batch),y[o],col=(batch$batch[o]))
 plot(x=1:nrow(batch),y[o],col=(batch$Mat.Age_Fac[o]),main="pct0 dans les échantillons") 
 plot(x=1:nrow(batch),y[o],col=(batch$sequencing[o]),main="pct0 dans les échantillons") 
@@ -247,7 +248,16 @@ rm(pc2)
 pcaChoose<-"pca_All"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
 names(batch)
-plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="sequencing",batch = batch,showSampleIDs=F)
+plot(density(batch$SeqDepth))
+plot(batch$SeqDepth)
+abline(h=quantile(batch$SeqDepth,0.91))
+
+plot(batch$SeqDepth,batch$newComplexityScore2,col=as.numeric(batch$SeqDepth>2*10^7)+1)
+batch$SeqDepthHi<-as.numeric(batch$SeqDepth>2*10^7)
+
+plot(batch$SeqDepth,batch$newComplexityScore4,col=batch$Group+1)
+
+plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="SeqDepthHi",batch = batch,showSampleIDs=F)
 
 plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group",batch = batch,showSampleIDs=F)
 
@@ -942,15 +952,16 @@ vennDiagram(a)
 
 #CM.LM
 genes<-na.omit(CM.LM$gene[CM.LM$pval<seuilpval & abs(CM.LM$FC)>seuilFC])
+genes2<-na.omit(CM.LM$gene)
 length(genes)
 #trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+gene.df <- bitr(unique(genes2), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
 head(gene.df)
 kk_CM.LM <- enrichKEGG(gene         = gene.df$ENTREZID,
                        pAdjustMethod = "BH",
                        pvalueCutoff  = 0.05,
                        qvalueCutoff  = 0.15)
-head(kk_CM.LM)
+head(kk_CM.LM,20)$Description
 #non
 
 #GO
@@ -965,9 +976,10 @@ head(GO_CM.LM)
 
 #CF.LF
 genes<-na.omit(CF.LF$gene[CF.LF$pval<seuilpval & abs(CF.LF$FC)>seuilFC])
+genes2<-na.omit(CF.LF$gene)
 length(genes) #635
 #trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+gene.df <- bitr(unique(genes2), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
 head(gene.df)
 kk_CF.LF <- enrichKEGG(gene         = gene.df$ENTREZID,
                        pAdjustMethod = "BH",
@@ -1158,10 +1170,11 @@ for(chrom in levels(as.factor(resDMR$chrom))){
 resDMR
 
 #all compas get :
+resDMRs<-list()
 
 for(compa in compas){
   print(compa)
-  resDMR<-read.table(paste0("analyses/DMR_with_comb_p/",compa,".regions-t.bed"),sep = "\t")
+  resDMR<-read.table(paste0("analyses/DMR_with_comb_p/model13",compa,".regions-t.bed"),sep = "\t")
   colnames(resDMR)<-c("chrom","start","end","min_p","n_probes","z_p","z_sidak_p")
   print(nrow(resDMR)) #108 region
   #annotation :
@@ -1177,10 +1190,31 @@ for(compa in compas){
     }
   }
   write.csv2(resDMR,file = paste(output,compa,"resDMR_comb-p_model",model,".csv",sep = "_"))
+  resDMRs[[compa]]<-resDMR
 }
 
 
-
+names(resDMRs)
+for(compa in "F.M"){
+  print(compa)
+  resDMR<-read.table(paste0("analyses/DMR_with_comb_p/model13",compa,".regions-t.bed"),sep = "\t")
+  colnames(resDMR)<-c("chrom","start","end","min_p","n_probes","z_p","z_sidak_p")
+  print(nrow(resDMR)) #108 region
+  #annotation :
+  for(chrom in levels(as.factor(resDMR$chrom))){
+    
+    for (region in which(resDMR$chrom==chrom)){
+      
+      range<-c(resDMR[region,"start"],resDMR[region,"end"])
+      genes<-annot$gene[which(annot$chr==chrom&annot$start>range[1]&annot$start<range[2])]
+      
+      resDMR[region,"gene"]<-paste(unique(genes),collapse = "/")
+      resDMR[region,"nbLocis"]<-paste(table(genes),collapse = "/")
+    }
+  }
+  write.csv2(resDMR,file = paste(output,compa,"resDMR_comb-p_model",model,".csv",sep = "_"))
+  resDMRs[[compa]]<-resDMR
+}
 
 
 #du sens bio ? 
