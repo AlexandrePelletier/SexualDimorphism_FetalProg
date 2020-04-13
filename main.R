@@ -71,13 +71,22 @@ plot(density(data_all$pct0))
 
 
 #FILTRATION DES LOCIS
+source("scripts/deter_seuilQC.R")
+names(data_F)
+#d'abord en fct msp1c et et nbNA
+
+deterSeuilQC(data_all,metrique = "msp1c",qTestes = 1:9/40,qualMetriques = 1) #exclu locis < q0.2
+
+deterSeuilQC(data_F[data_F$pct0>0.7,],metrique = "nbMethylNonZeros",qTestes = 0:5,test = "brut") #
+
 mat<-as.matrix(data_all[,samples])
 data_F<-data_all[data_all$msp1c>10^-7&
                    rowSums(is.na(mat))==0,]
+#puis on retire les locis full methylated
 data_F<-data_F[rowSums(data_F[,samples]>10)>3,]
 nrow(data_F) #1029401
-#plus conf Score, nbMethylNonzeros dans pct0 elevé ?
-source("scripts/deter_seuilQC.R")
+#plus conf Score, nbMethylNonzeros dans pct0 elevé :
+
 names(data_F)
 deterSeuilQC(data_F,metrique = "confidenceScore",qTestes = 1:9/10) #exclu locis < q0.2
 deterSeuilQC(data_F[data_F$pct0>0.7,],metrique = "nbMethylNonZeros",qTestes = 0:5,test = "brut") #exclu locis avec pct0>0.7 et nbMethylVraizers==0

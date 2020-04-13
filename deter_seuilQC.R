@@ -31,6 +31,8 @@ source('scripts/deterDataQual.R')
 
 #fct use : 
 deterSeuilQC<-function(dataCpG,metrique,qTestes,qualMetriques=c(1,2),test="quantile",lowerThan=T){
+  library(stringr)
+  samples<-names(dataCpG)[str_detect(names(dataCpG),"CBP")]
   if (1%in% qualMetriques){
     quals<-rep(0,length(qTestes))
   }
