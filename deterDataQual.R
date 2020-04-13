@@ -16,7 +16,7 @@ deterQual<-function(matCpG, maxMethyl =5, minPct0=0.35){
   return(pctLocisAvecVraisZeros)
 }
 
-deterQual2<-function(mat,df.covars,covarNum="Library_Complexity",pcTestes=5){
+deterQual2<-function(mat,df.covars,covarNum="Group_Complexity",pcTestes=5){
   #quelle corralation avec library complexity?
   res<-list(p=1, r2=0,PC=0, pctPC=0)
   
