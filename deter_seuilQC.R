@@ -86,7 +86,7 @@ deterSeuilQC<-function(dataCpG,metrique,qTestes,qualMetriques=c(1,2),test="quant
   return(list(qual1=quals,qual2.p=quals2,quals2.pctPC=quals3,qual2.r=quals4 ))
 }
 
-# #je veux enlever les locis de mauvaise qual selon un critére bien définit
+x²# #je veux enlever les locis de mauvaise qual selon un critére bien définit
 # #ccl des 2 premiers tests : methyl entre 0 et 20, 
 # #bon locis = pctdescore entre 0 et 20 élévé ou pct0 faible (<0.7) (ou sd > 25 (locis ++ unmethylé), mais pas utilisé pour le moment)
 # #qualitéData=pct0*pctEntre0et20

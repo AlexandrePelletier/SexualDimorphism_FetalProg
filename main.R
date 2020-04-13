@@ -60,6 +60,11 @@ head(batch)
 # batch$sequencing<-batch2[samples,"Sequencing"]
 #write.csv2(batch,"../../ref/batch_CD34_library_date_032520.csv",row.names = T)
 
+#seq Depth var,
+plot(batch$Library_Complexity,log10(batch$SeqDepth)) #better to put in log
+batch$SeqDepthLog<-log10(batch$SeqDepth)
+
+
 head(batch)
 
 
@@ -72,49 +77,55 @@ plot(density(data_all$pct0))
 
 #FILTRATION DES LOCIS
 source("scripts/deter_seuilQC.R")
-names(data_F)
+names(data_all)
 #d'abord en fct msp1c et et nbNA
 
-deterSeuilQC(data_all,metrique = "msp1c",qTestes = 1:9/40,qualMetriques = 1) #exclu locis < q0.2
+deterSeuilQC(data_all,metrique = "msp1c",qTestes = 1:9/40) #exclu locis < q0.125
+quantile(data_all$msp1c,0.125) #6.532433e-08
 
-deterSeuilQC(data_F[data_F$pct0>0.7,],metrique = "nbMethylNonZeros",qTestes = 0:5,test = "brut") #
+deterSeuilQC(data_all,metrique = "pctNA",qTestes = 0:5,test = "brut") #seuil exclu ; no NA
 
 mat<-as.matrix(data_all[,samples])
-data_F<-data_all[data_all$msp1c>10^-7&
+data_F<-data_all[data_all$msp1c>quantile(data_all$msp1c,0.125)&
                    rowSums(is.na(mat))==0,]
+
 #puis on retire les locis full methylated
-data_F<-data_F[rowSums(data_F[,samples]>10)>3,]
-nrow(data_F) #1029401
+data_F$nbNonFullMethyl<-rowSums(data_F[,samples]>10,na.rm = T)
+
+deterSeuilQC(data_F,metrique = "nbNonFullMethyl",qTestes = 0:10,test = "brut",lowerThan = F) #exclu locis avec nbNonFUllmethyl<5
+
+data_F<-data_F[rowSums(data_F[,samples]>10)>4,]
+nrow(data_F) #989522
 #plus conf Score, nbMethylNonzeros dans pct0 elevé :
 
 names(data_F)
 deterSeuilQC(data_F,metrique = "confidenceScore",qTestes = 1:9/10) #exclu locis < q0.2
+data_F<-data_F[data_F$confidenceScore>quantile(data_F$confidenceScore,0.2),]
+nrow(data_F) #791613
+
 deterSeuilQC(data_F[data_F$pct0>0.7,],metrique = "nbMethylNonZeros",qTestes = 0:5,test = "brut") #exclu locis avec pct0>0.7 et nbMethylVraizers==0
 
-data_F<-data_F[data_F$confidenceScore>quantile(data_F$confidenceScore,0.2),]
-nrow(data_F) #823k
 
 data_F<-data_F[!(data_F$pct0>0.7&data_F$nbMethylNonZeros==0),]
-nrow(data_F) #816k
+nrow(data_F) #786277
 locisF<-rownames(data_F)
 #gain en qualité
 #avant
 deterQual(mat) #41% des locis avec Vrais zeros
 deterQual(mat[locisF,]) #54%>64% de locis avec vrais zeros
 
-deterQual2(mat,batch) #PC 1  ( 16.9 % de la variance) a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.3801368616723
+deterQual2(mat,batch) #"PC 1  ( 16.9 % de la variance) a R2 avec Group_Complexity = 0.75 et pval = 10^ -36.1671884642798"
 
 
-deterQual2(mat[locisF,],batch) #PC 1  ( 19.1 % de la variance ) a R2 avec Library_Complexity = 0.73 et pval = 10^ -34.6003151198251"
+deterQual2(mat[locisF,],batch) #"PC 1  ( 19.4 % de la variance a R2 avec Group_Complexity = 0.72 et pval = 10^ -33.9025713104284"
+
 deterQual2(mat[!(rownames(mat)%in%locisF),],batch)
-# "PC 1  ( 14.3 % de la variance a R2 avec Library_Complexity = 0.79 et pval = 10^ -40.6381624618702"
+# "PC 1  ( 10.6 % de la variance a R2 avec Group_Complexity = 0.73 et pval = 10^ -34.8942186739751"
 
 deterQual2(mat[sample(rownames(mat),length(locisF)),],batch)
-#PC 1  ( 16.9 % de la variance) a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.4019834323515"
+#"PC 1  ( 16.9 % de la variance a R2 avec Group_Complexity = 0.75 et pval = 10^ -36.2830174521662"
 deterQual2(mat[sample(rownames(mat),length(locisF)),],batch)
-#PC 1  ( 16.9 % de la variance a R2 avec Library_Complexity = 0.76 et pval = 10^ -37.3775925094346
-
-#amelioration comparé aux hasard mais on peut surement ameliorer filtration pour enlever plus de dépendance
+#PC 1  ( 16.9 % de la variance a R2 avec Group_Complexity = 0.75 et pval = 10^ -36.0886977688336"
 
 #visualisation de nouvelle distribution
 
@@ -153,7 +164,7 @@ dev.off()
 
 #apres
 topVarLocis2<-rownames(data_F)[order(data_F$sd,decreasing = T)[1:10000]]
-sum(topVarLocis2 %in% topVarLocis1)/10000 #seulement 4.1% des topSD locis conservés !!!
+sum(topVarLocis2 %in% topVarLocis1)/10000 #seulement 14% des topSD locis conservés !!!
 head(data_all[topVarLocis2,"sd"])
 subMat<-mat[topVarLocis2,]
 p<-pheatmap(subMat,show_rownames = F,
@@ -167,7 +178,7 @@ p<-pheatmap(subMat,show_rownames = F,
                                         hpa2c=batch[colnames(subMat),"Library_Complexity"])
             
 )
-png(file.path(outputDir,paste("heatmapsApresFiltration.png",sep="_")), width = 1200, height = 800)
+png(paste(output,"heatmapsApresFiltration.png",sep="_"), width = 1200, height = 800)
 p
 dev.off()
 #encore une clusterisation selon batch et Library Complexity(pas etonnant vu que 80% sont les meme locis)
@@ -179,7 +190,7 @@ dev.off()
 # batch[samples,"pct0"]<-colSums(data_all[,samples]==0,na.rm = T)/nrow(data_all)
  batch[samples,"pct0ApresF"]<-colSums(data_F[,samples]==0,na.rm = T)/nrow(data_F)
  #batch[samples,"pct0locisLo"]<-colSums(data_all[!(rownames(data_all)%in%locisF),samples]==0,na.rm = T)/sum(!(rownames(data_all)%in%locisF))
- # write.csv2(batch,"../../ref/20-02-17_batch_119samples_IUGRLGACTRL_noNA_withHpaC.csv",row.names = T)
+ write.csv2(batch,"../../ref/batch_CD34_library_date_090420.csv",row.names = T)
 
 #plot les pct0 avant filtration, colorés par le groupe
 y<-batch$pct0
@@ -202,7 +213,7 @@ abline(h=0.845)
 
 
 #apres F
-y<-batch$newComplexityScore3
+y<-batch$pct0ApresF
 o<-order(y)
 plot(x=1:nrow(batch),y[o],col=(batch$Group[o]+1))
 table(batch$Group_name[batch$pct0ApresF>0.8])
@@ -250,9 +261,9 @@ deterQual2(mat[locisF,samples],batch)
 # rm(pc1,pc2,pc3)
 # saveRDS(PCAlist,file.path(outputDir,"PCAlist.rds"))
 PCAlist<-readRDS("analyses/main/PCAlist.rds")
-pc2<-prcomp(t(as.matrix(data_F[,samples])),center = T)
-PCAlist[["pca_F"]]<-pc2
-rm(pc2)
+# pc2<-prcomp(t(as.matrix(data_F[,samples])),center = T)
+# PCAlist[["pca_F"]]<-pc2
+# rm(pc2)
 #visual PCA et INFLUENCE COVAR SUR PC
 pcaChoose<-"pca_All"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
@@ -272,11 +283,14 @@ plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group",batch = batch,showSa
 
 plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Sex",batch = batch,showSampleIDs=F)
 
-var_fac<-names(batch)[c(2,4,8,10,11,12,13,15,16,19,24,27,29,33,34,35)]
-var_num<-names(batch)[c(5,6,17,20,21,22,23,25,26,28,32,39)]
+var_fac<-names(batch)[c(2,4,8,10,11,12,13,15,16,19,24,27,29,33,34,35,41)]
+var_num<-names(batch)[c(5,6,17,20,21,22,23,25,26,28,32,37,39,42)]
 varAdd<-c('GroupBatch_Complexity','GroupBatch_Complexity_Fac','pct0ApresF')
-vardint<-c("Group","Group_Sex","Sex","Library_Complexity","Group_Complexity","Group_Complexity_Fac")
+vardint<-c("Group","Group_Sex","Sex","Library_Complexity","Group_Complexity","Group_Complexity_Fac","newComplexityScore2","SeqDepthLog" )
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd ) #date PC4 et 6
+
+
+
 
 rowSums(-log10(resPV[rownames(resPV)%in%vardint,]))
 # Group_Complexity   Library_Complexity                Group Group_Complexity_Fac            Group_Sex                  Sex 
@@ -285,7 +299,8 @@ rowSums(-log10(resPV[rownames(resPV)%in%vardint,]))
 pcaChoose<-"pca_F"
 PCs1pct<-plotPCVarExplain(PCAlist[[pcaChoose]],1:40,lineSeuilPct = 1)
 plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="Group_Complexity_Fac",showSampleIDs=F)
-plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="date",batch = batch,showSampleIDs=F)
+plotPCA(PCAlist[[pcaChoose]],PCx=1,PCy=2,colorBatch="batch",batch = batch,showSampleIDs=F)
+
 resPV<-plotCovarPCs(PCAlist[[pcaChoose]],PCs1pct,batch,var_num,var_fac,exclude = varAdd )
 rowSums(-log10(resPV[rownames(resPV)%in%vardint,]))
 # Group_Complexity   Library_Complexity                Group Group_Complexity_Fac            Group_Sex                  Sex 
@@ -313,11 +328,9 @@ abline(h=1)
 
 
 varImportantes<-names(pctCovarExplPC[vars])[pctCovarExplPC[vars]>1]
-# [1] "Group_Complexity"     "Library_Complexity"  
-# [3] "Mat.Age"              "batch"               
-# [5] "date"                 "Group"               
-# [7] "Group_Complexity_Fac" "Group_Sex"           
-# [9] "latino"               "sequencing"   
+# [1] "Group_Complexity"     "Library_Complexity"   "Mat.Age"              "newComplexityScore2"  "SeqDepth"            
+# [6] "SeqDepthLog"          "batch"                "date"                 "Group"                "Group_Complexity_Fac"
+# [11] "latino"               "SeqDepthHi"           "sequencing"   
 
 
 
@@ -343,6 +356,7 @@ weight<-as.numeric(batch[samples,'Weight..g.'])
 weightAtTerm<-as.numeric(batch[samples,"Weight.at.term..lbs."])
 complexity<-as.numeric(batch[samples,"Library_Complexity"])
 group_complexity<-as.numeric(batch[samples,"Group_Complexity"])
+seqDepthLog<-as.numeric(batch[samples,"SeqDepthLog"])
 seqDepth<-as.numeric(batch[samples,"SeqDepth"])
 mat.age<-as.numeric(batch[samples,"Mat.Age"])
 
@@ -356,6 +370,7 @@ group_sex<-as.factor(batch[samples,"Group_Sex"])
 date<-as.factor(batch[samples,"date"])
 sequencing<-as.factor(batch[samples,"sequencing"])
 latino<-as.factor(batch[samples,"latino"])
+seqDepthHi<-as.factor(batch[samples,"SeqDepthHi"])
 #correl ac bio ?
 correl(complexity,PI,ret = "all") #p= 0.01, r=0.05
 correl(complexity,group,ret = "all") #pareil
@@ -378,6 +393,7 @@ correl(group_complexity,weightAtTerm,ret = "all")
 correl(group_complexity,mat.age,ret = "all") #encore signif mais moins r2= 0.06
 
 #group_comp_fac ?
+correl(weightAtTerm,group_complexity_fac,ret="all")
 correl(mat.age,group_complexity_fac,ret="all")# c'est pu signif ! donc c'est mieux
 
 
@@ -393,14 +409,26 @@ correl(batches,group_sex,ret="all") #no
 
 #mat.age correler avec group, le prendre dans model ou pas ?
 pc<-PCAlist[[2]]$x
-summary(lm(pc[,1]~group_complexity_fac)) #r2=0.63
-summary(lm(pc[,1]~group_complexity_fac+group_sex)) #r2 = 0.70
-summary(lm(pc[,1]~group_complexity_fac+group_sex+mat.age)) #r2 0.68, donc vaut mieux pas mettre mat.age
+summary(lm(pc[,1]~group_complexity_fac)) #r2=0.707
+summary(lm(pc[,1]~group_complexity_fac+group_sex)) #r2 = 0.78
+summary(lm(pc[,1]~group_complexity_fac+group_sex+mat.age)) #r2 0.773 donc vaut mieux pas mettre mat.age
+summary(lm(pc[,1]~group_complexity_fac+group_sex+latino)) #0.786 !
+summary(lm(pc[,1]~group_complexity_fac+group_sex+latino+seqDepthLog)) #nameliore pas explication pc1
+summary(lm(pc[,1]~group_complexity_fac+group_sex+latino+seqDepthHi)) #ameliore un peu : 0.79
+
+#group_comp_fac et seqDepHi utile les 2 ?
+correl(seqDepthHi,group_complexity_fac,ret="all") #pas independant, donc group_complexity_fac suffisant
+
+
+
+correl(mat.age,group_complexity_fac)
+
 
 summary(lm(pc[,1]~group_complexity_fac+group_sex+mat.age+latino))  #0.79 !
 summary(lm(pc[,1]~group_complexity_fac+group+latino))  #0.796 c'est mieux.
-summary(lm(pc[,1]~group_complexity_fac+group+latino+seqDepth)) #0.82 ! 
-summary(lm(pc[,1]~group_complexity_fac+group+latino+seqDepth+mat.age)) #0.83 !
+summary(lm(pc[,1]~group_complexity_fac+group_sex+latino+seqDepthLog)) #0.82 ! 
+
+summary(lm(pc[,1]~group_complexity_fac+group+latino+seqDepthLog+mat.age)) #0.83 !
 
 #ccl mat.age peu nécessaire pour expliquer pc1, mais peut etre bon pour expliquer PC6
 # on capture avec group de la var que complexity library n'expliquait seul
@@ -409,7 +437,10 @@ summary(lm(pc[,1]~group_complexity_fac+group+latino+seqDepth+mat.age)) #0.83 !
 
 
 ### histoire de la colinearité entre group et mat.age
-plot(batch$Mat.Age,batch$pct0ApresF,col=(batch$Group_Sex)+1) 
+plot(batch$Mat.Age,batch$pct0ApresF,col=(batch$Group_Complexity_Fac)) 
+# rownames(batch)[batch$Group_Complexity_Fac==4&batch$pct0ApresF>0.8]
+# batch$Group_Complexity_Fac[batch$Group_Complexity_Fac==4&batch$pct0ApresF>0.8]<-1
+batch2<-na.omit(batch[,c("Mat.Age","pct0ApresF")])
 
 LGA<-rownames(batch)[batch$Group_name=="L"]
 IUGR<-rownames(batch)[batch$Group_name=="I"]
@@ -494,7 +525,7 @@ fit2  <- eBayes(fit2) #warning message :Zero sample variances detected, have bee
 
 results <- decideTests(fit2)
 
-sum(abs(results)) #2039 > 3137 !
+sum(abs(results)) #2039 > 3755 !
 colSums(abs(results))
 
 
@@ -504,7 +535,7 @@ colSums(abs(results))
 # 0    71  1955     0     0     0     4     0     7     2     0     0 
 
 # C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
-# 0   105  3007     0     1     0    15     0     8     1     0     0 
+# 0   126  3602     0     1     0    17     0     8     1     0     0 
 
 #13 : 
 #bon model ? 1) enrichissment en enh et prom, 2) prox du gene
@@ -516,10 +547,10 @@ resSig<-data.frame(row.names = locisSig,fit2$p.value[locisSig,],annot[locisSig,c
 
 head(resSig,100)
 #nb C-L 
-sum(resSig$C.L<0.001)  #>5069>4944
+sum(resSig$C.L<0.001)  #5069>5008
 
 #enrichissement en bon locis :
-mean(resSig$RankConfidenceScore)/mean(na.omit(data_all$RankConfidenceScore)) #1.40>1.50 !
+mean(resSig$RankConfidenceScore)/mean(na.omit(data_all$RankConfidenceScore)) #1.40>1.49 !
 
 #enh et prom
 
@@ -542,7 +573,7 @@ table(resSig$type)/length(resSig$type)*100
 
 #13 :
 # 0         1         2         3         4         5         6 
-# 10.055055  5.625027  4.122743  4.707439 25.577227  4.319064 45.324570 
+# 9.529833  5.443812  3.930002  4.516129 25.738984  4.237824 46.341978 
 
 
 #locis around5k of the gene
@@ -552,7 +583,7 @@ sum(locisRall%in%locis5k)/length(locisRall) # 0.26
 
 sum(locisRF%in%locis5k)/length(locisRF) #0.32
 
-sum(locisSig%in%locis5k)/length(locisSig)  #0.54 > 0.60
+sum(locisSig%in%locis5k)/length(locisSig)  #0.54 > 0.61
 
 hist(annot[locisRall[locisRall%in%locis5k],"posAvant"],breaks = 100)
 hist(annot[locisRF[locisRF%in%locis5k],"posAvant"],breaks = 100)
@@ -679,8 +710,8 @@ for(i in 1:length(new.cluster.ids)){
 head(markers)
 scoresCluster<-scoreMarquageCluster(markers,samples,seuil = "intraClusterFixe",filtreMin = 2)
 write.csv2(scoresCluster,"analyses/test_scRNAseq_integration/sc_scoreClustersHSPC.csv",row.names = T)
-scoresCluster<-read.csv2("analyses/test_scRNAseq_integration/sc_scoreClustersHSPC.csv")
-
+scoresCluster<-read.csv2("analyses/test_scRNAseq_integration/sc_scoreClustersHSPC.csv",row.names = 1)
+head(scoresCluster)
 resGenesParCompa<-list()
 for(compa in compas){
   print(compa)
@@ -751,68 +782,6 @@ resModels[[model]]$distrib.compas
 saveRDS(resModels[[model]],file = paste(output,"LocisetGenes_AllCompas_pval",seuilPval,filtres,"model",model,'.rds'))
 
 
-#LES FILTRATIONS DES LOCIS SIG  : !a revoir 
-# #res generales
-# locisSig<-c()
-# for(compa in compas){
-#   locisSig<-union(locisSig,rownames(resParCompa[[compa]]))
-# }
-# 
-# length(locisSig) #25k
-# resSig<-data.frame(row.names = locisSig,)
-# #FC>30
-# 
-# locisFC<-list()
-# for (compa in compas){
-#   locisFC[[compa]]<-na.omit(rownames(resParCompa[[compa]])[resParCompa[[compa]]$FC>20]) 
-#   
-#   
-# }
-# 
-# 
-# locisConf<-na.omit(rownames(res)[res$RankConfidenceScore>750000])
-# #dist from TSS
-# locisGenes30kb<-rownames(res)[res$posAvant>-30000&res$posAvant<30000]
-# locisGenes2kb<-rownames(res)[res$posAvant>-2000&res$posAvant<2000]
-# #CRE (enhancer 4, prom 6)
-# locisCRE<-na.exclude(rownames(res)[res$type%in%c(4,6)])
-# #complexity >60 : 
-# locisComplex<-rownames(res)[res$complexity>60]
-# 
-# #locis Expr in sc
-# locisExpr<-annot[]
-# 
-# 
-# #locis change in sc
-# locisExpr
-# 
-# #locis Hi conf
-# locisHiConf<-intersect(intersect(intersect(intersect(locisComplex,locisConf),locisCRE),locisFC),locisGenes30kb) 
-# 
-# 
-# #SAVE ALL RES DU MODEL
-# resModels[[model]]<-list(model=models[[model]],
-#                          locisSig=rownames(top12000),
-#                          res=res,
-#                          seuilSig=max(top12000$P.Value),
-#                          distrib.compas=colSums(apply(res[,compas],2, function(x)return(x<max(top12000$P.Value)))),
-#                          distrib.features=round(table(res$type)/length(res$type)*100,1),
-#                          res.compas=resParCompa,
-#                          resGenes.compas=resGenesParCompa,
-#                          locisF=list(complex=locisComplex,conf=locisConf, CRE=locisCRE,
-#                                      FC20=locisFC,Genes30kb=locisGenes30kb,Genes2kb=locisGenes2kb,HiConf= locisHiConf),
-#                          distrib.hi.conf=table(res[locisHiConf,"topCompa"])
-#                          
-#                          
-# )
-# resModels[[model]]$model
-# resModels[[model]]$seuilSig
-# head(resModels[[model]]$locisSig)
-# head(resModels[[model]]$distrib.compas)
-# saveRDS(resModels[[model]],file = paste(output,"LocisetGenes_AllCompas_pval",seuilPval,filtres,"model",model,'.rds'))
-
-
-##F.M
 #vulcano 
 library(calibrate)
 seuilFC<-30
@@ -995,19 +964,17 @@ kk_CF.LF <- enrichKEGG(gene         = gene.df$ENTREZID,
                        pvalueCutoff  = 0.05,
                        qvalueCutoff  = 0.15)
 head(kk_CF.LF,20) #2 pathway passe cutoff : 
-cat(paste(head(kk_CF.LF,20)$Description,collapse = "\n"))
-# Signaling pathways regulating pluripotency of stem cells
-# Basal cell carcinoma
+cat(paste(head(kk_CF.LF,50)$Description,collapse = "\n"))
 
-#avant inclusion du sample sans sequencing data on avait aussi :
-# Cushing syndrome
-# Hippo signaling pathway
-# Axon guidance
-# Wnt signaling pathway
-# Melanogenesis
+setdiff(head(kk_CF.LF,50)$Description,head(kk_CM.LM,50)$Description) 
+#enrich en hormone/endocrine signaling pathway and metabo (sphinglolipid,Phospholipase,insulin, cholin, proteoglycan) 
 
+setdiff(head(kk_CM.LM,50)$Description,head(kk_CF.LF,50)$Description) 
+#[1] "Adherens junction"                    "Hepatocellular carcinoma"             "Dopaminergic synapse"                
+#[4] "Maturity onset diabetes of the young" "Amphetamine addiction" 
+#enrich en neuron function, et Maturity onset diabetes of the young
 
-#top1 : Signaling pathways regulating pluripotency of stem cells avec genes : 
+#exploration genes ! to do
 genesSigPath<-gene.df$SYMBOL[gene.df$ENTREZID%in%as.character(c(48,652,1856,2261,8321,9421,4088,4093,7473,54361,7474,7477,463 ))]
 genesSigPath # "BMP4"  "DVL2"  "FGFR3" "FZD1"  "HAND1" "SMAD3" "SMAD9" "WNT3"  "WNT4"  "WNT5A" "WNT7B" "ZFHX3"
 
@@ -1030,11 +997,6 @@ c3<-cbind(SigPath,Hippo,Wnt)
 c3
 a<-vennCounts(c3)
 vennDiagram(a)
-#pathway visual
-
-#le reste : "Signaling pathways regulating pluripotency of stem cells ; Basal cell carcinoma ; Cushing syndrome ;
-#Hippo signaling pathway ; Axon guidance ; Wnt signaling pathway ; Melanogenesis"
-
 
 
 #GO
@@ -1044,37 +1006,42 @@ GO_CF.LF <- enrichGO(gene         = gene.df$ENTREZID,
                      pvalueCutoff  = 0.01,
                      qvalueCutoff  = 0.05,
                      readable = T)
-head(GO_CF.LF) # DNA-binding transcription activator activity, RNA polymerase II-specific 
+head(GO_CF.LF,50)$Description # enhancer binding, growthfactor binding 
 
 #LM.LF
 genes<-na.omit(LM.LF$gene[LM.LF$pval<seuilpval & abs(LM.LF$FC)>seuilFC])
-length(genes) #180
-sum(duplicated(genes))
-genes[duplicated(genes)] #"FRMD1"
+genes2<-na.omit(LM.LF$gene)
+length(genes) #182
+sum(duplicated(genes2)) #179/1748
+genes2[duplicated(genes2)] #"FRMD1"
+# BLIM2"     "ABLIM2"     "ADRA1A"     "ADRA2A"     "AFAP1-AS1"  "ALKAL2"     "ALX4"       "AP3M2"      "APAF1"      "AQP1"      
+#  [11] "ARHGAP27P2" "ARHGAP8"    "ATP2C2"     "BARX2"      "BEGAIN"     "BMP8A"      "C5orf24"    "CACUL1"     "CAMTA1"     "CASC4"     
+#  [21] "CASZ1"      "CASZ1"      "CBFA2T3"    "COL20A1"    "CPNE5"      "CPZ"        "CPZ"        "CREB1"      "CRIPAK"     "CRY1"      
+#  [31] "DACT2"      "DDX31"      "DLC1"       "DMBX1"      "DMRTA2"     "DMRTA2"     "DPYSL2"     "EBF4"       "EEF1A2"     "EFCAB1"    
+#  [41] "EN2"        "EN2"        "EOMES"      "EPS8L2"     "EPS8L2"     "EVX1"       "FAM20C"     "FAM27B"     "FAM27C"     "FAM27C"    
+#  [51] "FAM53A"     "FAM53A"     "FAM78A"     "FCGR2A"     "FCGR2A"     "FCGR2A"     "FCGR2A"     "FENDRR"     "FGF3"       "FOXP4"     
+#  [61] "FRG1JP"     "FRMD1"      "GADD45G"    "GALNT17"    "GOLGA2P10"  "GPAA1"      "GPC1"       "GPC1"       "GRAPL"      "HAND2"     
+#  [71] "HLA-E"      "HOPX"       "IFITM1"     "IFITM3"     "IQSEC3"     "IRX1"       "JADE1"      "JPH3"       "LCN1"       "LINC00869" 
+#  [81] "LINC00887"  "LINC01138"  "LINC01138"  "LINC01138"  "LINC01192"  "LINC01310"  "LMX1B"      "LOC728613"  "LOC728613"  "LRFN2"     
+#  [91] "MAFF"       "MARK1"      "MICALL2"    "MICALL2"    "MICALL2"    "MIR3621"    "MIR4436A"   "MIR4472-1"  "MN1"        "MN1"       
+# [101] "MNX1"       "MNX1"       "MROH5"      "MROH5"      "MTFP1"      "MYO18B"     "MYO7B"      "NCS1"       "NEAT1"      "NECTIN1"   
+# [111] "NFAM1"      "NTN1"       "OGFRP1"     "OGFRP1"     "PAK4"       "PAX5"       "PBX3"       "PCIF1"      "PFN3"       "PHYKPL"    
+# [121] "PIK3CD"     "PITPNM3"    "PLEC"       "PLXNA4"     "PLXNA4"     "PLXNA4"     "PLXNB2"     "PP7080"     "PPP2R2C"    "RHOB"      
+# [131] "RHOB"       "RUNX2"      "RUNX2"      "RXRA"       "SAP130"     "SCRT1"      "SDC1"       "SIK1"       "SIX3"       "SIX3"      
+# [141] "SIX3"       "SLC25A51P1" "SLC29A4"    "SMARCA5"    "SOX14"      "SPEN"       "SPIRE2"     "SPTBN1"     "SRC"        "SRC"       
+# [151] "STIM2"      "STOX2"      "SYK"        "SYT15"      "TACC2"      "TFR2"       "TLE2"       "TLX1"       "TMEM250"    "TMEM250"   
+# [161] "TP73"       "TPO"        "TPRA1"      "TTC34"      "TUNAR"      "UBE2Q2P2"   "UBE3C"      "UBTF"       "ULK4P3"     "WASH3P"    
+# [171] "WASH3P"     "WASH7P"     "WASH7P"     "WASH8P"     "WASH8P"     "ZFAT"       "ZFYVE28"    "ZNF778"     "ZNF91"     
+
 #trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+gene.df <- bitr(unique(genes2), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
 head(gene.df)
 kk_LM.LF <- enrichKEGG(gene         = gene.df$ENTREZID,
                        pAdjustMethod = "BH",
                        pvalueCutoff  = 0.05,
                        qvalueCutoff  = 0.15)
-head(kk_CF.LF,20) #14 pathway passe cutoff : 
+head(kk_CF.LF,50)$Description 
 cat(paste(head(kk_CF.LF,20)$Description,collapse = "\n"))
-# Gastric cancer
-# Cushing syndrome
-# Hippo signaling pathway
-# Proteoglycans in cancer
-# Basal cell carcinoma
-# Breast cancer
-# Hepatocellular carcinoma
-# Signaling pathways regulating pluripotency of stem cells
-# Endocytosis
-# mTOR signaling pathway
-# Human papillomavirus infection
-# Axon guidance
-# Melanogenesis
-# Non-small cell lung cancer
-
 
 
 #top1 : Signaling pathways regulating pluripotency of stem cells avec genes : 
@@ -1096,9 +1063,9 @@ GO_LM.LF <- enrichGO(gene         = gene.df$ENTREZID,
                      pvalueCutoff  = 0.01,
                      qvalueCutoff  = 0.05,
                      readable = T)
-head(GO_LM.LF) # none
+head(GO_LM.LF,50)$Description # "DNA-binding transcription activator activity, RNA polymerase II-specific"
 
-
+#Hypermet in LF
 
 
 #! pathway visual (To do)
@@ -1158,26 +1125,6 @@ for (compa in compas){
 #with all compas : 
 # for compa in 'C.I' 'C.L' 'I.L' 'MC.ML' 'MC.MI' 'MI.ML' 'FC.FL' 'FC.FI' 'ML.FL' 'MI.FI' 'MC.FC' 'F.M'; do comb-p pipeline -c 4 --seed 0.05 --dist 750 -p $compa --region-filter-p 0.05 "$compa""model13_allLocis_and_pval.bed"; done 
 
-
-#get :
-resDMR<-read.table("analyses/DMR_with_comb_p/FC.FL2.regions-t.bed",sep = "\t")
-colnames(resDMR)<-c("chrom","start","end","min_p","n_probes","z_p","z_sidak_p")
-head(resDMR)
-nrow(resDMR) #108 region
-#annotation :
-for(chrom in levels(as.factor(resDMR$chrom))){
-  print(chrom)
-  for (region in which(resDMR$chrom==chrom)){
-    print(region)
-    range<-c(resDMR[region,"start"],resDMR[region,"end"])
-    genes<-annot$gene[which(annot$chr==chrom&annot$start>range[1]&annot$start<range[2])]
-    print(genes)
-    resDMR[region,"gene"]<-paste(unique(genes),collapse = "/")
-    resDMR[region,"nbLocis"]<-paste(table(genes),collapse = "/")
-  }
-}
-resDMR
-
 #all compas get :
 resDMRs<-list()
 
@@ -1228,11 +1175,11 @@ for(compa in "F.M"){
 
 #du sens bio ? 
 library(clusterProfiler)
-library()
+resDMR<-resDMRs[["FC.FL"]]
 gene.df<-bitr(unique(resDMR$gene),fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)
 gene.df
-kkDMR<-enrichKEGG(gene.df$ENTREZID)
-head(kkDMR) #none
+kkDMR<-enrichKEGG(gene.df$ENTREZID,pvalueCutoff = 0.05, qvalueCutoff = 0.15)
+head(kkDMR) #signaling pluripotency, gastic cancer et wnt sig
 
 GO_DMR <- enrichGO(gene         = gene.df$ENTREZID,
                      OrgDb         = org.Hs.eg.db,
@@ -1241,41 +1188,9 @@ GO_DMR <- enrichGO(gene         = gene.df$ENTREZID,
                      qvalueCutoff  = 0.2,
                      readable = T)
 
-head(GO_DMR)
-kkDMR<-enrichGO(gene.df$ENTREZID) #none
-
-#!with parameter recommand by paper 
-#seed = 0.05, dist = 750 :
+head(GO_DMR) #transcription corepressor activity 
 
 
-
-
-#2) bumphunet
-if (!requireNamespace("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
-BiocManager::install("bumphunter")
-install.packages("locfit")
-install.packages("matrixStats")
-install.packages("Rcpp")
-install.packages("rlang")
-install.packages("vctrs")
-install.packages("dplyr")
-library(bumphunter)
-browseVignettes("bumphunter")
-help(bumphunter)
-names(data_F)
-colnames(design)
-#from 
-#Parameter settings that achieved best performance (AuPR) for each method : bumphunter 	cuttoffQ = 0.95, maxGap = 250 
-resBumpFL<-bumphunter(as.matrix(data_F[,samples_F_F]),
-                      design=design,chr=data_F$chr,
-                      pos=data_F$start,
-                      coef=5,
-                      nullMethod ="permutation",
-                      cutoff = 0.95, maxGap = 250, B=10)
-
-head(resBumpFL$table)
-nrow(resBumpFL$table)
 #WHY THIS SEX SPE RESPONSE ?
 #parce que femelle ont les plus gros poids ?
 LGA<-batch[samples_F_F[samples_F_F%in%rownames(batch)[batch$Group_name=="L"]],]
@@ -1286,180 +1201,7 @@ plot(as.factor(LGA$Gender),as.numeric(LGA$Weight..g.))
 
 
 
-#FOCUS sur LGAvs ctrl
-#lga_CTRL
-g<-genesF.compa_liste[[model]]$C.L$all
-gM<-genesF.compa_liste[[model]]$MC.ML$all
-gF<-genesF.compa_liste[[model]]$FC.FL$all
 
 
-venn.diagram(
-  x = list(g, gM, gF),
-  category.names = c("C.L" , "CM.LM" , "CF.LF"),
-  filename = file.path(outputDir,paste0('vennGenesCTRLvsLGA_model',model,'.png')),
-  output=TRUE
-)
-
-intersect(g,gM)
-intersect(g,gF)
-intersect(gF,gM)
-
-
-###POUR MODEL 7, seuil moins stringeant sinon on ne capture rien
-seuilFC<-20
-seuilpval<-10^-3
-#M.F
-library(clusterProfiler)
-library(org.Hs.eg.db)
-keytypes(org.Hs.eg.db)
-
-genes<-CM.CF$gene[CM.CF$pval<seuilpval & abs(CM.CF$FC)>seuilFC]
-length(genes) #331
-cat(paste(genes,collapse = "\n"))
-
-#trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-head(gene.df)
-kk_CM.CF <- enrichKEGG(gene         = gene.df$ENTREZID,
-                       pAdjustMethod = "BH",
-                       pvalueCutoff  = 0.05,
-                       qvalueCutoff  = 0.15)
-head(kk_CM.CF) # none
-
-
-#GO
-GO_CM.CF <- enrichGO(gene         = gene.df$ENTREZID,
-                     OrgDb         = org.Hs.eg.db,
-                     pAdjustMethod = "BH",
-                     pvalueCutoff  = 0.01,
-                     qvalueCutoff  = 0.05,
-                     readable = T)
-head(GO_CM.CF)
-
-
-#none
-
-#sexual dim in response to stress
-
-#C.L
-genes<-na.omit(C.L$gene[C.L$pval<seuilpval & abs(C.L$FC)>seuilFC])
-length(genes) #899
-#trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-head(gene.df) 
-kk_C.L <- enrichKEGG(gene         = gene.df$ENTREZID,
-                     pAdjustMethod = "BH",
-                     pvalueCutoff  = 0.05,
-                     qvalueCutoff  = 0.15)
-head(kk_C.L) #none
-
-
-#GO
-GO_C.L <- enrichGO(gene         = gene.df$ENTREZID,
-                   OrgDb         = org.Hs.eg.db,
-                   pAdjustMethod = "BH",
-                   pvalueCutoff  = 0.01,
-                   qvalueCutoff  = 0.05,
-                   readable = T)
-head(GO_C.L)
-#none
-
-genesin1<-strsplit(head(GO_C.L)['GO:0001227',"geneID"],"/")[[1]]
-length(genesin1)
-cat(paste(genesin1,collapse = " "))
-genesin2<-c("FKBP4","FLT3","NCOR2","SMAD3","STAT3","STAT5B")
-genesin3<-strsplit(head(GO_C.L)['GO:0001228',"geneID"],"/")[[1]]
-length(genesin3)
-
-allgenes<-Reduce(union,list(genesin1,genesin2,genesin3))
-
-DNA_Bind_Trs_repr<-as.numeric(allgenes%in%genesin1)
-glucocor_R_bind<-as.numeric(allgenes%in%genesin2)
-DNA_Bind_Trs_activ<-as.numeric(allgenes%in%genesin3)
-c3<-cbind(DNA_Bind_Trs_repr,DNA_Bind_Trs_activ,glucocor_R_bind)
-c3
-a<-vennCounts(c3)
-vennDiagram(a)
-
-
-#CM.LM
-genes<-na.omit(CM.LM$gene[CM.LM$pval<seuilpval & abs(CM.LM$FC)>seuilFC])
-length(genes)#624
-#trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-head(gene.df)
-kk_CM.LM <- enrichKEGG(gene         = gene.df$ENTREZID,
-                       pAdjustMethod = "BH",
-                       pvalueCutoff  = 0.05,
-                       qvalueCutoff  = 0.15)
-head(kk_CM.LM)
-#none
-
-#GO
-GO_CM.LM <- enrichGO(gene         = gene.df$ENTREZID,
-                     OrgDb         = org.Hs.eg.db,
-                     pAdjustMethod = "BH",
-                     pvalueCutoff  = 0.01,
-                     qvalueCutoff  = 0.05,
-                     readable = T)
-
-head(GO_CM.LM)
-# cell-cell adhesion mediator activity with BAIAP2/CNTN2/CNTN6/IZUMO1/LRRC4C/PDLIM5/PPP1CA/STXBP6/TMOD3
-
-#CF.LF
-genes<-na.omit(CF.LF$gene[CF.LF$pval<seuilpval & abs(CF.LF$FC)>seuilFC])
-length(genes) #604
-#trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-head(gene.df)
-kk_CF.LF <- enrichKEGG(gene         = gene.df$ENTREZID,
-                       pAdjustMethod = "BH",
-                       pvalueCutoff  = 0.05,
-                       qvalueCutoff  = 0.15)
-head(kk_CF.LF,20) #Axon guidance with : 
-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa04360',"geneID"],"/")[[1]])]
-#"ABLIM2" "CFL2"   "DPYSL5" "EFNA5"  "EFNB2"  "NTN1"   "NTNG2"  "PAK1"   "PLCG2"  "PLXNA4" "PLXNC1" "PRKCZ"  "PTCH1"  "SHH"    "SLIT2" 
-
-
-#GO
-GO_CF.LF <- enrichGO(gene         = gene.df$ENTREZID,
-                     OrgDb         = org.Hs.eg.db,
-                     pAdjustMethod = "BH",
-                     pvalueCutoff  = 0.01,
-                     qvalueCutoff  = 0.05,
-                     readable = T)
-head(GO_CF.LF)
-#no
-
-
-
-
-#VISUALISATION RES
-#vulcano #! a faire
-# for(i in 1:length(compas)){
-#   print(compas[i])
-#   res2<- topTable(fit2,coef=compas[i],n =1000)
-#   if(any(res2$P.Value<0.01)){
-#     resF<-res2[(rownames(res2)%in%rownames(res)),]
-#     
-#     AllLocisP4F20[[compas[i]]]<-rownames(resFF)
-#     
-#     colors<-resFiltered[rownames(resF),"type"]+1
-#     
-#     
-#     top20<-(rownames(resF)[order((length(resF$logFC)/rank(resF$logFC))+rank(resF$P.Value))])[1:20]
-#     
-#     
-#     png(file.path(outputDir,paste(compas[i],"volcano.png",sep="_")), width = 700, height = 500)
-#     plot(resF$logFC,-log10(resF$P.Value),col=colors,main = compas[i])
-#     textxy(resF[top20,'logFC'],-log10(resF[top20,'P.Value']),resFiltered[top20,'gene'],offset= -.7)
-#     dev.off()
-#     
-#   }else{
-#     print(paste("pas de CpG pour",compas[i]))
-#   }
-#   
-#   
-# }
 
 

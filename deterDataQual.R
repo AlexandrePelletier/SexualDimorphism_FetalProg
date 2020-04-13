@@ -36,7 +36,7 @@ deterQual2<-function(mat,df.covars,covarNum="Group_Complexity",pcTestes=5){
       res$r2<-summary(resLm)$adj.r.squared
       res$PC<-i
       res$pctPC<-round(pca$sd[i]^2/sum(pca$sdev^2),3)
-      print(paste("PC",i," (",res$pctPC*100,"% de la variance","a R2 avec",covarNum,"=",round(summary(resLm)$adj.r.squared,2),"et pval = 10^",log10(anova(resLm)$Pr[1])))
+      print(paste("PC",i," (",res$pctPC*100,"% de la variance)","a R2 avec",covarNum,"=",round(summary(resLm)$adj.r.squared,2),"et pval = 10^",log10(anova(resLm)$Pr[1])))
       
     }
     
