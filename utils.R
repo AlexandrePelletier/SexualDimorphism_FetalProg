@@ -78,3 +78,47 @@ trunkName<-function(names,maxLeng=4,n.mot=NULL){
   
   return(vecMots)
 }
+
+
+makeGeneList<-function(genes,res,tradInENTREZID=F){
+  if(tradInENTREZID){
+    library(clusterProfiler)
+    gene.df <- bitr(genes, fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+    genes<-gene.df$ENTREZID
+    geneList<-rep(0,length(genes))
+    names(geneList)<-as.character(genes)
+    for(i in 1:length(genes)){
+      
+      gene<-gene.df$SYMBOL[gene.df$ENTREZID==genes[i]]
+      
+      geneList[i]<-mean(res[res$FC>0&res$gene==gene,"FC"])
+      
+    }
+    
+  }else{
+    geneList<-rep(0,length(genes))
+    names(geneList)<-genes
+    for(i in 1:length(genes)){
+      gene<-genes[i]
+      #gene<-gene.df$SYMBOL[gene.df$ENTREZID==genes[i]]
+      
+      geneList[i]<-mean(res[res$FC>0&res$gene==gene,"FC"])
+      
+    }
+    
+  }
+    
+  return(sort(geneList,decreasing = T))
+}
+
+tr<-function(ids_sepBySlash,tradEntrezInSymbol=F){
+  library(clusterProfiler)
+  
+  IDs<-c(strsplit(ids_sepBySlash,"/")[[1]])
+  if(tradEntrezInSymbol){
+    return(bitr(IDs, fromType = "ENTREZID",toType =  "SYMBOL",OrgDb = org.Hs.eg.db)$SYMBOL)
+  }else{
+    return(IDs)
+  }
+  
+}

@@ -1170,6 +1170,10 @@ geneList<-sort(geneList,decreasing = T)
 head(geneList)
 length(geneList) #3581
 
+#or with th function :
+geneList<-makeGeneList(na.omit(unique(res$gene)),res,tradInENTREZID = T)
+head(geneList)
+
 kk2 <- gseKEGG(geneList     = geneList,
                keyType = "ncbi-geneid",
                nPerm        = 100,
@@ -1179,10 +1183,18 @@ kk2 <- gseKEGG(geneList     = geneList,
 head(kk2) #doesnt work
 
 #with msigDB geneList
-CanonPathGS <- read.gmt("../../ref/c2.cp.v7.1.symbols.gmt")
-head(CanonPathGS)
-kk2<- GSEA(geneList, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 1)
-head(kk2,50)
+CanonPathGS <- read.gmt("../../ref/c2.cp.v7.1.symbols.gmt") 
+head(CanonPathGS) #it s in gene SYMBOL so :
+genes<-na.omit(unique(res$gene))
+geneList<-makeGeneList(genes,res)
+head(geneList)
+
+kk2<- GSEA(geneList, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 1,minGSSize = 20)
+head(kk2)
+
+#get genes from REACTOME_VESICLE_MEDIATED_TRANSPORT
+genesVes<-tr(head(kk2)["REACTOME_VESICLE_MEDIATED_TRANSPORT","core_enrichment"])
+genesVes
 
 ##With my score
 
