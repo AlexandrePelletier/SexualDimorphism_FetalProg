@@ -828,7 +828,7 @@ keytypes(org.Hs.eg.db)
 names(resParCompa)
 CM.CF<-resParCompa[["MC.FC"]]
 
-genes<-CM.CF$gene[CM.CF$pval<seuilpval & abs(CM.CF$FC)>seuilFC]
+genes<-na.omit(CM.CF$gene)
 length(genes)
 cat(paste(genes,collapse = "\n"))
 
@@ -844,229 +844,298 @@ head(kk_CM.CF) # none
 
 #GO
 GO_CM.CF <- enrichGO(gene         = gene.df$ENTREZID,
-               OrgDb         = org.Hs.eg.db,
-                    pAdjustMethod = "BH",
-                    pvalueCutoff  = 0.01,
-                    qvalueCutoff  = 0.05,
-               readable = T)
+                     OrgDb         = org.Hs.eg.db,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.01,
+                     qvalueCutoff  = 0.05,
+                     readable = T)
 head(GO_CM.CF)
-
-
-#none
+#DNA-binding transcription activator activity, RNA polymerase II-specific
+#and phosphatidylinositol-3,5-bisphosphate binding
 
 #sexual dim in response to stress
-C.L<-resParCompa[["C.L"]]
 
-CM.LM<-resParCompa[["MC.ML"]]
-CF.LF<-resParCompa[["FC.FL"]]
-LM.LF<-resParCompa[["ML.FL"]]
+resKEGG<-list()
+resGO<-list()
 #C.L
-genes<-na.omit(C.L$gene[C.L$pval<seuilpval & abs(C.L$FC)>seuilFC])
-length(genes)#874
+compa<-"C.L"
+
+genes<-na.omit(resParCompa[[compa]]$gene)
+length(genes)#3714
 #trad en entrez ID
 gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
 head(gene.df)
-kk_C.L <- enrichKEGG(gene         = gene.df$ENTREZID,
-                       pAdjustMethod = "BH",
-                       pvalueCutoff  = 0.05,
-                       qvalueCutoff  = 0.15)
-head(kk_C.L) #model 4 : 3 path: Transcriptional misregulation in cancer, 
-#Acute myeloid leukemia
-#and Signaling pathways regulating pluripotency of stem cells
+kk<- enrichKEGG(gene         = gene.df$ENTREZID,
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.05,
+                qvalueCutoff  = 0.15)
+resKEGG[[compa]]<-head(kk,50)
 
-#genes de Transcriptional misregulation in cancer
+paths<-resKEGG[[compa]]$Description
+length(paths) #38
 
-genesTransc<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_C.L,20)['hsa05202',"geneID"],"/")[[1]])]
-cat(paste(genesTransc,collapse = ", ")) #BMI1, CCNA1, ETV4, ETV6, FCGR1A, FLT1, FLT3, FOXO1, FUS, JUP, LDB1, MAF, PAX7, PRCC, SIX1, SPINT1, TLX1, TRAF1, ZBTB16
-#genes de Signaling pathways regulating pluripotency
-genesSigPath1<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_C.L,20)['hsa04550',"geneID"],"/")[[1]])]
-cat(paste(genesSigPath1))
-#genes acute myeloid leukemia
-genesLeuke<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_C.L,20)['hsa05221',"geneID"],"/")[[1]])]
-cat(paste(genesLeuke)) #CCNA1 FCGR1A FLT3 JUP NRAS SOS2 STAT3 STAT5A STAT5B ZBTB16
+#see genes paths :
+paths<-c("hsa04550","hsa05202","hsa04360")
+genesPaths<-list()
+# de Signaling pathways regulating pluripotency
+for(path in paths){
+  genesPaths[[path]]<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(resKEGG[[compa]][path,"geneID"],"/")[[1]])]
+  print(cat(paste(genesPaths[[path]],collapse = ", ")))
+  print("")
+}
 
-intersect(genesTransc,genesSigPath1) #BMI1
-allgenes<-Reduce(union,list(genesTransc,genesSigPath1, genesLeuke))
-SigPath1<-as.numeric(allgenes%in%genesSigPath1)
-Transc<-as.numeric(allgenes%in%genesTransc)
-Leuke<-as.numeric(allgenes%in%genesLeuke)
-c3<-cbind(SigPath1,Transc,Leuke)
+#see intersect avec venn :
+allgenes<-Reduce(union,genesPaths)
 
+c3<-cbind(sapply(genesPaths, function(x){
+  return(as.numeric(allgenes%in%x))
+}))
 a<-vennCounts(c3)
-vennDiagram(a)
+vennDiagram(a,names = trunkName(resKEGG[[compa]][paths,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
 
 #GO
-GO_C.L <- enrichGO(gene         = gene.df$ENTREZID,
-                     OrgDb         = org.Hs.eg.db,
-                     pAdjustMethod = "BH",
-                     pvalueCutoff  = 0.01,
-                     qvalueCutoff  = 0.05,
-                     readable = T)
-head(GO_C.L)
-# 3 : 1) DNA-binding transcription repressor activity, RNA polymerase II-specific, 
-#2) glucocorticoid receptor binding, 
-#and 3) DNA-binding transcription activator activity, RNA polymerase II-specific
+GO <- enrichGO(gene         = gene.df$ENTREZID,
+               OrgDb         = org.Hs.eg.db,
+               pAdjustMethod = "BH",
+               pvalueCutoff  = 0.01,
+               qvalueCutoff  = 0.05,
+               readable = T)
 
-# in 1) AEBP2/ASCL1/CDX2/CREB3L1/DACH1/DMBX1/ETV6/FOXO1/GSX1/HAND1/HES3/HOXB13/IRF8/IRX2/JDP2/KLF12/MNT/NR2E1/SATB1/SNAI1/SOX6/TBX3/YY1/ZBTB16/ZBTB7A/ZFHX3/ZNF217/ZNF281
-#in 2) FKBP4/FLT3/NCOR2/SMAD3/STAT3/STAT5B
-#in 3) ARNTL/BARX2/CREB3L1/CREB3L4/EBF3/EGR2/ESRRB/ESRRG/ETV4/ETV6/FOXD2/GBX2/GMEB1/GSX1/IER2/IKZF3/IRF2BP2/KLF13/MAF/NFIA/NHLH2/NKX2-8/NR2E1/ONECUT1/RFX5/SIX1/SMAD3/SOX1/SOX21/STAT3/STAT5B/TBX3/TLX1/TP73
+resGO[[compa]]<-head(GO,50)
+BP<-resGO[[compa]]$Description
+length(BP) #5
 
-genesin1<-strsplit(head(GO_C.L)['GO:0001227',"geneID"],"/")[[1]]
-length(genesin1)
-cat(paste(genesin1,collapse = " "))
-genesin2<-c("FKBP4","FLT3","NCOR2","SMAD3","STAT3","STAT5B")
-genesin3<-strsplit(head(GO_C.L)['GO:0001228',"geneID"],"/")[[1]]
-length(genesin3)
+#see genes paths :
+GOs<-c("GO:0001228","GO:0035326","GO:0043425")
+genesGOs<-list()
+# de Signaling pathways regulating pluripotency
+for(go in GOs){
+  genesGOs[[go]]<-strsplit(resGO[[compa]][go,"geneID"],"/")[[1]]
+  print(cat(paste(genesGOs[[go]],collapse = ", ")))
+  print("")
+}
 
-allgenes<-Reduce(union,list(genesin1,genesin2,genesin3))
+#see intersect avec venn :
+allgenes<-Reduce(union,genesGOs)
 
-DNA_Bind_Trs_repr<-as.numeric(allgenes%in%genesin1)
-glucocor_R_bind<-as.numeric(allgenes%in%genesin2)
-DNA_Bind_Trs_activ<-as.numeric(allgenes%in%genesin3)
-c3<-cbind(DNA_Bind_Trs_repr,DNA_Bind_Trs_activ,glucocor_R_bind)
-c3
+c3<-cbind(sapply(genesGOs, function(x){
+  return(as.numeric(allgenes%in%x))
+}))
 a<-vennCounts(c3)
-vennDiagram(a)
+vennDiagram(a,names = trunkName(resGO[[compa]][GOs,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
 
 
 #CM.LM
-genes<-na.omit(CM.LM$gene[CM.LM$pval<seuilpval & abs(CM.LM$FC)>seuilFC])
-genes2<-na.omit(CM.LM$gene)
-length(genes)
+compa<-"MC.ML"
+genes<-na.omit(resParCompa[[compa]]$gene)
+length(genes)#975
 #trad en entrez ID
-gene.df <- bitr(unique(genes2), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
 head(gene.df)
-kk_CM.LM <- enrichKEGG(gene         = gene.df$ENTREZID,
-                       pAdjustMethod = "BH",
-                       pvalueCutoff  = 0.05,
-                       qvalueCutoff  = 0.15)
-head(kk_CM.LM,20)$Description
-#non
+kk<- enrichKEGG(gene         = gene.df$ENTREZID,
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.05,
+                qvalueCutoff  = 0.15)
+resKEGG[[compa]]<-head(kk,50)
+
+paths<-resKEGG[[compa]]$Description
+length(paths) #3 "Hippo signaling pathway"   "Wnt signaling pathway"     "Th17 cell differentiation"
+
+#see genes paths :
+paths<-rownames(resKEGG[[compa]])
+genesPaths<-list()
+# de Signaling pathways regulating pluripotency
+for(path in paths){
+  genesPaths[[path]]<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(resKEGG[[compa]][path,"geneID"],"/")[[1]])]
+  print(cat(paste(genesPaths[[path]],collapse = ", ")))
+  print("")
+}
+
+#see intersect avec venn :
+allgenes<-Reduce(union,genesPaths)
+
+c3<-cbind(sapply(genesPaths, function(x){
+  return(as.numeric(allgenes%in%x))
+}))
+a<-vennCounts(c3)
+vennDiagram(a,names = trunkName(resKEGG[[compa]][paths,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
 
 #GO
-GO_CM.LM <- enrichGO(gene         = gene.df$ENTREZID,
-                     OrgDb         = org.Hs.eg.db,
-                     pAdjustMethod = "BH",
-                     pvalueCutoff  = 0.01,
-                     qvalueCutoff  = 0.05,
-                     readable = T)
-head(GO_CM.LM)
-#no
+GO <- enrichGO(gene         = gene.df$ENTREZID,
+               OrgDb         = org.Hs.eg.db,
+               pAdjustMethod = "BH",
+               pvalueCutoff  = 0.01,
+               qvalueCutoff  = 0.05,
+               readable = T)
+
+resGO[[compa]]<-head(GO,50)
+BP<-resGO[[compa]]$Description
+length(BP) #0
+
+
 
 #CF.LF
-genes<-na.omit(CF.LF$gene[CF.LF$pval<seuilpval & abs(CF.LF$FC)>seuilFC])
-genes2<-na.omit(CF.LF$gene)
-length(genes) #635
+compa<-"FC.FL"
+genes<-na.omit(resParCompa[[compa]]$gene)
+length(genes)#3604
 #trad en entrez ID
-gene.df <- bitr(unique(genes2), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
 head(gene.df)
-kk_CF.LF <- enrichKEGG(gene         = gene.df$ENTREZID,
-                       pAdjustMethod = "BH",
-                       pvalueCutoff  = 0.05,
-                       qvalueCutoff  = 0.15)
-head(kk_CF.LF,20) #2 pathway passe cutoff : 
-cat(paste(head(kk_CF.LF,50)$Description,collapse = "\n"))
+kk<- enrichKEGG(gene         = gene.df$ENTREZID,
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.05,
+                qvalueCutoff  = 0.15)
+resKEGG[[compa]]<-head(kk,50)
 
-setdiff(head(kk_CF.LF,50)$Description,head(kk_CM.LM,50)$Description) 
-#enrich en hormone/endocrine signaling pathway and metabo (sphinglolipid,Phospholipase,insulin, cholin, proteoglycan) 
+paths<-resKEGG[[compa]]$Description
+length(paths) #50 
 
-setdiff(head(kk_CM.LM,50)$Description,head(kk_CF.LF,50)$Description) 
-#[1] "Adherens junction"                    "Hepatocellular carcinoma"             "Dopaminergic synapse"                
-#[4] "Maturity onset diabetes of the young" "Amphetamine addiction" 
-#enrich en neuron function, et Maturity onset diabetes of the young
+#see genes paths :
+paths<-rownames(resKEGG[[compa]])[1:3]
+genesPaths<-list()
+# de Signaling pathways regulating pluripotency
+for(path in paths){
+  genesPaths[[path]]<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(resKEGG[[compa]][path,"geneID"],"/")[[1]])]
+  print(cat(paste(genesPaths[[path]],collapse = ", ")))
+  print("")
+}
 
-#exploration genes ! to do
-genesSigPath<-gene.df$SYMBOL[gene.df$ENTREZID%in%as.character(c(48,652,1856,2261,8321,9421,4088,4093,7473,54361,7474,7477,463 ))]
-genesSigPath # "BMP4"  "DVL2"  "FGFR3" "FZD1"  "HAND1" "SMAD3" "SMAD9" "WNT3"  "WNT4"  "WNT5A" "WNT7B" "ZFHX3"
+#see intersect avec venn :
+allgenes<-Reduce(union,genesPaths)
 
-#genes in Hippo signaling pathway
-genesHippo<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa04390',"geneID"],"/")[[1]])]
-genesHippo #"BMP4"   "CSNK1D" "DVL2"   "FZD1"   "PRKCZ"  "SMAD3"  "STK3"   "TP73"   "WNT3"   "WNT4"   "WNT5A"  "WNT7B" 
-
-
-#genes in Wnt signaling pathway
-genesWnt<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa04310',"geneID"],"/")[[1]])]
-genesWnt #"CUL1"   "DVL2"   "FZD1"   "MMP7"   "PRKACB" "RUVBL1" "SIAH1"  "SMAD3"  "WNT3"   "WNT4"   "WNT5A"  "WNT7B" 
-
-#venn de ses genes de pathways
-allgenes<-Reduce(union,list(genesSigPath,genesHippo,genesWnt))
-
-SigPath<-as.numeric(allgenes%in%genesSigPath)
-Hippo<-as.numeric(allgenes%in%genesHippo)
-Wnt<-as.numeric(allgenes%in%genesWnt)
-c3<-cbind(SigPath,Hippo,Wnt)
-c3
+c3<-cbind(sapply(genesPaths, function(x){
+  return(as.numeric(allgenes%in%x))
+}))
 a<-vennCounts(c3)
-vennDiagram(a)
-
+vennDiagram(a,names = trunkName(resKEGG[[compa]][paths,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
 
 #GO
-GO_CF.LF <- enrichGO(gene         = gene.df$ENTREZID,
-                     OrgDb         = org.Hs.eg.db,
-                     pAdjustMethod = "BH",
-                     pvalueCutoff  = 0.01,
-                     qvalueCutoff  = 0.05,
-                     readable = T)
-head(GO_CF.LF,50)$Description # enhancer binding, growthfactor binding 
+GO <- enrichGO(gene         = gene.df$ENTREZID,
+               OrgDb         = org.Hs.eg.db,
+               pAdjustMethod = "BH",
+               pvalueCutoff  = 0.01,
+               qvalueCutoff  = 0.05,
+               readable = T)
+
+resGO[[compa]]<-head(GO,50)
+BP<-resGO[[compa]]$Description
+length(BP) #12
+#see genes GOs :
+GOs<-rownames(resGO[[compa]])[c(1,3,9)]
+genesGOs<-list()
+# de Signaling pathways regulating pluripotency
+for(go in GOs){
+  genesGOs[[go]]<-strsplit(resGO[[compa]][go,"geneID"],"/")[[1]]
+  print(cat(paste(genesGOs[[go]],collapse = ", ")))
+  print("")
+}
+
+#see intersect avec venn :
+allgenes<-Reduce(union,genesGOs)
+
+c3<-cbind(sapply(genesGOs, function(x){
+  return(as.numeric(allgenes%in%x))
+}))
+a<-vennCounts(c3)
+vennDiagram(a,names = trunkName(resGO[[compa]][GOs,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
 
 #LM.LF
-genes<-na.omit(LM.LF$gene[LM.LF$pval<seuilpval & abs(LM.LF$FC)>seuilFC])
-genes2<-na.omit(LM.LF$gene)
-length(genes) #182
-sum(duplicated(genes2)) #179/1748
-genes2[duplicated(genes2)] #"FRMD1"
-# BLIM2"     "ABLIM2"     "ADRA1A"     "ADRA2A"     "AFAP1-AS1"  "ALKAL2"     "ALX4"       "AP3M2"      "APAF1"      "AQP1"      
-#  [11] "ARHGAP27P2" "ARHGAP8"    "ATP2C2"     "BARX2"      "BEGAIN"     "BMP8A"      "C5orf24"    "CACUL1"     "CAMTA1"     "CASC4"     
-#  [21] "CASZ1"      "CASZ1"      "CBFA2T3"    "COL20A1"    "CPNE5"      "CPZ"        "CPZ"        "CREB1"      "CRIPAK"     "CRY1"      
-#  [31] "DACT2"      "DDX31"      "DLC1"       "DMBX1"      "DMRTA2"     "DMRTA2"     "DPYSL2"     "EBF4"       "EEF1A2"     "EFCAB1"    
-#  [41] "EN2"        "EN2"        "EOMES"      "EPS8L2"     "EPS8L2"     "EVX1"       "FAM20C"     "FAM27B"     "FAM27C"     "FAM27C"    
-#  [51] "FAM53A"     "FAM53A"     "FAM78A"     "FCGR2A"     "FCGR2A"     "FCGR2A"     "FCGR2A"     "FENDRR"     "FGF3"       "FOXP4"     
-#  [61] "FRG1JP"     "FRMD1"      "GADD45G"    "GALNT17"    "GOLGA2P10"  "GPAA1"      "GPC1"       "GPC1"       "GRAPL"      "HAND2"     
-#  [71] "HLA-E"      "HOPX"       "IFITM1"     "IFITM3"     "IQSEC3"     "IRX1"       "JADE1"      "JPH3"       "LCN1"       "LINC00869" 
-#  [81] "LINC00887"  "LINC01138"  "LINC01138"  "LINC01138"  "LINC01192"  "LINC01310"  "LMX1B"      "LOC728613"  "LOC728613"  "LRFN2"     
-#  [91] "MAFF"       "MARK1"      "MICALL2"    "MICALL2"    "MICALL2"    "MIR3621"    "MIR4436A"   "MIR4472-1"  "MN1"        "MN1"       
-# [101] "MNX1"       "MNX1"       "MROH5"      "MROH5"      "MTFP1"      "MYO18B"     "MYO7B"      "NCS1"       "NEAT1"      "NECTIN1"   
-# [111] "NFAM1"      "NTN1"       "OGFRP1"     "OGFRP1"     "PAK4"       "PAX5"       "PBX3"       "PCIF1"      "PFN3"       "PHYKPL"    
-# [121] "PIK3CD"     "PITPNM3"    "PLEC"       "PLXNA4"     "PLXNA4"     "PLXNA4"     "PLXNB2"     "PP7080"     "PPP2R2C"    "RHOB"      
-# [131] "RHOB"       "RUNX2"      "RUNX2"      "RXRA"       "SAP130"     "SCRT1"      "SDC1"       "SIK1"       "SIX3"       "SIX3"      
-# [141] "SIX3"       "SLC25A51P1" "SLC29A4"    "SMARCA5"    "SOX14"      "SPEN"       "SPIRE2"     "SPTBN1"     "SRC"        "SRC"       
-# [151] "STIM2"      "STOX2"      "SYK"        "SYT15"      "TACC2"      "TFR2"       "TLE2"       "TLX1"       "TMEM250"    "TMEM250"   
-# [161] "TP73"       "TPO"        "TPRA1"      "TTC34"      "TUNAR"      "UBE2Q2P2"   "UBE3C"      "UBTF"       "ULK4P3"     "WASH3P"    
-# [171] "WASH3P"     "WASH7P"     "WASH7P"     "WASH8P"     "WASH8P"     "ZFAT"       "ZFYVE28"    "ZNF778"     "ZNF91"     
-
+compa<-"ML.FL"
+genes<-na.omit(resParCompa[[compa]]$gene)
+length(genes)#1201
 #trad en entrez ID
-gene.df <- bitr(unique(genes2), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
 head(gene.df)
-kk_LM.LF <- enrichKEGG(gene         = gene.df$ENTREZID,
-                       pAdjustMethod = "BH",
-                       pvalueCutoff  = 0.05,
-                       qvalueCutoff  = 0.15)
-head(kk_CF.LF,50)$Description 
-cat(paste(head(kk_CF.LF,20)$Description,collapse = "\n"))
+kk<- enrichKEGG(gene         = gene.df$ENTREZID,
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.05,
+                qvalueCutoff  = 0.15)
+resKEGG[[compa]]<-head(kk,50)
 
+paths<-resKEGG[[compa]]$Description
+length(paths) #24 
 
-#top1 : Signaling pathways regulating pluripotency of stem cells avec genes : 
-genesSigPath2<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa04550',"geneID"],"/")[[1]])]
-genesSigPath2 # "FZD1"   "FZD4"   "FZD7"   "HAND1"  "PIK3CD" "WNT2B"  "WNT7A" 
+#see genes paths :
+paths<-rownames(resKEGG[[compa]])[c(1,7,19)]
+genesPaths<-list()
+# de Signaling pathways regulating pluripotency
+for(path in paths){
+  genesPaths[[path]]<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(resKEGG[[compa]][path,"geneID"],"/")[[1]])]
+  print(cat(paste(genesPaths[[path]],collapse = ", ")))
+  print("")
+}
 
-#genes in proteoGlycnans
-genesProteoGly<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa05205',"geneID"],"/")[[1]])]
-genesProteoGly #"CDC42"  "FZD1"   "FZD4"   "FZD7"   "MRAS"   "PIK3CD" "SHH"    "SRC"    "WNT2B"  "WNT7A"
+#see intersect avec venn :
+allgenes<-Reduce(union,genesPaths)
 
-#genes in mTor signaling pathway
-genesmTor<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(head(kk_CF.LF,20)['hsa04150',"geneID"],"/")[[1]])]
-genesmTor #"FZD1"   "FZD4"   "FZD7"   "PIK3CD" "STK11"  "WNT2B"  "WNT7A" 
+c3<-cbind(sapply(genesPaths, function(x){
+  return(as.numeric(allgenes%in%x))
+}))
+a<-vennCounts(c3)
+vennDiagram(a,names = trunkName(resKEGG[[compa]][paths,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
 
 #GO
-GO_LM.LF <- enrichGO(gene         = gene.df$ENTREZID,
-                     OrgDb         = org.Hs.eg.db,
-                     pAdjustMethod = "BH",
-                     pvalueCutoff  = 0.01,
-                     qvalueCutoff  = 0.05,
-                     readable = T)
-head(GO_LM.LF,50)$Description # "DNA-binding transcription activator activity, RNA polymerase II-specific"
+GO <- enrichGO(gene         = gene.df$ENTREZID,
+               OrgDb         = org.Hs.eg.db,
+               pAdjustMethod = "BH",
+               pvalueCutoff  = 0.01,
+               qvalueCutoff  = 0.05,
+               readable = T)
+
+resGO[[compa]]<-head(GO,50)
+BP<-resGO[[compa]]$Description
+length(BP) #1, "DNA-binding transcription activator activity, RNA polymerase II-specific"
 
 #Hypermet in LF
+compa<-"ML.FL"
+genes<-na.omit(resParCompa[[compa]]$gene[resParCompa[[compa]]$FC>0])
+compa<-"ML.FL_HyperMet"
+length(genes)#907
+#trad en entrez ID
+gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+head(gene.df)
+kk<- enrichKEGG(gene         = gene.df$ENTREZID,
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.1,
+                qvalueCutoff  = 0.25)
+resKEGG[[compa]]<-head(kk,50)
+
+paths<-resKEGG[[compa]]$Description
+length(paths) #8 avec pvalueCutoff  = 0.1, et qvalueCutoff  = 0.25
+# [1] "Basal cell carcinoma"             "GnRH secretion"                   "AMPK signaling pathway"          
+# [4] "Protein digestion and absorption" "Hippo signaling pathway"          "Insulin secretion"               
+# [7] "Gastric cancer"                   "Chronic myeloid leukemia"
+
+#see genes paths :
+paths<-rownames(resKEGG[[compa]])[c(2,3,6)]
+genesPaths<-list()
+# de Signaling pathways regulating pluripotency
+for(path in paths){
+  genesPaths[[path]]<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(resKEGG[[compa]][path,"geneID"],"/")[[1]])]
+  print(cat(paste(genesPaths[[path]],collapse = ", ")))
+  print("")
+}
+
+#see intersect avec venn :
+allgenes<-Reduce(union,genesPaths)
+
+c3<-cbind(sapply(genesPaths, function(x){
+  return(as.numeric(allgenes%in%x))
+}))
+a<-vennCounts(c3)
+vennDiagram(a,names = trunkName(resKEGG[[compa]][paths,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
+
+#GO
+GO <- enrichGO(gene         = gene.df$ENTREZID,
+               OrgDb         = org.Hs.eg.db,
+               pAdjustMethod = "BH",
+               pvalueCutoff  = 0.01,
+               qvalueCutoff  = 0.05,
+               readable = T)
+
+resGO[[compa]]<-head(GO,50)
+BP<-resGO[[compa]]$Description
+length(BP) #1, "DNA-binding transcription activator activity, RNA polymerase II-specific"
 
 
 #! pathway visual (To do)
@@ -1080,7 +1149,7 @@ head(GO_LM.LF,50)$Description # "DNA-binding transcription activator activity, R
 #comb-p showed the best sensitivity as well as good control of FP rate across all simulation scenarios
 #comb-p identified substantially more TP DMRs than other methods, especially when effect sizes were small
 
-#1) COMB-P
+#=> COMB-P
 #command-line tool and a Python library [16].
 #principe : corrected P-value at a CpG site will be smaller than the original P-value if the neighboring CpG sites also have comparatively small P-values
 #input of comb-p is a .BED file with P-values and chromosome locations of the CpG sites
@@ -1119,14 +1188,9 @@ for (compa in compas){
 # --anno hg38 \            # annotate with genome hg38 from UCSC
 # FC.FL_allLocis_and_pval.bed                  # sorted BED file with pvals in 4th column
 
-#comb-p pipeline -c 4 --seed 0.05 --dist 750 -p FC.FL2 --region-filter-p 0.05 FC.FL_allLocis_and_pval.bed
-# wrote: FC.FL2.regions-p.bed.gz, (regions with corrected-p < 0.05: 108)
-# Bonferonni-corrected p-value for 1024960 rows: 4.88e-08     values less than Bonferonni-corrected p-value: 1 
-
-
 
 #with all compas : 
-# for compa in 'C.I' 'C.L' 'I.L' 'MC.ML' 'MC.MI' 'MI.ML' 'FC.FL' 'FC.FI' 'ML.FL' 'MI.FI' 'MC.FC' 'F.M'; do comb-p pipeline -c 4 --seed 0.05 --dist 750 -p $compa --region-filter-p 0.05 "$compa""model13_allLocis_and_pval.bed"; done 
+# for compa in 'C.L' 'MC.ML' 'FC.FL' 'ML.FL' 'MC.FC' 'F.M'; do comb-p pipeline -c 4 --seed 0.05 --dist 750 -p "model14""$compa" --region-filter-p 0.05 "$compa""model14_allLocis_and_pval.bed"; done 
 
 #all compas get :
 resDMRs<-list()
@@ -1185,13 +1249,14 @@ kkDMR<-enrichKEGG(gene.df$ENTREZID,pvalueCutoff = 0.05, qvalueCutoff = 0.15)
 head(kkDMR) #signaling pluripotency, gastic cancer et wnt sig
 
 GO_DMR <- enrichGO(gene         = gene.df$ENTREZID,
-                     OrgDb         = org.Hs.eg.db,
-                     pAdjustMethod = "BH",
-                     pvalueCutoff  = 0.05,
-                     qvalueCutoff  = 0.2,
-                     readable = T)
+                   OrgDb         = org.Hs.eg.db,
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.05,
+                   qvalueCutoff  = 0.2,
+                   readable = T)
 
 head(GO_DMR) #transcription corepressor activity 
+
 
 
 #WHY THIS SEX SPE RESPONSE ?
