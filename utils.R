@@ -48,8 +48,33 @@ correl<-function(x,y,ret="all",verbose=T){
 }
 
 
-# trunkName<-function(names,maxLeng=5,n.Mot=3){
-#   library(stringr)
-#   str_split()
-#   str_sub(names,)
-# }
+trunkName<-function(names,maxLeng=4,n.mot=NULL){
+  library(stringr)
+  if(is.null(n.mot)){
+    return(str_sub(names,1,maxLeng))
+  }else if(is.numeric(n.mot)){
+    liste_mots<-strsplit(names," ")
+    
+    vec2Mots<-rep("",length(names))
+    for (j in 1:length(names)){
+      mots<-liste_mots[[j]]
+      mots<-mots[str_length(mots)>2]
+      vecMots<-c()
+      for(i in 1:n.mot){
+        if(!is.na(mots[i])){
+          vecMots<-c(vecMots,str_sub(mots[i],1,maxLeng)) 
+        }
+        
+      }
+      vec2Mots[j]<-paste(vecMots,collapse = ". ")
+      
+    }
+    return(vec2Mots)
+  }
+  
+  
+  
+  
+  
+  return(vecMots)
+}
