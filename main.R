@@ -15,7 +15,7 @@ source("scripts/utils.R")
 source("scripts/FindInfosGenes.R")
 source("scripts/scRNA-seq integration.R")
 #output dir 
-script_name <- "newLocisF"
+script_name <- "main"
 outputDir <- file.path("analyses",script_name)
 dir.create(path = outputDir, recursive = TRUE, showWarnings = FALSE, mode = "0777")
 date<-Sys.Date()
@@ -33,6 +33,7 @@ head(data_all)
 
 dim(data_all) #1709224     132
 samples<-names(data_all)[str_detect(names(data_all),"CBP")]
+
 
 batch<-read.csv2("../../ref/batch_CD34_library_date_090420.csv",header=T,row.names = 1)
 
@@ -528,8 +529,6 @@ results <- decideTests(fit2)
 sum(abs(results)) #2039 > 3755 !
 colSums(abs(results))
 
-
-
 #4:
 # C.I   C.L   I.L MC.ML MC.MI MI.ML FC.FL FC.FI ML.FL MI.FI MC.FC   F.M 
 # 0    71  1955     0     0     0     4     0     7     2     0     0 
@@ -781,7 +780,6 @@ resModels[[model]]<-list(model=models[[model]],
                          
 resModels[[model]]$distrib.compas
 saveRDS(resModels[[model]],file = paste(output,"LocisetGenes_AllCompas_pval",seuilPval,filtres,"model",model,'.rds'))
-
 
 #vulcano 
 library(calibrate)
@@ -1138,6 +1136,61 @@ BP<-resGO[[compa]]$Description
 length(BP) #1, "DNA-binding transcription activator activity, RNA polymerase II-specific"
 
 
+#GSEA
+library(clusterProfiler)
+library(org.Hs.eg.db)
+resAll<-readRDS("analyses/main/newLocisF/2020-04-12 LocisetGenes_AllCompas_pval 0.001 locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros model 13 .rds")
+resAll$model
+#basic : 
+##with the FC
+#make the geneList : 
+# The geneList contains three features:
+# numeric vector: fold change or other type of numerical variable
+# named vector: every number was named by the corresponding gene ID
+# sorted vector: number should be sorted in decreasing order
+
+#with FC.FL, mean FC pos (hypermet) if several CpG hypermet in a gene
+res<-resAll$res.compas$FC.FL
+head(res)
+genes<-na.omit(unique(res$gene))
+#gene.df <- bitr(genes, fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+#genes<-gene.df$ENTREZID
+geneList<-rep(0,length(genes))
+names(geneList)<-genes
+for(i in 1:length(genes)){
+  gene<-genes[i]
+  #gene<-gene.df$SYMBOL[gene.df$ENTREZID==genes[i]]
+  
+  geneList[i]<-mean(res[res$FC>0&res$gene==gene,"FC"])
+  
+}
+head(geneList)
+#order : 
+geneList<-sort(geneList,decreasing = T)
+head(geneList)
+length(geneList) #3581
+
+kk2 <- gseKEGG(geneList     = geneList,
+               keyType = "ncbi-geneid",
+               nPerm        = 100,
+               minGSSize    = 20,
+               pvalueCutoff = 0.5,
+               verbose      = FALSE)
+head(kk2) #doesnt work
+
+#with msigDB geneList
+CanonPathGS <- read.gmt("../../ref/c2.cp.v7.1.symbols.gmt")
+head(CanonPathGS)
+kk2<- GSEA(geneList, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 1)
+head(kk2,50)
+
+##With my score
+
+#with cpg bias adjutstement (ebBayes)
+
+
+
+
 #! pathway visual (To do)
 
 
@@ -1256,7 +1309,6 @@ GO_DMR <- enrichGO(gene         = gene.df$ENTREZID,
                    readable = T)
 
 head(GO_DMR) #transcription corepressor activity 
-
 
 
 #WHY THIS SEX SPE RESPONSE ?
