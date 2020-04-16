@@ -184,8 +184,8 @@ mergeCols<-function(df,mergeColsName,colsToMerge=NULL,top=4,filter=0,abs=TRUE,ro
 }
 
 #ensemble annot
-putInChrRegFormat<-function(resCpG,colChr="chr",colStart="start",colEnd="start",chrWithchr=TRUE){
-  return(apply(resCpG,1,function(x){
+putInChrRegFormat<-function(df,colChr="chr",colStart="start",colEnd="start",chrWithchr=TRUE){
+  return(apply(df,1,function(x){
     if(chrWithchr){
       chr<-as.numeric(strsplit(x[colChr],"r")[[1]][2])
     }else{
@@ -199,6 +199,51 @@ putInChrRegFormat<-function(resCpG,colChr="chr",colStart="start",colEnd="start",
   ))
   
 }
+
+regInReg<-function(ChrRangeVec1,ChrRangeVec2){
+  return((ChrRangeVec1[1]==ChrRangeVec2[1]&ChrRangeVec1[2]>ChrRangeVec2[2]&ChrRangeVec1[3]<ChrRangeVec2[3]))
+  
+}
+matchReg<-function(CpGsPos_InChrRegFormat,ChrReg){
+  listCpG<-strsplit(CpGsPos_InChrRegFormat,":") 
+  return(sapply(listCpG,regInReg,strsplit(ChrReg,":")[[1]]))
+}
+annotCpGResWithBMRes<-function(resCpG,resBM=NULL,chrPosCol="chrRegion",
+                               attrs=c('chromosome_name','chromosome_start','chromosome_end','feature_type_name','regulatory_stable_id'),
+                               annots=c('feature_type_name'),
+                               ensembl=NULL){
+  if(is.null(resBM)){
+    library(biomaRt)
+    ensembl<-useEnsembl(biomart="ENSEMBL_MART_FUNCGEN", dataset="hsapiens_regulatory_feature", GRCh=37,version = 95)
+    print(ensembl)
+    resBM <- getBM(attributes=attrs,
+                   filters = 'chromosomal_region',
+                   values = resCpG$chrRegion,
+                   mart = ensembl)
+    
+  }
+  if("chrReg"%in%names(resBM)){
+    print("chrReg format already here")
+    
+  }else{
+    resBM$chrReg<-putInChrRegFormat(df=resBM,
+                                    colChr = "chromosome_name",colStart ="chromosome_start",
+                                    colEnd = "chromosome_end",chrWithchr = F)
+  }
+  resCpG[,annots]<-""
+  features<-as.vector(unique(resBM[,annots]))
+  resCpG[,features]<-FALSE
+  for(ChrReg in unique(resBM$chrReg)){
+    
+    locis<-rownames(resCpG)[matchReg(resCpG[,chrPosCol],ChrReg)]
+    features<-resBM[resBM$chrReg==ChrReg&!duplicated(resBM$chrReg),annots]
+    resCpG[locis,annots]<-paste0(resCpG[locis,annots],paste0(resBM[resBM$chrReg==ChrReg&!duplicated(resBM$chrReg),annots],sep="/"))
+    resCpG[locis,features]<-TRUE
+    
+  }
+  return(resCpG)
+}
+
 
 
 ###conversion resLocis - resGenes###
