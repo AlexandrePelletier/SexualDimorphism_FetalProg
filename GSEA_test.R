@@ -55,9 +55,45 @@ sum(is.na(res$gene)) #5971
 res<-res[!is.na(res$gene),]
 
 #get ENSEMBL info : regulatory domain, et motifTF
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#   install.packages("BiocManager")
+# 
+# BiocManager::install("ensembldb")
+# browseVignettes("ensembldb")
+# #need db 
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#   install.packages("BiocManager")
+# 
+# BiocManager::install("EnsDb.Hsapiens.v86")
+# 
+# library(EnsDb.Hsapiens.v86)
+# ## Making a "short cut"
+# edb <- EnsDb.Hsapiens.v86
+# ## print some informations for this package
+# edb
+# #get cross correl weigth.
 
-#get cross correl weigth.
+#dont find in the docs how query chr and start and get annot regulatory,so with biomart :
 
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("biomaRt")
+library(biomaRt) 
+#there is 1) Human Regulatory Features (hsapiens_regulatory_feature) and 2) Human Binding Motifs dataset (hsapiens_motif_feature) interesting (and 3: Human Regulatory Evidence (hsapiens_peak))
+#1)  Human Regulatory Features
+ensembl = useEnsembl(biomart="ENSEMBL_MART_FUNCGEN", dataset="hsapiens_regulatory_feature", GRCh=37,version = 95)
+
+listFilters(ensembl)
+listAttributes(ensembl)
+
+result_BM <- getBM( genes      = genes, # genes that we wanted info
+                                 mart       = "ENSEMBL_MART_ENSEMBL", # marts were selected with biomartr::getMarts()
+                                 dataset    = "hsapiens_gene_ensembl", # datasets were selected with biomartr::getDatasets()
+                                 attributes = "uniprotswissprot", # attributes were selected with biomartr::getAttributes()
+                                 filters    = "hgnc_symbol",) # specify what ID type was stored in the fasta file retrieved with biomartr::getGenome()
+
+result_BM<-result_BM[which(result_BM$uniprotswissprot!=""),]
+                                
 
 
 #get scRNAseq ecpr, need before to put res by genes :
