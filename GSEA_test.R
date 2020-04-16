@@ -42,7 +42,7 @@ output <- file.path(outputDir,date)
 #with clusterProf, 
 
 fit2<-readRDS("analyses/main/fit2_model13.rds")
-fit2$coefficients
+colnames(fit2$coefficients)
 res<- topTable(fit2,coef="FC.FL",n =Inf)
 locis<-rownames(res)
 res<-data.frame(row.names = locis,
@@ -75,26 +75,76 @@ res<-res[!is.na(res$gene),]
 
 #dont find in the docs how query chr and start and get annot regulatory,so with biomart :
 
-if (!requireNamespace("BiocManager", quietly = TRUE))
-  install.packages("BiocManager")
-BiocManager::install("biomaRt")
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#   install.packages("BiocManager")
+# BiocManager::install("biomaRt")
 library(biomaRt) 
 #there is 1) Human Regulatory Features (hsapiens_regulatory_feature) and 2) Human Binding Motifs dataset (hsapiens_motif_feature) interesting (and 3: Human Regulatory Evidence (hsapiens_peak))
 #1)  Human Regulatory Features
-ensembl = useEnsembl(biomart="ENSEMBL_MART_FUNCGEN", dataset="hsapiens_regulatory_feature", GRCh=37,version = 95)
+ensemblReg = useEnsembl(biomart="ENSEMBL_MART_FUNCGEN", dataset="hsapiens_regulatory_feature", GRCh=37,version = 95)
 
-listFilters(ensembl)
-listAttributes(ensembl)
+listFilters(ensemblReg) #chromosomal_region  e.g 1:100:10000000, 1:100000:200000
+listAttributes(ensemblReg)
+attrs<-c('chromosome_name','chromosome_start','chromosome_end','feature_type_name','feature_type_description','epigenome_name',
+         'epigenome_description','activity','regulatory_stable_id')
 
-result_BM <- getBM( genes      = genes, # genes that we wanted info
-                                 mart       = "ENSEMBL_MART_ENSEMBL", # marts were selected with biomartr::getMarts()
-                                 dataset    = "hsapiens_gene_ensembl", # datasets were selected with biomartr::getDatasets()
-                                 attributes = "uniprotswissprot", # attributes were selected with biomartr::getAttributes()
-                                 filters    = "hgnc_symbol",) # specify what ID type was stored in the fasta file retrieved with biomartr::getGenome()
-
-result_BM<-result_BM[which(result_BM$uniprotswissprot!=""),]
+#get info for 1 pos, par exemple le 1er locis :
+head(res)
+#               FC         pval   pval.adj   chr     start posAvant    gene ENTREZID type
+# 844706  48.33741 2.379390e-08 0.01870860  chr7  36193351      515   EEPD1    80820    6
+#need put in format 7:36193351:36193351
+putCpGInChrRegFormat<-function(resCpG,colChr="chr",colStart="start"){
+  return(apply(resCpG,1,function(x){
+    chr<-as.numeric(strsplit(x[colChr],"r")[[1]][2])
+    start<-as.numeric(x[colStart])
+    return(paste(chr,start,start,sep= ":"))
+    }
+    ))
+  
+}
+res$chrRegion<-putCpGInChrRegFormat(res)
+head(res)
+#so for the first locis
+chrPos<-res$chrRegion[1]
+result_BM <- getBM(attributes=attrs,
+                   filters = 'chromosomal_region',
+                   values = chrPos,
+                   mart = ensemblReg)
+result_BM
                                 
+tail(result_BM,100) #2 regions found with 2 type of features : promoters and CTCF binding site. seen in a lot of tissue/cells (epigenome_name)
 
+#with a feature called enhancer (4) :
+chrPos<-res$chrRegion[2]
+result_BM <- getBM(attributes=attrs,
+                   filters = 'chromosomal_region',
+                   values = chrPos,
+                   mart = ensemblReg)
+result_BM #called promoter too, instead of enhancer, BUT, in activity col, all are denoted "active"
+
+# to simply resutls dont need epigenome name in attr :
+attrs<-c('chromosome_name','chromosome_start','chromosome_end','feature_type_name','activity','regulatory_stable_id')
+
+#with much more locis
+chrPos<-res$chrRegion[1:20]
+result_BM <- getBM(attributes=attrs,
+                   filters = 'chromosomal_region',
+                   values = chrPos,
+                   mart = ensemblReg,)
+result_BM
+#merge with our res
+#pb, we loose the real pos of the CpG, we need need check wich cpg put chrname start 
+#we would like a fnction 
+
+res20<-head(res,20)
+res20$locis<-rownames(res20)
+res20.merge<-merge(res20,by=)
+#with ecidence db
+
+
+#with motif db
+
+#conf annot with gene db
 
 #get scRNAseq ecpr, need before to put res by genes :
 head(res)

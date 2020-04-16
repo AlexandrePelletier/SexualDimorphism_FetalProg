@@ -183,6 +183,24 @@ mergeCols<-function(df,mergeColsName,colsToMerge=NULL,top=4,filter=0,abs=TRUE,ro
   }
 }
 
+#ensemble annot
+putInChrRegFormat<-function(resCpG,colChr="chr",colStart="start",colEnd="start",chrWithchr=TRUE){
+  return(apply(resCpG,1,function(x){
+    if(chrWithchr){
+      chr<-as.numeric(strsplit(x[colChr],"r")[[1]][2])
+    }else{
+      chr<-as.numeric(x[colChr])
+    }
+    
+    start<-as.numeric(x[colStart])
+    end<-as.numeric(x[colEnd])
+    return(paste(chr,start,end,sep= ":"))
+  }
+  ))
+  
+}
+
+
 ###conversion resLocis - resGenes###
 
 resLocisToGenes<-function(resLocis, withNCpGTot=FALSE){
