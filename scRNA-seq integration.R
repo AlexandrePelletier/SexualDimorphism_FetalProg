@@ -1,11 +1,4 @@
 
-resLocisToGenes<-function(resLocis){
-  genes<-na.omit(unique(resLocis$gene))
-  df<-data.frame(row.names =genes,nLocis=table(resLocis$gene)[genes])
-  colnames(df)<-c("gene","nLocis")
-  return(df)
-}
-
 
 findGenesExpr<-function(resGenes,listExprMat,retourne="all"){
   #retourne df avec expr des genes dans chaque pop (colonnes des mat)

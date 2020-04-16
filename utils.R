@@ -79,6 +79,14 @@ trunkName<-function(names,maxLeng=4,n.mot=NULL){
   return(vecMots)
 }
 
+resLocisToGenes<-function(resLocis){
+  genes<-na.omit(unique(resLocis$gene))
+  df<-data.frame(row.names =genes,nLocis=table(resLocis$gene)[genes])
+  colnames(df)<-c("gene","nLocis")
+  return(df)
+}
+
+
 
 makeGeneList<-function(genes,res,tradInENTREZID=F,score="FC",aggregFUN=mean){
   if(tradInENTREZID){
