@@ -639,7 +639,8 @@ q9ConfScore<-quantile(data_F$confidenceScore,1:9/10)
 for(compa in compas){
   print(compa)
   res<- topTable(fit2,coef=compa,n =Inf)
-  
+  #if we decided to save all locis pval and FC : 
+  write.csv2(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),row.names = T)
   if(any(res$P.Value<seuilPval)){
     resF<-res[res$P.Value<seuilPval,]
     print(paste(nrow(resF),"locis passe filtre pval"))
