@@ -79,10 +79,19 @@ trunkName<-function(names,maxLeng=4,n.mot=NULL){
   return(vecMots)
 }
 
-resLocisToGenes<-function(resLocis){
+resLocisToGenes<-function(resLocis, withNCpGTot=FALSE){
   genes<-na.omit(unique(resLocis$gene))
-  df<-data.frame(row.names =genes,nLocis=table(resLocis$gene)[genes])
-  colnames(df)<-c("gene","nLocis")
+  
+  if(withNCpGTot){
+    annot<-read.csv2("../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = 1)
+    df<-data.frame(row.names =genes,nCpG=table(resLocis$gene)[genes],nCpGTot=table(annot$gene)[genes])
+    colnames(df)<-c("gene","nCpG","Asuppr","nCpGtot")
+    df<-df[,names(df)!="Asuppr"]
+  }else{
+    df<-data.frame(row.names =genes,nCpG=table(resLocis$gene)[genes])
+    colnames(df)<-c("gene","nCpG")
+  }
+  
   return(df)
 }
 
