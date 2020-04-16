@@ -492,7 +492,7 @@ mat.age<-as.numeric(batch[samples_F_F,"Mat.Age"])
 batches<-factor(batch[samples_F_F,"batch"])
 group_sex<-factor(batch[samples_F_F,"Group_Sex"])
 group_sex<-revalue(group_sex,c("1"="FC","2"="MC","3"="FI","4"="MI","5"="FL","6"="ML"))
-group_complexity<-as.numeric(batch[samples_F_F,"Group_Complexity"])
+#group_complexity<-as.numeric(batch[samples_F_F,"Group_Complexity"])
 group_complexity_fac<-factor(batch[samples_F_F,"Group_Complexity_Fac"])
 latino<-factor(batch[samples_F_F,"latino"])
 #complexity<-as.numeric(batch[samples_F_F,"Library_Complexity"])
@@ -523,7 +523,7 @@ cont.matrix <- makeContrasts(C.I="(group_sexFC+group_sexMC)-(group_sexFI+group_s
 
 fit2  <- contrasts.fit(fit, cont.matrix)
 fit2  <- eBayes(fit2) #warning message :Zero sample variances detected, have been offset away from zero 
-
+#saveRDS(fit2,"analyses/main/fit2_model13.rds")
 results <- decideTests(fit2)
 
 sum(abs(results)) #2039 > 3755 !
@@ -650,7 +650,7 @@ for(compa in compas){
                                          pval=resF$P.Value,
                                          pval.adj=resF$adj.P.Val,
                                          topCompa=compas[as.vector(apply(fit2$p.value[locis,compas],1,which.min))],
-                     annot[locis,c("chr","start","posAvant","gene","type")],
+                     annot[locis,c("chr","start","posAvant","gene","ENTREZID","type")],
                                          complexity=data_F[locis,"complexity"],
                     msp1Conf=sapply(data_F[locis,"msp1c"],function(x){
                       return(sum(x>q9Msp1c))
@@ -1165,6 +1165,7 @@ for(i in 1:length(genes)){
   
 }
 head(geneList)
+length(geneList)
 #order : 
 geneList<-sort(geneList,decreasing = T)
 head(geneList)
@@ -1183,20 +1184,94 @@ kk2 <- gseKEGG(geneList     = geneList,
 head(kk2) #doesnt work
 
 #with msigDB geneList
-CanonPathGS <- read.gmt("../../ref/c2.cp.v7.1.symbols.gmt") 
+CanonPathGS <- read.gmt("../../ref/c2.cp.kegg.v7.1.symbols.gmt") 
 head(CanonPathGS) #it s in gene SYMBOL so :
+
 genes<-na.omit(unique(res$gene))
 geneList<-makeGeneList(genes,res)
 head(geneList)
 
-kk2<- GSEA(geneList, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 1,minGSSize = 20)
-head(kk2)
+kk<- GSEA(geneList, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
+kk<-head(kk,50)
 
 #get genes from REACTOME_VESICLE_MEDIATED_TRANSPORT
 genesVes<-tr(head(kk2)["REACTOME_VESICLE_MEDIATED_TRANSPORT","core_enrichment"])
 genesVes
 
-##With my score
+##With my score : met a influence neg if in 6, pos if in 4, expr in HSPC,
+locis<-rownames(res)
+#influence[-1,1]
+influes<-sapply(res$type,function(x){
+  if(x==4){
+    influe<-1
+  }else if(x==6){
+    influe<--1
+  }else{
+    influe<-0
+  }
+  return(influe)
+  
+})
+
+#Met[-1,1] : hypermet chez LGA = FC pos = 1
+Met<-sapply(res$FC,function(x){
+  return(ifelse(x>0,1,-1))
+  
+})
+
+#=> si LGA hypermet sur prom,  Met*influe => 1*-1=-1=> met a influence neg sur gene (downregule le gene)
+
+#with just that and the absFC, en additionnant ces scores :
+res$basicScore<-abs(res$FC)*(Met*influes)
+max(res$basicScore)
+
+geneList2.mean<-makeGeneList(na.omit(unique(res$gene)),res,score="basicScore",aggregFUN = mean)
+geneList2.sum<-makeGeneList(na.omit(unique(res$gene)),res,score="basicScore",aggregFUN = sum)
+head(geneList2.mean,15)
+head(geneList2.sum,15)
+#    NR2F2      SOX1 LINC00461      PAX7     HPSE2   ONECUT1 
+#238.3086  199.8215  161.7815  152.6651  150.7314  147.8474 
+
+#compare to geneList with MeanFC pos:
+geneList1.mean<-makeGeneList(na.omit(unique(res$gene)),res,score="FC",aggregFUN = mean)
+geneList1.sum<-makeGeneList(na.omit(unique(res$gene)),res,score="FC",aggregFUN = sum)
+head(geneList1.mean,15)
+head(geneList1.sum,15)
+head(geneList)
+# SUCLA2      ITSN2   NDUFA4L2     PTP4A2      SFXN4 PAXIP1-AS2 
+# 56.64272   56.62103   56.05162   56.05000   55.37305   55.29064 
+
+kk2.mean<- GSEA(geneList2.mean, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
+kk2.mean<-head(kk2.mean,50) #les 50 sont signifs ! 
+kk2.mean
+
+kk2.sum<- GSEA(geneList2.sum, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
+kk2.sum<-head(kk2.sum,50) #les 50 sont signifs ! 
+kk2.sum[,c(2,3,5,6)]
+
+geneList2.sum[names(geneList2.mean)]<-1
+geneList2.sum
+#wereas :
+
+kk1.mean<- GSEA(geneList1.mean, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
+kk1.mean<-head(kk1.mean,50)  
+kk1.mean[,c(2,3,5,6)] #0
+
+kk1.sum<- GSEA(geneList1.sum, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
+kk1.sum<-head(kk1.sum,50) 
+kk1.sum[,c(2,3,5,6)] #0
+
+
+
+#get genes from ...
+genesVes<-tr(head(kk2)["REACTOME_VESICLE_MEDIATED_TRANSPORT","core_enrichment"])
+genesVes
+
+
+#(FCscore[0:1]: plus un FC rdt imprtznt, plus le score le sera
+FCscores<-abs(FCs[locis,"C.L"])/max(abs(FCs[locis,"C.L"]))
+
+
 
 #with cpg bias adjutstement (ebBayes)
 

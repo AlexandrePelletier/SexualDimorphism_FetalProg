@@ -80,36 +80,32 @@ trunkName<-function(names,maxLeng=4,n.mot=NULL){
 }
 
 
-makeGeneList<-function(genes,res,tradInENTREZID=F){
+makeGeneList<-function(genes,res,tradInENTREZID=F,score="FC",aggregFUN=mean){
   if(tradInENTREZID){
     library(clusterProfiler)
     gene.df <- bitr(genes, fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
     genes<-gene.df$ENTREZID
     geneList<-rep(0,length(genes))
     names(geneList)<-as.character(genes)
-    for(i in 1:length(genes)){
-      
-      gene<-gene.df$SYMBOL[gene.df$ENTREZID==genes[i]]
-      
-      geneList[i]<-mean(res[res$FC>0&res$gene==gene,"FC"])
-      
-    }
-    
   }else{
     geneList<-rep(0,length(genes))
     names(geneList)<-genes
+  }
+  
     for(i in 1:length(genes)){
-      gene<-genes[i]
-      #gene<-gene.df$SYMBOL[gene.df$ENTREZID==genes[i]]
       
-      geneList[i]<-mean(res[res$FC>0&res$gene==gene,"FC"])
+      if(tradInENTREZID){
+        gene<-gene.df$SYMBOL[gene.df$ENTREZID==genes[i]]
+      }else{
+        gene<-genes[i]
+      }
+    
+      geneList[i]<-aggregFUN(res[res$FC>0&res$gene==gene,score])
       
     }
-    
-  }
-    
-  return(sort(geneList,decreasing = T))
+    return(sort(geneList,decreasing = T))
 }
+
 
 tr<-function(ids_sepBySlash,tradEntrezInSymbol=F){
   library(clusterProfiler)
