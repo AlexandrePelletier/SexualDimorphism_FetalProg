@@ -1,6 +1,6 @@
 
 
-findGenesExpr<-function(resGenes,listExprMat,retourne="all"){
+find.scGeneExpr<-function(resGenes,listExprMat,returnAllGenes=TRUE){
   #retourne df avec expr des genes dans chaque pop (colonnes des mat)
   allGenes<-unique(as.vector(sapply(listExprMat, rownames)))
   genesInCommon<-intersect(rownames(resGenes),allGenes)
@@ -38,7 +38,7 @@ findGenesExpr<-function(resGenes,listExprMat,retourne="all"){
   }
   resGenesExpr<-resGenesExpr[,cols]
   
-  if(retourne=="all"){
+  if(returnAllGenes){
     df<-merge.data.frame(resGenes,resGenesExpr,by="row.names",all.x = T,all.y = T)
     rownames(df)<-df$gene
     return(df[,-c(1,2)])
@@ -90,98 +90,10 @@ findMarqueursPops<-function(genes,df=NULL){
 
 #locis : 
 
-mergeCols<-function(df,mergeColsName,colsToMerge=NULL,top=4,filter=0,abs=TRUE,roundNum=1,conserveCols=FALSE){
-  if(is.null(colsToMerge)){
-    colsToMerge<-colnames(df)
-  }
-  #use top=4 pour garder que les 4 plus grosses valeurs des cols tomerge (numeriques)
-  if(conserveCols){
-    newDf<-data.frame(row.names = rownames(df),df[,])
-  }else{
-    newDf<-data.frame(row.names = rownames(df),df[,!(colnames(df)%in%colsToMerge)])
-  }
-  
-  if(is.numeric(top)){
-    for(line in rownames(df)){
-      if(abs){
-        colsToMergeF<-colsToMerge[which(sapply(df[line,colsToMerge],abs)>filter)]
-        if(length(colsToMergeF)>0){
-          colsToMergeOrdered<-colsToMergeF[order(sapply(df[line,colsToMergeF],abs),decreasing = T)]
-        }else{
-          colsToMergeOrdered<-NA
-        }
-        
-        
-      }else{
-        colsToMergeF<-na.omit(colsToMerge[df[line,colsToMerge]>filter])
-        if(length(colsToMergeF)>0){
-          colsToMergeOrdered<-colsToMergeF[order(df[line,colsToMergeF],decreasing = T)]
-        }else{
-          colsToMergeOrdered<-NA
-        }
-        
-        
-      }
-      
-      
-
-      if(length(colsToMergeOrdered)>abs(top)){
-        if(top>0){
-          colsToMergeOrdered<-colsToMergeOrdered[1:top]
-        }else if(top<0){
-          colsToMergeOrdered<-colsToMergeOrdered[(length(colsToMergeOrdered)+(top-1)):length(colsToMergeOrdered)]
-        }
-        
-        
-      }
-      subColNames<-paste0("top",top,mergeColsName)
-      newDf[line,subColNames]<-paste(colsToMergeOrdered,collapse = "/")
-      if(all(is.na(colsToMergeOrdered))){
-        valeurs<-NA
-      }else{
-        valeurs<-paste(round(df[line,colsToMergeOrdered],roundNum),collapse = "/")
-      }
-      newDf[line,paste0(subColNames,"Value")]<-valeurs
-    }
-    return(newDf)
-    
-  }else{
-    
-    newDf[,paste0(mergeColsName,"Cols")]<-paste(colsToMerge,collapse = "/")
-    newDf[,mergeColsName]<-apply(df[,colsToMerge],1,paste,collapse = "/")
-    return(newDf)
-    
-  }
-}
 
 
-#annot locis 
-annotLocis<-function(resLocis,resGenes,annots=NULL,genes=NULL,filter=T){
-  if(is.null(annots)){
-    annots<-colnames(resGenes)
-  }
-  if(is.null(genes)){
-    genes<-rownames(resGenes)
-  }
-  poss<-c()
-  for(gene in genes){
-    pos<-which(resLocis$gene==gene)
-    poss<-union(poss,pos)
-    for(annot in annots){
-      resLocis[pos,annot]<-resGenes[gene,annot]
-      
-      
-    }
-   
-  }
-  if(filter){
-    return(resLocis[poss,])
-  }else{
-    return(resLocis)
-  }
-  
 
-}
+
 
 
 

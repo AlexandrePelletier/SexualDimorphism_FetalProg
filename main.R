@@ -720,7 +720,7 @@ for(compa in compas){
   resGenes<-resLocisToGenes(resParCompa[[compa]])
   
   #add genes Expr in bulk scrnaseq and in subpop
-  resGenes<-findGenesExpr(resGenes,listExprMat)
+  resGenes<-find.scGeneExpr(resGenes,listExprMat)
   #add markers of clusters
   resGenes<-addMarqueursClusters(scoresCluster,resGenes)
   #add canonical/published markers of cell types
