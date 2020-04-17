@@ -107,17 +107,29 @@ makeGeneList<-function(genes,res,tradInENTREZID=F,score="FC",aggregFUN=mean){
 }
 
 
-tr<-function(ids_sepBySlash,tradEntrezInSymbol=F){
-  library(clusterProfiler)
-  
+tr<-function(ids_sepBySlash,retourne="all",tradEntrezInSymbol=F){
   IDs<-c(strsplit(ids_sepBySlash,"/")[[1]])
-  if(tradEntrezInSymbol){
-    return(bitr(IDs, fromType = "ENTREZID",toType =  "SYMBOL",OrgDb = org.Hs.eg.db)$SYMBOL)
+  if(retourne=="all"){
+    ret<-1:length(IDs)
   }else{
-    return(IDs)
+    ret<-retourne
+  }
+  if(tradEntrezInSymbol){
+    require(clusterProfiler)
+    library(org.Hs.eg.db)
+    if(retourne=="all"){
+      return(clusterProfiler::bitr(IDs, fromType = "ENTREZID",toType =  "SYMBOL",OrgDb = org.Hs.eg.db)$SYMBOL)
+    }
+    else{
+      return(clusterProfiler::bitr(IDs, fromType = "ENTREZID",toType =  "SYMBOL",OrgDb = org.Hs.eg.db)$SYMBOL[ret])
+    }
+    
+  }else{
+    return(IDs[ret])
   }
   
 }
+
 
 mergeCols<-function(df,mergeColsName,colsToMerge=NULL,top=4,filter=0,abs=TRUE,roundNum=1,conserveCols=FALSE){
   if(is.null(colsToMerge)){
@@ -200,6 +212,7 @@ putInChrRegFormat<-function(df,colChr="chr",colStart="start",colEnd="start",chrW
   
 }
 
+
 regInReg<-function(ChrRangeVec1,ChrRangeVec2){
   return((ChrRangeVec1[1]==ChrRangeVec2[1]&ChrRangeVec1[2]>ChrRangeVec2[2]&ChrRangeVec1[3]<ChrRangeVec2[3]))
   
@@ -210,10 +223,12 @@ matchReg<-function(CpGsPos_InChrRegFormat,ChrReg){
 }
 annotCpGResWithBMRes<-function(resCpG,resBM=NULL,chrPosCol="chrRegion",
                                attrs=c('chromosome_name','chromosome_start','chromosome_end','feature_type_name','regulatory_stable_id'),
-                               annots=c('feature_type_name'),
+                               annot='feature_type_name',
                                ensembl=NULL){
+  library(stringr)
   if(is.null(resBM)){
     library(biomaRt)
+    
     ensembl<-useEnsembl(biomart="ENSEMBL_MART_FUNCGEN", dataset="hsapiens_regulatory_feature", GRCh=37,version = 95)
     print(ensembl)
     resBM <- getBM(attributes=attrs,
@@ -230,17 +245,19 @@ annotCpGResWithBMRes<-function(resCpG,resBM=NULL,chrPosCol="chrRegion",
                                     colChr = "chromosome_name",colStart ="chromosome_start",
                                     colEnd = "chromosome_end",chrWithchr = F)
   }
-  resCpG[,annots]<-""
-  features<-as.vector(unique(resBM[,annots]))
-  resCpG[,features]<-FALSE
+  resCpG[,annot]<-""
+  features<-as.vector(unique(resBM[,annot]))
+  resCpG[,features]<-""
   for(ChrReg in unique(resBM$chrReg)){
     
     locis<-rownames(resCpG)[matchReg(resCpG[,chrPosCol],ChrReg)]
-    features<-resBM[resBM$chrReg==ChrReg&!duplicated(resBM$chrReg),annots]
-    resCpG[locis,annots]<-paste0(resCpG[locis,annots],paste0(resBM[resBM$chrReg==ChrReg&!duplicated(resBM$chrReg),annots],sep="/"))
-    resCpG[locis,features]<-TRUE
+    features<-resBM[resBM$chrReg==ChrReg&!duplicated(resBM$chrReg),annot]
+    resCpG[locis,annot]<-paste0(resCpG[locis,annot],paste0(resBM[resBM$chrReg==ChrReg&!duplicated(resBM$chrReg),annot],sep="/"))
+    resCpG[locis,features]<-paste(ChrReg,resBM[resBM$chrReg==ChrReg&!duplicated(resBM$chrReg),'regulatory_stable_id'],sep = "/")
     
   }
+  
+  resCpG[,annot]<-str_sub(resCpG[,annot],1,(str_length(resCpG[,annot])-1))
   return(resCpG)
 }
 

@@ -5,6 +5,7 @@ options(stringsAsFactors=F)
 set.seed(12345)
 library(limma)
 source("scripts/scRNA-seq integration.R")
+source("scripts/utils.R")
 #output dir 
 script_name <- "GSEA_test"
 outputDir <- file.path("analyses",script_name)
@@ -93,17 +94,13 @@ head(res)
 #               FC         pval   pval.adj   chr     start posAvant    gene ENTREZID type
 # 844706  48.33741 2.379390e-08 0.01870860  chr7  36193351      515   EEPD1    80820    6
 #need put in format 7:36193351:36193351
-putCpGInChrRegFormat<-function(resCpG,colChr="chr",colStart="start"){
-  return(apply(resCpG,1,function(x){
-    chr<-as.numeric(strsplit(x[colChr],"r")[[1]][2])
-    start<-as.numeric(x[colStart])
-    return(paste(chr,start,start,sep= ":"))
-    }
-    ))
-  
-}
-res$chrRegion<-putCpGInChrRegFormat(res)
+
+res$chrRegion<-putInChrRegFormat(res)
 head(res)
+write.csv2(res,paste0(output,"_resCF.LF_AllLocis_with_AnnotNecessForCpGScore.csv"))
+res<-read.csv2("analyses/GSEA_test/2020-04-16_resCF.LF_AllLocis_with_AnnotNecessForCpGScore.csv",row.names = 1)
+head(res)
+nrow(res)
 #so for the first locis
 chrPos<-res$chrRegion[1]
 result_BM <- getBM(attributes=attrs,
@@ -130,15 +127,70 @@ chrPos<-res$chrRegion[1:20]
 result_BM <- getBM(attributes=attrs,
                    filters = 'chromosomal_region',
                    values = chrPos,
-                   mart = ensemblReg,)
+                   mart = ensemblReg)
 result_BM
+result_BM$chrReg<-putInChrRegFormat(df=result_BM,
+                  colChr = "chromosome_name",colStart ="chromosome_start",
+                  colEnd = "chromosome_end",chrWithchr = F)
+
 #merge with our res
 #pb, we loose the real pos of the CpG, we need need check wich cpg put chrname start 
-#we would like a fnction 
-
+#we would like a fnction, for each chrRange in resBM, get locis in this region, and annotate res in these locis
+  
 res20<-head(res,20)
-res20$locis<-rownames(res20)
-res20.merge<-merge(res20,by=)
+res20<-annotCpGResWithBMRes(res20,result_BM)
+head(res20)
+
+#with all res
+#res<-annotCpGResWithBMRes(res) #take too much time, need to make step by step, chr by chr and split by 1k locis
+table(res$chr)
+#for efficiency, need only chrRegion and chr 
+res2<-res[,c("type","chrRegion")]
+head(res2)
+
+for(chr in"chr1"){
+  print(chr)
+  n<-ceiling(table(res$chr)["chr1"]/1000)
+  print(paste("partionner en ",n,"fois"))
+  q2<-0
+  for(i in 1){
+    f<-round(i/n,2)
+    q1<-quantile(res$start,f,na.rm = T)
+    locis<-rownames(res)[res$chr==chr&res$start<=q1&res$start>q2]
+    print(paste(chr,"part",i,"annotation de ",length(locis),"locis.."))
+    subRes<-annotCpGResWithBMRes(res2[locis,])
+    q2<-q1
+    write.csv2(subRes,file = paste0(output,"annotEnsembl",chr,"part",i,".csv"),na = "")
+    print("")
+    print("..annotes et enregistrer")
+  }
+  
+}
+head(subRes,10)
+subRes$RangeProm<-sapply(subRes$Promoter,tr,1) #work
+
+for(chr in paste0("chr",1:21)){
+  print(chr)
+  n<-ceiling(table(res$chr)[chr]/5000)
+  print(paste("partionner",n,"fois"))
+  q2<-0
+  for(i in 1:n){
+    f<-round(i/n,2)
+    q1<-quantile(res[res$chr==chr,"start"],f)
+    locis<-rownames(res)[res$chr==chr&res$start<=q1&res$start>q2]
+    if(length(locis)>0){
+      print(paste(chr,"part",i,", annotation de",length(locis),"locis.."))
+      subRes<-annotCpGResWithBMRes(res2[locis,])
+      q2<-q1
+      write.csv2(subRes,file = paste0(output,"annotEnsembl",chr,"part",i,".csv"))
+      print("..annotes et enregistrer")
+      
+    }
+    
+  }
+  
+}
+
 #with ecidence db
 
 
