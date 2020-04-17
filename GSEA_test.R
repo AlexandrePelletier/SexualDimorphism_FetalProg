@@ -169,7 +169,7 @@ for(chr in"chr1"){
 head(subRes,10)
 subRes$RangeProm<-sapply(subRes$Promoter,tr,1) #work
 
-for(chr in paste0("chr",1:21)){
+for(chr in paste0("chr",9:21)){
   print(chr)
   n<-ceiling(table(res$chr)[chr]/5000)
   print(paste("partionner",n,"fois"))
