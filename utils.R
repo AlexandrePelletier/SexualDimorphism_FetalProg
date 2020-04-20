@@ -1,5 +1,33 @@
 
+##utils everywhere
+trunkName<-function(names,maxLeng=4,n.mot=NULL){
+  library(stringr)
+  if(is.null(n.mot)){
+    return(str_sub(names,1,maxLeng))
+  }else if(is.numeric(n.mot)){
+    liste_mots<-strsplit(names," ")
+    
+    vec2Mots<-rep("",length(names))
+    for (j in 1:length(names)){
+      mots<-liste_mots[[j]]
+      mots<-mots[str_length(mots)>2]
+      vecMots<-c()
+      for(i in 1:n.mot){
+        if(!is.na(mots[i])){
+          vecMots<-c(vecMots,str_sub(mots[i],1,maxLeng)) 
+        }
+        
+      }
+      vec2Mots[j]<-paste(vecMots,collapse = ". ")
+      
+    }
+    return(vec2Mots)
+  }
 
+  return(vecMots)
+}
+
+##function explor data before modeling
 pctPC<-function(pca,rngPCs="all"){
   if(is.character(rngPCs)){
     rngPCs<-1:length(pca$sdev)
@@ -48,86 +76,54 @@ correl<-function(x,y,ret="all",verbose=T){
 }
 
 
-trunkName<-function(names,maxLeng=4,n.mot=NULL){
-  library(stringr)
-  if(is.null(n.mot)){
-    return(str_sub(names,1,maxLeng))
-  }else if(is.numeric(n.mot)){
-    liste_mots<-strsplit(names," ")
-    
-    vec2Mots<-rep("",length(names))
-    for (j in 1:length(names)){
-      mots<-liste_mots[[j]]
-      mots<-mots[str_length(mots)>2]
-      vecMots<-c()
-      for(i in 1:n.mot){
-        if(!is.na(mots[i])){
-          vecMots<-c(vecMots,str_sub(mots[i],1,maxLeng)) 
+##fct for res modeling
+checkSignifPval<-function(res,pvalsPermut,cutoffStopIter=0.05,cutoffSigCol="q5",flag=T,colPval='pval'){
+  
+  res<-res[order(res[,colPval]),]
+  locisToCheck<-rownames(res)
+  pvalsPermut<-pvalsPermut[locisToCheck,]
+  pctNonSig<-0
+  i<-1
+  nNonSig<-1
+  locisPassPas<-c()
+  while(pctNonSig<cutoffStopIter){
+    if(i<=nrow(res)){
+      if(res[i,colPval]>pvalsPermut[i,cutoffSigCol]){
+        nNonSig<-nNonSig+1
+        pctNonSig<-nNonSig/i
+        
+        if(flag){
+          res[i,"PassPermut"]<-F
+        }else{
+          locisPassPas<-c(locisPassPas,i)
         }
         
-      }
-      vec2Mots[j]<-paste(vecMots,collapse = ". ")
-      
-    }
-    return(vec2Mots)
-  }
-  
-  
-  
-  
-  
-  return(vecMots)
-}
-
-
-makeGeneList<-function(genes,res,tradInENTREZID=F,score="FC",aggregFUN=mean){
-  if(tradInENTREZID){
-    library(clusterProfiler)
-    gene.df <- bitr(genes, fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-    genes<-gene.df$ENTREZID
-    geneList<-rep(0,length(genes))
-    names(geneList)<-as.character(genes)
-  }else{
-    geneList<-rep(0,length(genes))
-    names(geneList)<-genes
-  }
-  
-    for(i in 1:length(genes)){
-      
-      if(tradInENTREZID){
-        gene<-gene.df$SYMBOL[gene.df$ENTREZID==genes[i]]
       }else{
-        gene<-genes[i]
+        if(flag){
+          res[i,"PassPermut"]<-T
+        }
       }
-    
-      geneList[i]<-aggregFUN(res[res$FC>0&res$gene==gene,score])
+      
+      i<-i+1
+    }else {
+      print(paste("le set de locis Sig est fiable, le pct de locis ne passant pas le cutoffPermut=",pctNonSig))
+      if(flag){
+        return(res)
+      }else{
+        return(locisToCheck[locisPassPas])
+      }
       
     }
-    return(sort(geneList,decreasing = T))
-}
-
-
-tr<-function(ids_sepBySlash,retourne="all",tradEntrezInSymbol=F){
-  IDs<-c(strsplit(ids_sepBySlash,"/")[[1]])
-  if(retourne=="all"){
-    ret<-1:length(IDs)
-  }else{
-    ret<-retourne
+      
   }
-  if(tradEntrezInSymbol){
-    require(clusterProfiler)
-    library(org.Hs.eg.db)
-    if(retourne=="all"){
-      return(clusterProfiler::bitr(IDs, fromType = "ENTREZID",toType =  "SYMBOL",OrgDb = org.Hs.eg.db)$SYMBOL)
-    }
-    else{
-      return(clusterProfiler::bitr(IDs, fromType = "ENTREZID",toType =  "SYMBOL",OrgDb = org.Hs.eg.db)$SYMBOL[ret])
-    }
-    
+  print(paste("le set de locis Sig est fiable jusqu'au locis ",i,"(pval=",res[i,colPval],")"))
+  if(flag){
+    return(res)
   }else{
-    return(IDs[ret])
+    return(locisToCheck[locisPassPas])
   }
   
+    
 }
 
 
@@ -195,6 +191,107 @@ mergeCols<-function(df,mergeColsName,colsToMerge=NULL,top=4,filter=0,abs=TRUE,ro
   }
 }
 
+#locis > genes
+resLocisToGenes<-function(resLocis, withNCpGTot=FALSE){
+  genes<-na.omit(unique(resLocis$gene))
+  
+  if(withNCpGTot){
+    annot<-read.csv2("../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = 1)
+    df<-data.frame(row.names =genes,nCpG=table(resLocis$gene)[genes],nCpGTot=table(annot$gene)[genes])
+    colnames(df)<-c("gene","nCpG","Asuppr","nCpGtot")
+    df<-df[,names(df)!="Asuppr"]
+  }else{
+    df<-data.frame(row.names =genes,nCpG=table(resLocis$gene)[genes])
+    colnames(df)<-c("gene","nCpG")
+  }
+  
+  return(df)
+}
+
+#genes>locis
+annotLocis<-function(resLocis,resGenes,annots=NULL,genes=NULL,rmLocisSansGenes=T){
+  if(is.null(annots)){
+    annots<-colnames(resGenes)
+  }
+  if(is.null(genes)){
+    genes<-rownames(resGenes)
+  }
+  poss<-c()
+  for(gene in genes){
+    pos<-which(resLocis$gene==gene)
+    poss<-union(poss,pos)
+    for(annot in annots){
+      resLocis[pos,annot]<-resGenes[gene,annot]
+      
+      
+    }
+    
+  }
+  if(rmLocisSansGenes){
+    locisWithGenes<-rownames(resLocis)[poss]
+    nLocis<-sum(!(rownames(resLocis)%in%locisWithGenes))
+    print(paste(nLocis,"ont ete enleves car non reliés a un gène"))
+    return(resLocis[poss,])
+  }else{
+    return(resLocis)
+  }
+  
+  
+}
+
+
+# after modeling (GSEA..)
+makeGeneList<-function(genes,res,tradInENTREZID=F,score="FC",aggregFUN=mean){
+  if(tradInENTREZID){
+    library(clusterProfiler)
+    gene.df <- bitr(genes, fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
+    genes<-gene.df$ENTREZID
+    geneList<-rep(0,length(genes))
+    names(geneList)<-as.character(genes)
+  }else{
+    geneList<-rep(0,length(genes))
+    names(geneList)<-genes
+  }
+  
+    for(i in 1:length(genes)){
+      
+      if(tradInENTREZID){
+        gene<-gene.df$SYMBOL[gene.df$ENTREZID==genes[i]]
+      }else{
+        gene<-genes[i]
+      }
+    
+      geneList[i]<-aggregFUN(res[res$FC>0&res$gene==gene,score])
+      
+    }
+    return(sort(geneList,decreasing = T))
+}
+
+
+tr<-function(ids_sepBySlash,retourne="all",tradEntrezInSymbol=F){
+  IDs<-c(strsplit(ids_sepBySlash,"/")[[1]])
+  if(retourne=="all"){
+    ret<-1:length(IDs)
+  }else{
+    ret<-retourne
+  }
+  if(tradEntrezInSymbol){
+    require(clusterProfiler)
+    library(org.Hs.eg.db)
+    if(retourne=="all"){
+      return(clusterProfiler::bitr(IDs, fromType = "ENTREZID",toType =  "SYMBOL",OrgDb = org.Hs.eg.db)$SYMBOL)
+    }
+    else{
+      return(clusterProfiler::bitr(IDs, fromType = "ENTREZID",toType =  "SYMBOL",OrgDb = org.Hs.eg.db)$SYMBOL[ret])
+    }
+    
+  }else{
+    return(IDs[ret])
+  }
+  
+}
+
+
 #ensemble annot
 putInChrRegFormat<-function(df,colChr="chr",colStart="start",colEnd="start",chrWithchr=TRUE){
   return(apply(df,1,function(x){
@@ -211,7 +308,6 @@ putInChrRegFormat<-function(df,colChr="chr",colStart="start",colEnd="start",chrW
   ))
   
 }
-
 
 regInReg<-function(ChrRangeVec1,ChrRangeVec2){
   return((ChrRangeVec1[1]==ChrRangeVec2[1]&ChrRangeVec1[2]>ChrRangeVec2[2]&ChrRangeVec1[3]<ChrRangeVec2[3]))
@@ -263,51 +359,4 @@ annotCpGResWithBMRes<-function(resCpG,resBM=NULL,chrPosCol="chrRegion",
 
 
 
-###conversion resLocis - resGenes###
 
-resLocisToGenes<-function(resLocis, withNCpGTot=FALSE){
-  genes<-na.omit(unique(resLocis$gene))
-  
-  if(withNCpGTot){
-    annot<-read.csv2("../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = 1)
-    df<-data.frame(row.names =genes,nCpG=table(resLocis$gene)[genes],nCpGTot=table(annot$gene)[genes])
-    colnames(df)<-c("gene","nCpG","Asuppr","nCpGtot")
-    df<-df[,names(df)!="Asuppr"]
-  }else{
-    df<-data.frame(row.names =genes,nCpG=table(resLocis$gene)[genes])
-    colnames(df)<-c("gene","nCpG")
-  }
-  
-  return(df)
-}
-
-
-annotLocis<-function(resLocis,resGenes,annots=NULL,genes=NULL,rmLocisSansGenes=T){
-  if(is.null(annots)){
-    annots<-colnames(resGenes)
-  }
-  if(is.null(genes)){
-    genes<-rownames(resGenes)
-  }
-  poss<-c()
-  for(gene in genes){
-    pos<-which(resLocis$gene==gene)
-    poss<-union(poss,pos)
-    for(annot in annots){
-      resLocis[pos,annot]<-resGenes[gene,annot]
-      
-      
-    }
-    
-  }
-  if(rmLocisSansGenes){
-    locisWithGenes<-rownames(resLocis)[poss]
-    nLocis<-sum(!(rownames(resLocis)%in%locisWithGenes))
-    print(paste(nLocis,"ont ete enleves car non reliés a un gène"))
-    return(resLocis[poss,])
-  }else{
-    return(resLocis)
-  }
-  
-  
-}
