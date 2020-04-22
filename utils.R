@@ -241,45 +241,40 @@ annotLocis<-function(resLocis,resGenes,annots=NULL,genes=NULL,rmLocisSansGenes=T
 
 
 # after modeling (GSEA..)
-makeGeneList<-function(res,tradInENTREZID=F,score="FC",returnRank=T,withResLocis=F,aggregLocisFUN=mean){
+makeGeneList<-function(res,score="FC",returnRank=T,withResLocis=F,aggregLocisFUN=mean){
   if(withResLocis){
     genes<-na.omit(unique(res$gene))
   }else{
     genes<-rownames(res)
   }
   
-  if(tradInENTREZID){
-    library(clusterProfiler)
-    gene.df <- bitr(genes, fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-    genes<-gene.df$ENTREZID
+  if(withResLocis){
     geneList<-rep(0,length(genes))
-    names(geneList)<-as.character(genes)
-  }else{
-    geneList<-rep(0,length(genes))
-    names(geneList)<-genes
-  }
-  
     for(i in 1:length(genes)){
       
-      if(tradInENTREZID){
-        gene<-gene.df$SYMBOL[gene.df$ENTREZID==genes[i]]
-      }else{
-        gene<-genes[i]
-      }
-    
-      if(withResLocis){
-        geneList[i]<-aggregLocisFUN(res[res$gene==gene,score])
-        
-      }else{
-        geneList[i]<-res[gene,score]
-      }
+      gene<-genes[i]
       
-      if(returnRank){
-        geneList<-rank(geneList)
-      } 
+      geneList[i]<-aggregLocisFUN(res[res$gene==gene,score])
+    }
+    
+    
+    if(returnRank){
+      geneList<-rank(geneList)
       
     }
-    return(sort(geneList,decreasing = T))
+    names(geneList)<-genes
+    
+  }else{
+    if(returnRank){
+      geneList<-rank(res[,score])
+      
+      
+    }else{
+      geneList<-res[,score]
+    }
+    names(geneList)<-genes
+  }
+  return(sort(geneList,decreasing = T))
 }
 
 

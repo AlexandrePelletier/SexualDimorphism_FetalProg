@@ -358,7 +358,7 @@ head(resGenes)
 library(clusterProfiler)
 KeggGS <- read.gmt("../../ref/c2.cp.kegg.v7.1.symbols.gmt") 
 geneList<-makeGeneList(resGenes,score = "GeneScore",returnRank = T)
-head(geneList)
+head(geneList,50)
 
 kk<-GSEA(geneList,TERM2GENE=KeggGS,nPerm = 1000,pvalueCutoff = 0.1)
 head(kk,20) #done
@@ -372,12 +372,31 @@ head(resGenes)
 #GSEA without weitghed for non expr genes :
 
 geneList<-makeGeneList(resGenes,score = "GeneScore2",returnRank = T)
-head(geneList)
+head(geneList,50)
 
-kk<-GSEA(geneList,TERM2GENE=KeggGS,nPerm = 1000,pvalueCutoff = 0.1)
-head(kk,20) #done
-emapplot(kk)
+kk2<-GSEA(geneList,TERM2GENE=KeggGS,nPerm = 1000,pvalueCutoff = 0.1)
+head(kk2,20) #done
+emapplot(kk2)
 
+
+#normalized with the number of CpG detected by msp1 by genes
+for(gene in rownames(resGenes)){
+  resGenes[gene,"GeneScore3"]<-sum(res$CpGScore[which(res$gene==gene)])/resGenes[gene,"nCpGtot"]
+}
+head(resGenes)
+#GSEA without weitghed for non expr genes :
+
+geneList<-makeGeneList(resGenes,score = "GeneScore3",returnRank = T)
+head(geneList,50)
+
+kk3<-GSEA(geneList,TERM2GENE=KeggGS,nPerm = 1000,pvalueCutoff = 0.1)
+head(kk3,20) #done
+emapplot(kk3)
+
+saveRDS(list(resLocis=res,resGenes=resGenes),paste0(output,"resCLF.rds"))
+
+#need better norm than just divide by number of CpG tot, that too influencing
+#ebayes ?
 
 
 #we can add RNAseq expr to improve the score: 
