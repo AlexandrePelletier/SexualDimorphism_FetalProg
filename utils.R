@@ -241,7 +241,7 @@ annotLocis<-function(resLocis,resGenes,annots=NULL,genes=NULL,rmLocisSansGenes=T
 
 
 # after modeling (GSEA..)
-makeGeneList<-function(genes,res,tradInENTREZID=F,score="FC",aggregFUN=mean){
+makeGeneList<-function(genes,res,tradInENTREZID=F,score="FC",returnRank=T,withResLocis=F,aggregLocisFUN=mean){
   if(tradInENTREZID){
     library(clusterProfiler)
     gene.df <- bitr(genes, fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
@@ -261,15 +261,24 @@ makeGeneList<-function(genes,res,tradInENTREZID=F,score="FC",aggregFUN=mean){
         gene<-genes[i]
       }
     
-      geneList[i]<-aggregFUN(res[res$FC>0&res$gene==gene,score])
+      if(withResLocis){
+        geneList[i]<-aggregLocisFUN(res[res$gene==gene,score])
+        
+      }else{
+        geneList[i]<-res[gene,score]
+      }
+      
+      if(returnRank){
+        geneList<-rank(geneList)
+      } 
       
     }
     return(sort(geneList,decreasing = T))
 }
 
 
-tr<-function(ids_sepBySlash,retourne="all",tradEntrezInSymbol=F){
-  IDs<-c(strsplit(ids_sepBySlash,"/")[[1]])
+tr<-function(ids_sepBySlash,retourne="all",sep="/",tradEntrezInSymbol=FALSE,uniqu=TRUE){
+  IDs<-as.vector(strsplit(ids_sepBySlash,sep)[[1]])
   if(retourne=="all"){
     ret<-1:length(IDs)
   }else{
@@ -286,7 +295,13 @@ tr<-function(ids_sepBySlash,retourne="all",tradEntrezInSymbol=F){
     }
     
   }else{
-    return(IDs[ret])
+    if(uniqu){
+      return(unique(IDs[ret]))
+    }else{
+      return(IDs[ret])
+    }
+    
+    
   }
   
 }

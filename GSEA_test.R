@@ -191,19 +191,197 @@ for(chr in paste0("chr",9:21)){
   
 }
 
-#with ecidence db
+#add this annot in ref/annot
+annot<-read.csv2("../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = 1)
+head(annot)
+chrs<-paste0("chr",1:21)
+for(chr in chrs){
+  print(chr)
+  for(file in list.files("analyses/GSEA_test/",pattern = paste0(chr,"part"))){
+    print(strsplit(file,chr)[[1]][2])
+    ensAnno<-read.csv2(paste0("analyses/GSEA_test/",file),row.names = 1)
+    locis<-rownames(ensAnno)
+    annot[locis,"feature_type_name"]<-ensAnno$feature_type_name
+    annot[locis,"CTCF.Binding.Site"]<-ensAnno$CTCF.Binding.Site
+    annot[locis,"Promoter"]<-ensAnno$Promoter
+    annot[locis,"Promoter.Flanking.Region"]<-ensAnno$Promoter.Flanking.Region
+    annot[locis,"Open.chromatin"]<-ensAnno$Open.chromatin
+    annot[locis,"Enhancer"]<-ensAnno$Enhancer
+    annot[locis,"TF.binding.site"]<-ensAnno$TF.binding.site
+  }
+}
+
+head(annot[which(annot$feature_type_name!=""),])
+write.csv2(annot,file = "../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = T)
+
+#add in res
+res<-data.frame(row.names = rownames(res),res,annot[rownames(res),12:18])
+head(res)
+#check if true
+#type 4 and 6 enrichit en prom/enh features ?
+m<-which(res$type%in%0:6 &res$feature_type_name!="")
+length(m)#396k/780k
+table(res$type[m],res$feature_type_name[m])
+
+plot(factor(res$type[m]),factor(res$feature_type_name[m]))
+
+#make df count by ensemblfeatures and type
+library(dplyr)
+featuresCounts<-res%>%count(type,feature_type_name,sort = T)
+head(featuresCounts,20)
+featuresCounts[featuresCounts$type==4,]#2k enh et 3k6 TF /150k
+sum(res$type==4)
+featuresCounts[featuresCounts$type==6,]#1k enh et no TF /200k
+sum(res$type==6)
+featuresCounts[featuresCounts$type==5,]#2k3 enh et noTF  /51k
+sum(res$type==5)
+
+featuresCounts[featuresCounts$type==0,]#8k enh et 1k TF /164k
+sum(res$type==0)
+featuresCounts[featuresCounts$type==1,]#3k enh et 500 TF /73k
+sum(res$type==1)
+featuresCounts[featuresCounts$type==2,]#3k5 enh et 500 TF /66k
+sum(res$type==2)
+featuresCounts[featuresCounts$type==3,]#3k enh et 500 TF /70k
+sum(res$type==3)
+
+#number of ensFeatures by type
+allFeats<-list()
+allFeatsCounts<-data.frame()
+
+for(type in 0:6){
+  #1) count by type
+  allFeats[[as.character(type)]]<-unlist(lapply(res[which(res$type==type),"feature_type_name"],tr))
+  print("ok")
+  counts<-table(allFeats[[as.character(type)]])
+  print("ok2")
+  allFeatsCounts[names(counts),as.character(type)]<-counts
+  
+}
+head(allFeatsCounts)
+allFeatsCounts$tot<-rowSums(allFeatsCounts)
+
+allFeatsCounts['tot',names(allFeatsCounts)]<-colSums(allFeatsCounts)
+
+head(allFeatsCounts,10)
+
+allFeatsCountsNorm<-data.frame(row.names = rownames(allFeatsCounts))
+for(type in 0:6){
+  for(ensFeat in rownames(allFeatsCountsNorm)){
+    allFeatsCountsNorm[ensFeat,as.character(type)]<-allFeatsCounts[ensFeat,as.character(type)]/allFeatsCounts['tot',as.character(type)]
+  }
+  
+}
+allFeatsCountsNorm
+
+allFeatsCountsDf<-data.frame()
+i<-1
+for(type in colnames(allFeatsCounts)[1:(ncol(allFeatsCounts)-1)]){
+  for(ensFeat in rownames(allFeatsCounts)[1:(nrow(allFeatsCounts)-1)]){
+    allFeatsCountsDf[i,c("type","ensembFeat")]<-c(type,ensFeat)
+    allFeatsCountsDf[i,"count"]<-allFeatsCounts[ensFeat,type]
+    i<-i+1
+  }
+}
+head(allFeatsCountsDf,10)
+#barplot
+library(ggplot2)
+ggplot(allFeatsCountsDf)+
+  geom_bar(aes(x = type, y = count,fill=ensembFeat), stat = 'identity')
 
 
-#with motif db
+#now, we can create our CpGscore : 
+#we want FC=pvalue > 4/6 > regulatory element > TF > wieght of correlation > RNAseq reference
+#so principal weight is FC[0:1] + pval[0:1] (max=2) (the DMC weigtht)
+#We multiply this weight by the "regulatory weight" [0-1]
+# +1 if (4,6), 0.5 if 5, 0.1 otherwise
+# +0.7 if(CTCF,enh,prom,)+ 0.3 if prom flanking, openchrine, #+0.5 if(TFbind site), or 0 otherwise
+#rank this and norm the rank to obtain a score between 0 and 1
+ 
+##DMC weigtht
+#(FC[0:1] : toavoid overfitting, we use the rank of abs(FC) as metriks normalized
+res$FCScore<-rank(abs(res$FC))/nrow(res)
+head(res)
+tail(res)
+#pval[0:1] : the same (with rank), to have the same weight
+res$PvalScore<-rank(1/res$pval)/nrow(res)
+res$DMCWeight<-res$PvalScore+res$FCScore
 
-#conf annot with gene db
+##regulatory weight
+# +1 if (4,6), 0.5 if 5, 0.1 otherwise
+res$TypeScore<-sapply(res$type,function(x){
+  if(x%in%c(4,6)){
+    score<-1
+  }else if(x==5){
+    score<-0.5
+  }else{
+    score<-0.1
+  }
+  return(score)
+})
 
-#get scRNAseq ecpr, need before to put res by genes :
+# +0.7 if(CTCF,enh,prom,)+ 0.3 if prom flanking, openchrine, #+0.5 if(TFbind site), or 0 otherwise
+res$EnsRegScore<-sapply(res$feature_type_name,function(x){
+  vecX<-tr(x)
+  if(any(c("CTCF Binding Site","Promoter","Enhancer")%in%vecX)){
+    score<-0.7
+  }else if(any(c("Open chromatin","Promoter Flanking Region")%in%vecX)){
+    score<-0.3
+  }else{
+    score<-0
+  }
+  if("TF binding site"%in%vecX){
+    score<-score+0.5
+  }
+  return(score)
+})
+
+head(res)
+tail(res)
+#rank this and norm the rank to obtain a weight between 0 and 1
+res$RegWeight<-rank(res$TypeScore+res$EnsRegScore)/max(rank(res$TypeScore+res$EnsRegScore))
+
+##CpG score: DMCweight*RegWeight
+res$CpGScore<-res$DMCWeight*res$RegWeight
+
+#now we can calculate de GenesScores by sum(CpGScore in a gene)/nCpGtot in the genes and add a weight of this new score depending of the gene expr: 
+
+#first, det the res by CpG before to put res by genes :
 head(res)
 resGenes<-resLocisToGenes(res,withNCpGTot = T)
-head(resGenes) #get also the number of CpG detected in at least 1 sample HPA2c library(nCpG), and the number of CpG tot detected by Msp1c ref
+head(resGenes) #get also the number CpG detected in at least 1 sample HPA2c library(nCpG), compared the number of CpG tot detected by Msp1c ref
+for(gene in rownames(resGenes)){
+  resGenes[gene,"GeneScore"]<-sum(res$CpGScore[which(res$gene==gene)])
+}
+head(resGenes)
+#GSEA without weitghed for non expr genes :
+library(clusterProfiler)
+KeggGS <- read.gmt("../../ref/c2.cp.kegg.v7.1.symbols.gmt") 
+geneList<-makeGeneList(rownames(resGenes),resGenes,score = "GeneScore",returnRank = T)
+head(geneList)
 
-#then we can add scRNAseq expr : 
+kk<-GSEA(geneList,TERM2GENE=KeggGS,nPerm = 1000,pvalueCutoff = 0.1)
+head(kk,20) #done
+emapplot(kk)
+
+#normalized with the number of CpG in data_F by genes
+for(gene in rownames(resGenes)){
+  resGenes[gene,"GeneScore2"]<-sum(res$CpGScore[which(res$gene==gene)])/resGenes[gene,"nCpG"]
+}
+head(resGenes)
+#GSEA without weitghed for non expr genes :
+library(clusterProfiler)
+KeggGS <- read.gmt("../../ref/c2.cp.kegg.v7.1.symbols.gmt") 
+geneList<-makeGeneList(rownames(resGenes),resGenes,score = "GeneScore",returnRank = T)
+head(geneList)
+
+kk<-GSEA(geneList,TERM2GENE=KeggGS,nPerm = 1000,pvalueCutoff = 0.1)
+head(kk,20) #done
+emapplot(kk)
+
+
+
+#we can add RNAseq expr to improve the score: 
 CTRL_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInCTRL.csv",row.names = 1)
 LGA_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInLGA.csv",row.names = 1)
 listExprMat<-list(CTRL=CTRL_expr_by_pop,LGA=LGA_expr_by_pop)

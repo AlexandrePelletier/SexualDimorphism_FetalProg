@@ -260,7 +260,7 @@ head(resFL)
 pvalsPermutsInSex<-readRDS("analyses/withoutIUGR/estim_pval_cutoff_with_permut/2020-04-20_1000_permuts_within_sex_q5_byLocis.rds")
 names(pvalsPermutsInSex)
 pvalsPermuts<-pvalsPermutsInSex$FC.FL
-resFL<-checkSignifPval(resFL,pvalsPermuts,cutoffSigCol = "q1")
+resFL<-checkSignifPval(resFL,pvalsPermuts,cutoffSigCol = "q1") #ok
 res[!res$PassPermut,]
 locisPassPas<-rownames(res)[!res$PassPermut]
 pvalsPermuts[locisPassPas,]
@@ -269,15 +269,17 @@ resML<-read.csv2("analyses/withoutIUGR/2020-04-13_res_locis_in_MC.ML_top_965_pva
 dim(resML)
 
 pvalsPermuts<-pvalsPermutsInSex$MC.ML
-resML<-checkSignifPval(resML,pvalsPermuts,cutoffSigCol = "q1")
+resML<-checkSignifPval(resML,pvalsPermuts,cutoffSigCol = "q1") #ok
 
 
 
 pvalsPermutsBtwSex<-readRDS("analyses/withoutIUGR/estim_pval_cutoff_with_permut/2020-04-20_1000_permuts_between_sex_q5_byLocis.rds")
 pvalsPermuts<-pvalsPermutsBtwSex$ML.FL
 resSL<-read.csv2("analyses/withoutIUGR/2020-04-13_res_locis_in_ML.FL_top_1201_pval_0.001_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",row.names = 1)
-resSL<-checkSignifPval(resSL,pvalsPermuts,cutoffSigCol = "q1")
+resSL<-checkSignifPval(resSL,pvalsPermuts,cutoffSigCol = "q1") #ok
 
 pvalsPermuts<-pvalsPermutsBtwSex$MC.FC
 resSC<-read.csv2("analyses/withoutIUGR/2020-04-13_res_locis_in_MC.FC_top_665_pval_0.001_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",row.names = 1)
-resSC<-checkSignifPval(resSC,pvalsPermuts,cutoffSigCol = "q1")
+resSC<-checkSignifPval(resSC,pvalsPermuts,cutoffSigCol = "q1") #ok
+
+

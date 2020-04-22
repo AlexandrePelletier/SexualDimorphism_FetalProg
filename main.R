@@ -1173,7 +1173,7 @@ head(geneList)
 length(geneList) #3581
 
 #or with th function :
-geneList<-makeGeneList(na.omit(unique(res$gene)),res,tradInENTREZID = T)
+geneList<-makeGeneList(na.omit(unique(res$gene)),res,tradInENTREZID = T,withResLocis = T,returnRank = F)
 head(geneList)
 
 kk2 <- gseKEGG(geneList     = geneList,
@@ -1189,7 +1189,7 @@ CanonPathGS <- read.gmt("../../ref/c2.cp.kegg.v7.1.symbols.gmt")
 head(CanonPathGS) #it s in gene SYMBOL so :
 
 genes<-na.omit(unique(res$gene))
-geneList<-makeGeneList(genes,res)
+geneList<-makeGeneList(genes,res,withResLocis = T,returnRank = F)
 head(geneList)
 
 kk<- GSEA(geneList, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
@@ -1226,16 +1226,16 @@ Met<-sapply(res$FC,function(x){
 res$basicScore<-abs(res$FC)*(Met*influes)
 max(res$basicScore)
 
-geneList2.mean<-makeGeneList(na.omit(unique(res$gene)),res,score="basicScore",aggregFUN = mean)
-geneList2.sum<-makeGeneList(na.omit(unique(res$gene)),res,score="basicScore",aggregFUN = sum)
+geneList2.mean<-makeGeneList(na.omit(unique(res$gene)),res,score="basicScore",withResLocis = T,aggregFUN = mean,returnRank = F)
+geneList2.sum<-makeGeneList(na.omit(unique(res$gene)),res,score="basicScore",withResLocis = T,aggregFUN = sum,returnRank = F)
 head(geneList2.mean,15)
 head(geneList2.sum,15)
 #    NR2F2      SOX1 LINC00461      PAX7     HPSE2   ONECUT1 
 #238.3086  199.8215  161.7815  152.6651  150.7314  147.8474 
 
 #compare to geneList with MeanFC pos:
-geneList1.mean<-makeGeneList(na.omit(unique(res$gene)),res,score="FC",aggregFUN = mean)
-geneList1.sum<-makeGeneList(na.omit(unique(res$gene)),res,score="FC",aggregFUN = sum)
+geneList1.mean<-makeGeneList(na.omit(unique(res$gene)),res,score="FC",,withResLocis = T,aggregFUN = mean,returnRank = F)
+geneList1.sum<-makeGeneList(na.omit(unique(res$gene)),res,score="FC",withResLocis = T,aggregFUN = sum,returnRank = F)
 head(geneList1.mean,15)
 head(geneList1.sum,15)
 head(geneList)
