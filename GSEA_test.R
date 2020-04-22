@@ -357,7 +357,7 @@ head(resGenes)
 #GSEA without weitghed for non expr genes :
 library(clusterProfiler)
 KeggGS <- read.gmt("../../ref/c2.cp.kegg.v7.1.symbols.gmt") 
-geneList<-makeGeneList(rownames(resGenes),resGenes,score = "GeneScore",returnRank = T)
+geneList<-makeGeneList(resGenes,score = "GeneScore",returnRank = T)
 head(geneList)
 
 kk<-GSEA(geneList,TERM2GENE=KeggGS,nPerm = 1000,pvalueCutoff = 0.1)
@@ -370,9 +370,8 @@ for(gene in rownames(resGenes)){
 }
 head(resGenes)
 #GSEA without weitghed for non expr genes :
-library(clusterProfiler)
-KeggGS <- read.gmt("../../ref/c2.cp.kegg.v7.1.symbols.gmt") 
-geneList<-makeGeneList(rownames(resGenes),resGenes,score = "GeneScore",returnRank = T)
+
+geneList<-makeGeneList(resGenes,score = "GeneScore2",returnRank = T)
 head(geneList)
 
 kk<-GSEA(geneList,TERM2GENE=KeggGS,nPerm = 1000,pvalueCutoff = 0.1)

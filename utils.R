@@ -241,7 +241,13 @@ annotLocis<-function(resLocis,resGenes,annots=NULL,genes=NULL,rmLocisSansGenes=T
 
 
 # after modeling (GSEA..)
-makeGeneList<-function(genes,res,tradInENTREZID=F,score="FC",returnRank=T,withResLocis=F,aggregLocisFUN=mean){
+makeGeneList<-function(res,tradInENTREZID=F,score="FC",returnRank=T,withResLocis=F,aggregLocisFUN=mean){
+  if(withResLocis){
+    genes<-na.omit(unique(res$gene))
+  }else{
+    genes<-rownames(res)
+  }
+  
   if(tradInENTREZID){
     library(clusterProfiler)
     gene.df <- bitr(genes, fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
