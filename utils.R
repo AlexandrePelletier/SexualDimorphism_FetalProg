@@ -27,6 +27,10 @@ trunkName<-function(names,maxLeng=4,n.mot=NULL){
   return(vecMots)
 }
 
+paste1<-function(vec){
+  return(paste(vec,collapse = "/"))
+}
+
 ##function explor data before modeling
 pctPC<-function(pca,rngPCs="all"){
   if(is.character(rngPCs)){
@@ -192,36 +196,51 @@ mergeCols<-function(df,mergeColsName,colsToMerge=NULL,top=4,filter=0,abs=TRUE,ro
 }
 
 #locis > genes
-aggregLocis<-function(gene,resLocis,colname,FUN=min,colGene="gene"){
-  
+aggregLocis<-function(gene,resLocis,colname,FUN=min,returnLocis=FALSE,colGene="gene"){
+  if(returnLocis){
+    return(rownames(resLocis)[which((resLocis[,colGene]==gene)&(resLocis[,colname]==FUN(resLocis[which(resLocis[,colGene]==gene),colname])))])
+  }
   return(FUN(resLocis[which(resLocis[,colGene]==gene),colname]))
   
 }
 
 
-resLocisToGenes<-function(resLocis, withNCpGTot=FALSE,aggregPval.FUN=NULL,aggregFC.FUN=NULL,colGene="gene",colPval="pval",colFC="FC"){
+resLocisToGenes<-function(resLocis,withColLocis=TRUE, withNCpGTot=FALSE,aggregPval.FUN=NULL,aggregFC.FUN=NULL,colID="id",colGene="gene",colPval="pval",colFC="FC"){
   genes<-na.omit(unique(resLocis[,colGene]))
+  df<-data.frame(row.names =genes,
+                 nCpG=table(resLocis$gene)[genes])
+  colnames(df)<-c("gene","nCpG")
+  if(withColLocis==TRUE|withColLocis=="all"){
+    df$locis<-sapply(genes,aggregLocis,resLocis,colID,paste1)
+  }
   
   if(withNCpGTot){
     annot<-read.csv2("../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = 1)
-    df<-data.frame(row.names =genes,nCpG=table(resLocis$gene)[genes],nCpGTot=table(annot$gene)[genes])
-    colnames(df)<-c("gene","nCpG","Asuppr","nCpGtot")
+    df<-data.frame(row.names =genes,df,nCpGTot=table(annot$gene)[genes])
+    colnames(df)[ncol(df)-1:ncol(df)]<-c("Asuppr","nCpGtot")
     df<-df[,names(df)!="Asuppr"]
   }else{
-    df<-data.frame(row.names =genes,
-                   nCpG=table(resLocis$gene)[genes])
-    colnames(df)<-c("gene","nCpG")
+    
   }
+  
   if(!is.null(aggregPval.FUN)){
-    print(paste("aggregqtion des", colPval))
+    print(paste("aggregation des", colPval))
     df[,colPval]<-sapply(genes,aggregLocis,resLocis,colPval,aggregPval.FUN)
+    if(withColLocis=="all"){
+      df[,paste0(colPval,".id")]<-sapply(genes,aggregLocis,resLocis,colPval,aggregPval.FUN,returnLocis=T)
+    }
+    
   }
   
   
   if(!is.null(aggregFC.FUN)){
     print(paste("aggregqtion des", colFC))
     df[,colFC]<-sapply(genes,aggregLocis,resLocis,colFC,aggregFC.FUN)
+    if(withColLocis=="all"){
+      df[,paste0(colPval,".id")]<-sapply(genes,aggregLocis,resLocis,colFC,aggregFC.FUN,returnLocis=T)
+    }
   }
+  
   
   return(df)
 }
