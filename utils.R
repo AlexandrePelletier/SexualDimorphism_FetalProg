@@ -211,6 +211,9 @@ resLocisToGenes<-function(resLocis,withColLocis=TRUE, withNCpGTot=FALSE,aggregPv
                  nCpG=table(resLocis$gene)[genes])
   colnames(df)<-c("gene","nCpG")
   if(withColLocis==TRUE|withColLocis=="all"){
+    if(!(colID%in%colnames(resLocis))){
+      resLocis[,colID]<-rownames(resLocis)
+    }
     df$locis<-sapply(genes,aggregLocis,resLocis,colID,paste1)
   }
   
