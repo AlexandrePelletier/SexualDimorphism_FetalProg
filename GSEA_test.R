@@ -46,6 +46,11 @@ fit2<-readRDS("analyses/main/fit2_model13.rds")
 colnames(fit2$coefficients)
 res<- topTable(fit2,coef="FC.FL",n =Inf)
 locis<-rownames(res)
+
+annot<-read.csv2("../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = 1)
+head(annot)
+
+#annot res :
 res<-data.frame(row.names = locis,
                 FC=res$logFC,
                 pval=res$P.Value,
