@@ -217,7 +217,62 @@ for(chr in chrs){
 }
 
 head(annot[which(annot$feature_type_name!=""),])
+annot[which(annot$feature_type_name==""),]<-NA
+head(annot)
+
+#pendant qu'on y est, on ajoute annot bulk CTRL et LGA
+CTRL_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInCTRL.csv",row.names = 1)
+head(CTRL_expr_by_pop,20)
+LGA_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInLGA.csv",row.names = 1)
+for(gene in na.omit(unique(annot$gene))){
+  if(gene%in%rownames(CTRL_expr_by_pop)){
+    annot[which(annot$gene==gene),"CTRL_sc"]<-CTRL_expr_by_pop[gene,"bulk"]
+  }
+  if(gene%in%rownames(LGA_expr_by_pop)){
+    annot[which(annot$gene==gene),"LGA_sc"]<-LGA_expr_by_pop[gene,"bulk"]
+  }
+  
+}
+head(annot[which(!is.na(annot$CTRL_sc)),])
 write.csv2(annot,file = "../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = T)
+
+
+
+#number of ensFeatures by type
+#0) distrib type in 780k locis :
+table(annot[rownames(data_F),"type"])
+#distrib ensFeat by type :
+allFeats<-list()
+allFeatsCounts<-data.frame()
+
+for(type in 0:6){
+  
+  #1) count by type
+  allFeats[[as.character(type)]]<-unlist(lapply(res[which(res$type==type),"feature_type_name"],tr))
+  print("ok")
+  counts<-table(allFeats[[as.character(type)]])
+  print("ok2")
+  allFeatsCounts[names(counts),as.character(type)]<-counts
+  allFeatsCounts["None",as.character(type)]<-sum(is.na(res[which(res$type==type),"feature_type_name"]))
+  
+}
+allFeatsCounts
+
+allFeatsCountsDf<-data.frame()
+i<-1
+for(type in colnames(allFeatsCounts)){
+  for(ensFeat in rownames(allFeatsCounts)){
+    allFeatsCountsDf[i,c("type","ensembFeat")]<-c(type,ensFeat)
+    allFeatsCountsDf[i,"count"]<-allFeatsCounts[ensFeat,type]
+    i<-i+1
+  }
+}
+head(allFeatsCountsDf,10)
+#barplot
+library(ggplot2)
+ggplot(allFeatsCountsDf)+
+  geom_bar(aes(x = type, y = count,fill=ensembFeat), stat = 'identity')
+
 
 #add in res
 res<-data.frame(row.names = rownames(res),res,annot[rownames(res),12:18])
@@ -250,49 +305,6 @@ sum(res$type==2)
 featuresCounts[featuresCounts$type==3,]#3k enh et 500 TF /70k
 sum(res$type==3)
 
-#number of ensFeatures by type
-allFeats<-list()
-allFeatsCounts<-data.frame()
-
-for(type in 0:6){
-  #1) count by type
-  allFeats[[as.character(type)]]<-unlist(lapply(res[which(res$type==type),"feature_type_name"],tr))
-  print("ok")
-  counts<-table(allFeats[[as.character(type)]])
-  print("ok2")
-  allFeatsCounts[names(counts),as.character(type)]<-counts
-  
-}
-head(allFeatsCounts)
-allFeatsCounts$tot<-rowSums(allFeatsCounts)
-
-allFeatsCounts['tot',names(allFeatsCounts)]<-colSums(allFeatsCounts)
-
-head(allFeatsCounts,10)
-
-allFeatsCountsNorm<-data.frame(row.names = rownames(allFeatsCounts))
-for(type in 0:6){
-  for(ensFeat in rownames(allFeatsCountsNorm)){
-    allFeatsCountsNorm[ensFeat,as.character(type)]<-allFeatsCounts[ensFeat,as.character(type)]/allFeatsCounts['tot',as.character(type)]
-  }
-  
-}
-allFeatsCountsNorm
-
-allFeatsCountsDf<-data.frame()
-i<-1
-for(type in colnames(allFeatsCounts)[1:(ncol(allFeatsCounts)-1)]){
-  for(ensFeat in rownames(allFeatsCounts)[1:(nrow(allFeatsCounts)-1)]){
-    allFeatsCountsDf[i,c("type","ensembFeat")]<-c(type,ensFeat)
-    allFeatsCountsDf[i,"count"]<-allFeatsCounts[ensFeat,type]
-    i<-i+1
-  }
-}
-head(allFeatsCountsDf,10)
-#barplot
-library(ggplot2)
-ggplot(allFeatsCountsDf)+
-  geom_bar(aes(x = type, y = count,fill=ensembFeat), stat = 'identity')
 
 
 #now, we can create our CpGscore : 
