@@ -412,8 +412,32 @@ emapplot(kk3)
 
 saveRDS(list(resLocis=res,resGenes=resGenes),paste0(output,"resCLF.rds"))
 
+#* confWeight [0-1] : TSS, ewas links, cross correl
+#rank normalisé de sum de : 
+#tss +1 : 
+  #pour promcpg, <1000 => max point, descend progress au dela (0.9 <2000, 0.8<3000...)
+  #pour les autres : <3000 max point, et descend progressivement apres
+
+#ewas link : si locis +/-xpb rattaché à expression genes => +1
+
+#cross correl : si cpg bouge pareillement a d'autres cpg a travers ech sans etre corrélé a group_complecity => poids 0>1
+
+
 #need better norm than just divide by number of CpG tot, that too influencing
-#ebayes ?
+#moyenne pondéré /2: pour eviter inflaté genes avec beaucoup de locis, on veut ponderé le score des CpG :
+#un gene est considéré comme tres impacté si il a 3 CpG important d'activer : (par exmple 1 sur enh, prom, genebody)
+#donc, on notre moyenne pondéré favorisera surout les 3 topCpG score par gene : 
+  #ScoreGene=CpG1+CpG2+CpG3 + 0.5*CpG4 + 0.2*CpG5 ... / (sommeCoeffTot)
+
+#mais nb de CpG important dépend de cb CpG ont été rattaché au gene à la base : 
+#donc plutot que 3 disons qu'il y a x CpG important par gene, pour trouver x, nous devons prendre en compte : 
+#1) nb de CpG par gene : si peu de cpg rattaché, il ya moins de chance d'y avoir des cpg importants quand qd il yen a bcp
+#2) taile du genes : plus il est grand plus on s'attend a qu'il est plus de cpg pour le reguler
+
+#1) x=3 pour gene avec nCpG dans lespace interquartile , 2/4 si <q25/>q75, 1/5 si <q5/>q95
+#2) +1/-1 si taille gene <q25/>q75
+
+#ebayes/methylGSA ?
 
 
 #we can add RNAseq expr to improve the score: 

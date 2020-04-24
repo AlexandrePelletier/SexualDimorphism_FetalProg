@@ -120,7 +120,7 @@ checkSignifPval<-function(res,pvalsPermut,cutoffStopIter=0.05,cutoffSigCol="q5",
     }
       
   }
-  print(paste("le set de locis Sig est fiable jusqu'au locis ",i,"(pval=",res[i,colPval],")"))
+  print(paste("le set de locis Sig est fiable jusqu'au locis num",i,"(pval=",res[i,colPval],")"))
   if(flag){
     return(res)
   }else{

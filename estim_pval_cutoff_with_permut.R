@@ -271,8 +271,6 @@ dim(resML)
 pvalsPermuts<-pvalsPermutsInSex$MC.ML
 resML<-checkSignifPval(resML,pvalsPermuts,cutoffSigCol = "q1") #ok
 
-
-
 pvalsPermutsBtwSex<-readRDS("analyses/withoutIUGR/estim_pval_cutoff_with_permut/2020-04-20_1000_permuts_between_sex_q5_byLocis.rds")
 pvalsPermuts<-pvalsPermutsBtwSex$ML.FL
 resSL<-read.csv2("analyses/withoutIUGR/2020-04-13_res_locis_in_ML.FL_top_1201_pval_0.001_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",row.names = 1)
@@ -282,4 +280,29 @@ pvalsPermuts<-pvalsPermutsBtwSex$MC.FC
 resSC<-read.csv2("analyses/withoutIUGR/2020-04-13_res_locis_in_MC.FC_top_665_pval_0.001_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",row.names = 1)
 resSC<-checkSignifPval(resSC,pvalsPermuts,cutoffSigCol = "q1") #ok
 
+#adjuste cutoof par compa : 
+pvalsPermutsList<-readRDS("analyses/withoutIUGR/estim_pval_cutoff_with_permut/2020-04-20_1000_permuts_within_sex_q5_byLocis.rds")
+pvalsPermutsList2<-readRDS("analyses/withoutIUGR/estim_pval_cutoff_with_permut/2020-04-20_1000_permuts_between_sex_q5_byLocis.rds")
+
+pvalsPermutsList$MC.FC<-pvalsPermutsList2$MC.FC
+pvalsPermutsList$ML.FL<-pvalsPermutsList2$ML.FL
+rm(pvalsPermutsList2)
+names(pvalsPermutsList)
+for(compa in names(pvalsPermutsList)){
+  print(compa)
+  res<-topTable(fit2,coef = compa,n=Inf)
+  checkSignifPval(res,pvalsPermutsList[[compa]],
+                  cutoffSigCol = "q5",
+                  cutoffStopIter = 0.001,
+                  flag = F,
+                  colPval = "P.Value")
+}
+# [1] "FC.FL"
+# [1] "le set de locis Sig est fiable jusqu'au locis  25818 (pval= 0.00981763928626813 )"
+# [1] "MC.ML"
+# [1] "le set de locis Sig est fiable jusqu'au locis  7941 (pval= 0.00552187854136438 )"
+# [1] "MC.FC"
+# [1] "le set de locis Sig est fiable jusqu'au locis  5472 (pval= 0.0050229937438393 )"
+# [1] "ML.FL"
+# [1] "le set de locis Sig est fiable jusqu'au locis  10753 (pval= 0.00838621589744964 )"
 
