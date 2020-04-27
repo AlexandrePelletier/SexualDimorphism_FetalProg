@@ -1,4 +1,16 @@
 #get ENSEMBL info : regulatory domain, et motifTF
+#config et library
+options(stringsAsFactors=F)
+set.seed(12345)
+library(limma)
+source("scripts/scRNA-seq integration.R")
+source("scripts/utils.R")
+#output dir 
+script_name <- "GSEA_test"
+outputDir <- file.path("analyses",script_name)
+dir.create(path = outputDir, recursive = TRUE, showWarnings = FALSE, mode = "0777")
+date<-Sys.Date()
+output <- file.path(outputDir,date)
 
 
 #for the 780k locis  after filtration, 
