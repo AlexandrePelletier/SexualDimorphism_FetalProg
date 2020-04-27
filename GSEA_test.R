@@ -412,13 +412,12 @@ emapplot(kk3)
 
 saveRDS(list(resLocis=res,resGenes=resGenes),paste0(output,"resCLF.rds"))
 
-#* confWeight [0-1] : TSS, ewas links, cross correl
+#* confWeight [0-1] : TSS, eQTL links, cross correl
 #rank normalisé de sum de : 
-#tss +1 : 
-  #pour promcpg, <1000 => max point, descend progress au dela (0.9 <2000, 0.8<3000...)
-  #pour les autres : <3000 max point, et descend progressivement apres
+#tss +1 si <1000pb : 
 
-#ewas link : si locis +/-xpb rattaché à expression genes => +1
+#eQTL link : si locis +/-xpb rattaché à expression genes => +1
+  #with gTex, 
 
 #cross correl : si cpg bouge pareillement a d'autres cpg a travers ech sans etre corrélé a group_complecity => poids 0>1
 
