@@ -197,3 +197,71 @@ for(gene in na.omit(unique(annot$gene))){
 head(annot[which(!is.na(annot$CTRL_sc)),])
 write.csv2(annot,file = "../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = T)
 
+#number of ensFeatures by type
+#0) distrib type in 780k locis :
+table(annot[rownames(data_F),"type"])
+#distrib ensFeat by type :
+allFeats<-list()
+allFeatsCounts<-data.frame()
+
+for(type in 0:6){
+  
+  #1) count by type
+  allFeats[[as.character(type)]]<-unlist(lapply(res[which(res$type==type),"feature_type_name"],tr))
+  print("ok")
+  counts<-table(allFeats[[as.character(type)]])
+  print("ok2")
+  allFeatsCounts[names(counts),as.character(type)]<-counts
+  allFeatsCounts["None",as.character(type)]<-sum(is.na(res[which(res$type==type),"feature_type_name"]))
+  
+}
+allFeatsCounts
+
+allFeatsCountsDf<-data.frame()
+i<-1
+for(type in colnames(allFeatsCounts)){
+  for(ensFeat in rownames(allFeatsCounts)){
+    allFeatsCountsDf[i,c("type","ensembFeat")]<-c(type,ensFeat)
+    allFeatsCountsDf[i,"count"]<-allFeatsCounts[ensFeat,type]
+    i<-i+1
+  }
+}
+head(allFeatsCountsDf,10)
+#barplot
+library(ggplot2)
+ggplot(allFeatsCountsDf)+
+  geom_bar(aes(x = type, y = count,fill=ensembFeat), stat = 'identity')
+
+
+#add in res
+res<-data.frame(row.names = rownames(res),res,annot[rownames(res),12:18])
+head(res)
+#check if true
+#type 4 and 6 enrichit en prom/enh features ?
+m<-which(res$type%in%0:6 &res$feature_type_name!="")
+length(m)#396k/780k
+table(res$type[m],res$feature_type_name[m])
+
+plot(factor(res$type[m]),factor(res$feature_type_name[m]))
+
+#make df count by ensemblfeatures and type
+library(dplyr)
+featuresCounts<-res%>%count(type,feature_type_name,sort = T)
+head(featuresCounts,20)
+featuresCounts[featuresCounts$type==4,]#2k enh et 3k6 TF /150k
+sum(res$type==4)
+featuresCounts[featuresCounts$type==6,]#1k enh et no TF /200k
+sum(res$type==6)
+featuresCounts[featuresCounts$type==5,]#2k3 enh et noTF  /51k
+sum(res$type==5)
+
+featuresCounts[featuresCounts$type==0,]#8k enh et 1k TF /164k
+sum(res$type==0)
+featuresCounts[featuresCounts$type==1,]#3k enh et 500 TF /73k
+sum(res$type==1)
+featuresCounts[featuresCounts$type==2,]#3k5 enh et 500 TF /66k
+sum(res$type==2)
+featuresCounts[featuresCounts$type==3,]#3k enh et 500 TF /70k
+sum(res$type==3)
+
+
