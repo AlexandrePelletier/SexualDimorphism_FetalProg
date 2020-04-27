@@ -132,8 +132,27 @@ head(res)
 tail(res)
 
 #eQTL link : si locis +/-xpb rattaché à expression genes => +1
-#with gTex, 
+#with gTex : 
+wb_eQTL<-read.csv2("../../ref/Whole_Blood.eQTL.csv")
+head(wb_eQTL)
+genes_eQTL<-unique(wb_eQTL$gene)
 
+# +1 si dans regionReg, descend progressivement sinon  :
+res$eQTLScore<-sapply(rownames(res),function(locus){
+  gene<-res[locus,"gene"]
+  if(gene%in%genes_eQTL){
+    pos<-res[locus,"posAvant"]
+    regions<-wb_eQTL$region[which(wb_eQTL$gene==gene)]
+    #!reflechir comment checker efficacement si dans les régions
+  }
+  
+  if(x<1000){
+    score<-1
+  }else {
+    score<-1/(log10(x-1000))
+  }
+  return(score)
+})
 #cross correl : si cpg bouge pareillement a d'autres cpg a travers ech sans etre corrélé a group_complecity => poids 0>1
 
 
