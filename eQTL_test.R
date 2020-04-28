@@ -4,8 +4,7 @@
 #config et library
 options(stringsAsFactors=F)
 set.seed(12345)
-library(limma)
-source("scripts/scRNA-seq integration.R")
+#library(limma)
 source("scripts/utils.R")
 
 #output dir 
@@ -83,7 +82,38 @@ summary(wb_eQTL$distDuSuivant)
 # donc 90pb autour du locis signif et une region régulant le gène
 wb_eQTL$region<-paste(wb_eQTL$tss_distance-45,wb_eQTL$tss_distance+45,sep = ":")
 head(wb_eQTL)
-
-#! faire df region reg : region stricte :si chevauchement. + Large si region sep de 90 pb
-
 write.csv2(wb_eQTL,"../../ref/Whole_Blood.eQTL.csv")
+
+
+
+##integration features 4/6 et eQTL 
+library(data.table)
+library(stringr)
+wb_eQTL<-fread("../../ref/Whole_Blood.eQTL.csv",select = 2:17)
+wb_eQTL
+#1) need chr pos absolu
+#get translator hg38>hg19
+translator<-fread("../../ref/eQTL/GTEx_Analysis_v8_eQTL/GTEx_Analysis_2017-06-05_v8_WholeGenomeSeq_838Indiv_Analysis_Freeze.lookup_table.txt",
+                  select = c(1,8))
+translator
+wb_eQTL<-merge.data.table(wb_eQTL,translator,by="variant_id")
+
+wb_eQTL[,chr:=str_extract(variant_id_b37,"^[0-9XY]{1,2}") ]
+wb_eQTL
+fwrite(wb_eQTL,"../../ref/Whole_Blood.eQTL.csv",sep = ";")
+
+wb_eQTL[,pos:=as.numeric(str_sub(str_extract(variant_id_b37,"_[0-9]+"),2)) ]
+wb_eQTL
+#features4/6 region
+features<-fread("../Reference/feature_all_042820.bed",skip = 1,select = c(1:4),col.names = c("chr","start","end","type"))
+features[,longueur:=end-start]
+features[,type:=as.factor(type)]
+#length region par type
+library(ggplot2)
+p<-ggplot(data = features,aes(x=type))
+p+geom_boxplot(aes(y=longueur))+scale_y_continuous(trans = 'log10')  
+p+geom_bar()
+
+#seul les regions "0" sont de trop large région, je vais annoter d'abord toute les régions 1:6
+#on veut ajouter colonne "gene lié via eQTL" en checkant si ça match avec un SNP-gene
+

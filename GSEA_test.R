@@ -124,7 +124,7 @@ res$TSSScore<-sapply(abs(res$posAvant),function(x){
   if(x<1000){
     score<-1
   }else {
-    score<-1/(log10(x-1000))
+    score<-1/(1+log10(x-1000))
   }
   return(score)
 })
@@ -137,22 +137,54 @@ wb_eQTL<-read.csv2("../../ref/Whole_Blood.eQTL.csv")
 head(wb_eQTL)
 genes_eQTL<-unique(wb_eQTL$gene)
 
+##Remarque : refine the links CpG Gene with eQTL : 
+
+
 # +1 si dans regionReg, descend progressivement sinon  :
+#dabord checker si locis bien lié au gene : 
+#trad en pos absolu : 
+head(wb_eQTL) # dans le variant_id, il y a la position sous la forme "chr1_64764"
+#c'est la pos de quel référence ? 
+
+
 res$eQTLScore<-sapply(rownames(res),function(locus){
   gene<-res[locus,"gene"]
   if(gene%in%genes_eQTL){
     pos<-res[locus,"posAvant"]
-    regions<-wb_eQTL$region[which(wb_eQTL$gene==gene)]
+    regions<-strsplit(wb_eQTL$region[which(wb_eQTL$gene==gene)],":")
     #!reflechir comment checker efficacement si dans les régions
+    if(any(sapply(regions,function(region){
+      return(pos>=as.numeric(region[1])&pos<=as.numeric(region[2]))
+      
+    }))){
+      score<-1
+    }else{
+      distMin<-min(sapply(regions,function(region){
+        start<-as.numeric(region[1])
+        end<-as.numeric(region[2])
+        if(pos<start){
+          
+          dist<-start-pos
+        }else{
+          dist<-pos-end
+        }
+        return(dist)
+        
+      }))
+      score<-1/(1+log10(distMin))
+    }
+      
+  }else{
+    score<-0
   }
   
-  if(x<1000){
-    score<-1
-  }else {
-    score<-1/(log10(x-1000))
-  }
+  
   return(score)
 })
+head(res,20)
+annot[rownames(res),"eQTLScore"]<-res$eQTLScore
+write.csv2(annot,"../../ref/annotation_CpG_HELP_ALL_070420.csv")
+
 #cross correl : si cpg bouge pareillement a d'autres cpg a travers ech sans etre corrélé a group_complecity => poids 0>1
 
 
