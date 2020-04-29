@@ -100,20 +100,9 @@ wb_eQTL<-merge.data.table(wb_eQTL,translator,by="variant_id")
 
 wb_eQTL[,chr:=str_extract(variant_id_b37,"^[0-9XY]{1,2}") ]
 wb_eQTL
-fwrite(wb_eQTL,"../../ref/Whole_Blood.eQTL.csv",sep = ";")
+
 
 wb_eQTL[,pos:=as.numeric(str_sub(str_extract(variant_id_b37,"_[0-9]+"),2)) ]
 wb_eQTL
-#features4/6 region
-features<-fread("../Reference/feature_all_042820.bed",skip = 1,select = c(1:4),col.names = c("chr","start","end","type"))
-features[,longueur:=end-start]
-features[,type:=as.factor(type)]
-#length region par type
-library(ggplot2)
-p<-ggplot(data = features,aes(x=type))
-p+geom_boxplot(aes(y=longueur))+scale_y_continuous(trans = 'log10')  
-p+geom_bar()
 
-#seul les regions "0" sont de trop large région, je vais annoter d'abord toute les régions 1:6
-#on veut ajouter colonne "gene lié via eQTL" en checkant si ça match avec un SNP-gene
-
+fwrite(wb_eQTL,"../../ref/Whole_Blood.eQTL.csv",sep = ";")
