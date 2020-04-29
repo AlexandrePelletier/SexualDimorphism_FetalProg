@@ -5,7 +5,7 @@
 options(stringsAsFactors=F)
 set.seed(12345)
 #library(limma)
-source("scripts/utils.R")
+#source("scripts/utils.R")
 
 #output dir 
 script_name <- "eQTL_test"
@@ -110,10 +110,14 @@ wb_eQTL
 fwrite(wb_eQTL,"../../ref/Whole_Blood.eQTL.csv",sep = ";")
 
 ##In which featureRegion are this SNP ?
+
 features<-fread("../Reference/feature_all_042820.bed",skip = 1,select = c(1:4),col.names = c("chr","start","end","type"))
 
 features[,longueur:=end-start]
 features[,type:=as.factor(type)]
+library(stringr)
+features[,chrReg:=paste(str_extract(chr,"[0-9XY]{1,2}$"),start,end,sep = ":")]
+fwrite(features,"../../ref/CD34_all_chromatin_feature.csv",sep = ";")
 #length region par type
 library(ggplot2)
 p<-ggplot(data = features,aes(x=type))
@@ -122,6 +126,11 @@ p+geom_bar()
 # les regions "0" majoriatire (~300k reg contre ~150k region pour les autre), correspondant a l'heterochromatine,
 #sont de large région, (75% entre 3k et 5k), les autres sont à 2k de longueur
 
+#loading
+wb_eQTL<-fread("../../ref/Whole_Blood.eQTL.csv")
+wb_eQTL
+features<-fread("../../ref/CD34_all_chromatin_feature.csv")
+features
 
 #pour 1 region type,tout les eQtl dans celle ci sont annoter
 reg<-features[3,]
@@ -148,19 +157,21 @@ for (chrom in "chr21"){
     
     if(nrow(sub_eQTL)>0){
       print(paste(chrom,"part",i,", annotation de",nrow(sub_eQTL),"locis.."))
-      sub_features<-features[chr==chrom&start<=q1&end>q2,]
+      sub_features<-features[chr==chrom&end<=q1&start>q2,]
       for(j in 1:nrow(sub_features)){
         reg<-sub_features[j,]
         sub_eQTL[pos>=reg$start&pos<=reg$end,"type"]<-reg$type
-        
+        sub_eQTL[pos>=reg$start&pos<=reg$end,"chrRegion"]<-reg$chrReg
       }
       q2<-q1
-      fwrite(sub_eQTL,file = paste0(output,"annotEnsembl",chrom,"part",i,".txt"))
+      #fwrite(sub_eQTL,file = paste0(output,"annotFeat",chrom,"part",i,".txt"))
       print("..annotes et enregistrer")
     }
     
   }
 }
+
+sub_eQTL
 
 for (chrom in unique(features$chr)){
   print(chrom)
@@ -174,21 +185,21 @@ for (chrom in unique(features$chr)){
     
     if(nrow(sub_eQTL)>0){
       print(paste(chrom,"part",i,", annotation de",nrow(sub_eQTL),"locis.."))
-      sub_features<-features[chr==chrom&start<=q1&end>q2,]
+      sub_features<-features[chr==chrom&end<=q1&start>q2,]
       for(j in 1:nrow(sub_features)){
         reg<-sub_features[j,]
         sub_eQTL[pos>=reg$start&pos<=reg$end,"type"]<-reg$type
-        
+        sub_eQTL[pos>=reg$start&pos<=reg$end,"chrRegion"]<-reg$chrReg
       }
       q2<-q1
-      fwrite(sub_eQTL,file = paste0(output,"annotEnsembl",chrom,"part",i,".txt"))
+      fwrite(sub_eQTL,file = paste0(output,"annotFeat",chrom,"part",i,".txt"))
       print("..annotes et enregistrer")
     }
     
   }
 }
 #check si bien annoté :
-df<-fread("analyses/eQTL_test/2020-04-29annotEnsemblchr1part37.txt")
+df<-fread("analyses/eQTL_test/2020-04-29annotFeatchr1part37.txt")
 df[is.na(type),] #oui, pas de na
 #test merge with wb_eqtl
 #need put col type in the same type (factor)
@@ -197,6 +208,7 @@ test<-rbind(df,sub_eQTL)
 
 #recup et merge res
 sub_eQTL[,type:=as.character(type)]
+
 wb_eQTL2<-sub_eQTL
 
 for(chr in paste0("chr",c(1:22,"X"))){
@@ -210,17 +222,29 @@ for(chr in paste0("chr",c(1:22,"X"))){
 }
 
 #checker si bien 
-nrow(wb_eQTL2)
+nrow(wb_eQTL2) #2398562
 wb_eQTL2<-wb_eQTL2[order(chr,pos)]
 fwrite(wb_eQTL2,"../../ref/Whole_Blood.eQTL.csv",sep = ";")
-#SNP signif enrichit en 4 et 6 ?
-ggplot(data = wb_eQTL2,aes(x=type))+geom_bar() #nb de count SNP par type
 
-wb_eQTL2_count<-wb_eQTL2[,n.snp:=.N,by=type][!duplicated(n.snp),c('type','n.snp')]
-wb_eQTL2_count<-wb_eQTL2_count[!is.na(type)][order(type)]
-wb_eQTL2_count$n.region<-table(features$type)
+#nb de count SNP par type
+library(ggplot2)
+ggplot(data = wb_eQTL2,aes(x=type))+geom_bar() 
+
+#remove na et save : 
+wb_eQTL2<-wb_eQTL2[!is.na(type)]
+wb_eQTL3<-wb_eQTL2[!is.na(type)][,1:(ncol(wb_eQTL2)-1)]
+
+fwrite(wb_eQTL3,"../../ref/Whole_Blood.eQTL.csv",sep = ";")
+wb_eQTL<-wb_eQTL3
+rm(wb_eQTL2,wb_eQTL3)
+#SNP signif enrichit en 4 et 6 ?
+wb_eQTL_count<-wb_eQTL[,n.snp:=.N,by=type][!duplicated(n.snp),c('type','n.snp')]
+wb_eQTL_count<-wb_eQTL_count[!is.na(type)][order(type)]
+wb_eQTL_count$n.region<-table(features$type)
 features[,len.tot:=sum(longueur),by=type]
-wb_eQTL2_count$length.tot<-features[!duplicated(len.tot)][order(type)][,"len.tot"]
-wb_eQTL2_count[,cpm.snp:=n.snp/length.tot*1000000]
-ggplot(data = wb_eQTL2_count,aes(x=type,y=cpm.snp))+geom_col()+ggtitle("eQTL significatif / features (en cpm)") #count par million SNP par type
-fwrite(wb_eQTL2_count,"summary_eQTL_Features.csv",sep = ";")
+wb_eQTL_count$length.tot<-features[!duplicated(len.tot)][order(type)][,"len.tot"]
+wb_eQTL_count[,cpm.snp:=n.snp/length.tot*1000000]
+ggplot(data = wb_eQTL_count,aes(x=type,y=cpm.snp))+geom_col()+ggtitle("sig. blood eQTL / CD34+ Chromatin feature (in cpm)") #count par million SNP par type
+fwrite(wb_eQTL_count,"summary_eQTL_Features.csv",sep = ";")
+
+#next : 
