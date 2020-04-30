@@ -247,4 +247,73 @@ wb_eQTL_count[,cpm.snp:=n.snp/length.tot*1000000]
 ggplot(data = wb_eQTL_count,aes(x=type,y=cpm.snp))+geom_col()+ggtitle("sig. blood eQTL / CD34+ Chromatin feature (in cpm)") #count par million SNP par type
 fwrite(wb_eQTL_count,"summary_eQTL_Features.csv",sep = ";")
 
-#next : 
+#next : eQTR : region regulé par df
+eQTR<-features[,.(chr,start,end,type,longueur,chrReg)]
+
+#1) add region lvl : nEQTL dans la region
+wb_eQTL<-fread("../../ref/Whole_Blood.eQTL.csv",sep = ";",dec = ",")
+wb_eQTL<-wb_eQTL[chrRegion!=""]
+wb_eQTL[,nQTL.reg:=.N,chrRegion]
+
+#add genelvl : 
+#1) col gene : n.snp.reg.gene | pval_beta | 
+wb_eQTL[,nQTL.gene:=.N,gene_id] #bonus mais pas forcément utile
+
+wb_eQTL[,nQTL.reg.gene:=.N,by=.(chrRegion,gene_id)]
+wb_eQTL
+
+#2)SNP :    
+#moy(pval_nom-threshold)
+wb_eQTL[,avg.pval.thr:=mean(pval_nominal-pval_nominal_threshold),by=.(chrRegion,gene_id)]
+
+#| mean(distDuTSS)/sd
+wb_eQTL[,avg.distTSS:=mean(tss_distance),by=.(chrRegion,gene_id)]
+wb_eQTL[,sd.distTSS:=sd(tss_distance),by=.(chrRegion,gene_id)]
+#| distr.distDuTSS 
+wb_eQTL[,distr.distTSS:=paste(summary(tss_distance)[-4],collapse="/"),by=.(chrRegion,gene_id)]
+
+#| mean(posInReg)/sd 
+wb_eQTL[,avg.pos:=mean(pos),by=.(chrRegion,gene_id)]
+wb_eQTL[,sd.pos:=sd(pos),by=.(chrRegion,gene_id)]
+#|distr(posInReg)
+wb_eQTL[,distr.pos:=paste(summary(pos)[-4],collapse="/"),by=.(chrRegion,gene_id)]
+#| distr(posInRegAllQTL)
+wb_eQTL[,distr.pos.All:=paste(summary(pos)[-4],collapse="/"),chrRegion]
+wb_eQTL
+#| moy(distsEntreEux)/sd
+dist_all<-function(vec){
+  vec_dist<-sapply(1:(length(vec)-1), function(i){
+    
+    return(abs(vec[i]-vec[i+1:(length(vec)-i)]))
+    
+  })
+  return(unlist(vec_dist))
+}
+dist_all(tail(wb_eQTL)$pos)
+
+wb_eQTL[,avg.distBtwThem:=mean(dist_all(pos)),by=.(chrRegion,gene_id)]
+wb_eQTL[,sd.distBtwThem:=sd(dist_all(pos)),by=.(chrRegion,gene_id)]
+#| moy(distsAllQTL de la reg)/sd
+wb_eQTL[,avg.distBtwAll:=mean(dist_all(pos)),by=.(chrRegion)]
+wb_eQTL[,sd.distBtwAll:=sd(dist_all(pos)),by=.(chrRegion)]
+
+#clear
+eQTR<-unique(wb_eQTL,by = c("chrRegion","gene_id"))
+eQTR<-eQTR[,.(chrRegion,type,nQTL.reg,gene_id,
+              gene,pval_beta,nQTL.reg.gene,
+              avg.pval.thr,avg.distTSS,sd.distTSS,distr.distTSS,
+              avg.distBtwThem,sd.distBtwThem,
+              avg.distBtwAll,sd.distBtwAll,
+              avg.pos,sd.pos,
+              distr.pos,
+              distr.pos.All
+              )]
+eQTR[,chrReg:=chrRegion]
+eQTR<-eQTR[,-c("chrRegion")]
+features<-features[,.(chr,start,end,chrReg,longueur)]
+eQTR<-merge(features,eQTR,by=c("chrReg"))
+eQTR
+#number of gene by region 
+eQTR[,nGenes:=.N,by=.(chrReg)]
+fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
+hist(eQTR$nGenes)
