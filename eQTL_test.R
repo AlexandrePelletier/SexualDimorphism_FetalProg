@@ -5,6 +5,7 @@
 options(stringsAsFactors=F)
 set.seed(12345)
 #library(limma)
+library(data.table)
 #source("scripts/utils.R")
 
 #output dir 
@@ -316,4 +317,53 @@ eQTR
 #number of gene by region 
 eQTR[,nGenes:=.N,by=.(chrReg)]
 fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
-hist(eQTR$nGenes)
+
+eQTR<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
+
+hist(eQTR$nGenes,breaks = 50) #majority of one gene by region,, but 100k region avec 2 genes, 75k avec 3genes...
+
+#split region : si 2 clusters de SNPs distincts, en coupant au milieu de maxPosSNPGene1 et minPosSNPGene2 
+eQTR1<-eQTR[nGenes==1]
+eQTR2<-eQTR[nGenes>1]
+eQTR2
+#3 choses : 1) 1 SNP peut lier 2 genes (ex : R3HCC1L, et LOXL4)
+#2)  1 SNP contenu dans un cluster de SNP liant un gene A peut lier un gene B
+#3) les genes Symbols sont mal annoter
+#nb de genes sans symbol
+nrow(unique(eQTR,by = "gene_id")[gene==""]) #2300
+
+ensemblSansSymbol<-unique(eQTR,by = "gene_id")[gene==""]$gene_id #2300
+head(ensemblSansSymbol)
+length(ensemblSansSymbol) #2300
+library(biomartr)
+
+library(stringr)
+biomartr::getMarts()
+dtset<-biomartr::getDatasets("ENSEMBL_MART_ENSEMBL")[]
+dtset[str_detect(dtset$dataset,"hsapiens"),]
+biomartr::getAttributes(mart = "ENSEMBL_MART_ENSEMBL",dataset = "hsapiens_gene_ensembl")
+result_BM <- biomartr::biomart( genes      = ensemblSansSymbol, # genes that we wanted info
+                                mart       = "ENSEMBL_MART_ENSEMBL", # marts were selected with biomartr::getMarts()
+                                dataset    = "hsapiens_gene_ensembl", # datasets were selected with biomartr::getDatasets()
+                                attributes = "hgnc_symbol", # attributes were selected with biomartr::getAttributes()
+                                filters    = "ensembl_gene_id_version")
+#put in gene colonne
+result_BM<-result_BM[result_BM$hgnc_symbol!="",]
+nrow(result_BM) #☺ajout 712 symbol
+for(i in 1:nrow(result_BM)){
+  ensembl<-result_BM$ensembl_gene_id_version[i]
+  symbol<-result_BM$hgnc_symbol[i]
+  eQTR[gene_id==ensembl,"gene"]<-symbol
+}
+eQTR
+eQTR1<-eQTR[nGenes==1]
+eQTR2<-eQTR[nGenes>1]
+eQTR2
+#clivage region possible pour cluster de SNP A et B (median A < median B, et nA<nB) si :
+#1) maxPos A < minPos B
+#2) nA*-log10(pval) > 1/5e(nB*-log10(pval))
+eQTR2<-eQTR2[order(chr,start,avg.pos)]
+#1) maxPos A < minPos B
+#a) tester avec une region
+
+#b) need a fonction ~= function dist_all()
