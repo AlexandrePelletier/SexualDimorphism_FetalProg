@@ -6,6 +6,7 @@ options(stringsAsFactors=F)
 set.seed(12345)
 #library(limma)
 library(data.table)
+library(stringr)
 #source("scripts/utils.R")
 
 #output dir 
@@ -202,6 +203,7 @@ for (chrom in unique(features$chr)){
 #check si bien annoté :
 df<-fread("analyses/eQTL_test/2020-04-29annotFeatchr1part37.txt")
 df[is.na(type),] #oui, pas de na
+
 #test merge with wb_eqtl
 #need put col type in the same type (factor)
 df[,type:=as.factor(type)] 
@@ -321,7 +323,7 @@ fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.cs
 eQTR<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
 
 hist(eQTR$nGenes,breaks = 50) #majority of one gene by region,, but 100k region avec 2 genes, 75k avec 3genes...
-
+hist(eQTR[type%in%c(4,6)]$nGenes,breaks = 50) 
 #split region : si 2 clusters de SNPs distincts, en coupant au milieu de maxPosSNPGene1 et minPosSNPGene2 
 eQTR1<-eQTR[nGenes==1]
 eQTR2<-eQTR[nGenes>1]
@@ -356,14 +358,96 @@ for(i in 1:nrow(result_BM)){
   eQTR[gene_id==ensembl,"gene"]<-symbol
 }
 eQTR
-eQTR1<-eQTR[nGenes==1]
-eQTR2<-eQTR[nGenes>1]
-eQTR2
-#clivage region possible pour cluster de SNP A et B (median A < median B, et nA<nB) si :
-#1) maxPos A < minPos B
-#2) nA*-log10(pval) > 1/5e(nB*-log10(pval))
-eQTR2<-eQTR2[order(chr,start,avg.pos)]
-#1) maxPos A < minPos B
-#a) tester avec une region
+fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
+eQTR<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv")
+eQTR
+sapply(eQTR, class)
+eQTR<-eQTR[,type:=as.factor(type)] #put type in factor instead of numeric
+eQTR[,start.eQTR:=sapply(distr.pos,function(x){
+  return(as.numeric(strsplit(x,"/")[[1]][1]))
+})]
+eQTR
+eQTR[,end.eQTR:=sapply(distr.pos,function(x){
+  return(as.numeric(strsplit(x,"/")[[1]][5]))
+})]
+eQTR[,length.eQTR:=end.eQTR-start.eQTR]
+eQTR
 
-#b) need a fonction ~= function dist_all()
+
+#exploration des régions
+eQTR1<-eQTR[nGenes==1]
+eQTR2<-eQTR[nQTL.reg.gene>1]
+eQTR2
+plot(density(eQTR2$length.eQTR)),log="x") #pique à 
+abline(v=quantile(eQTR2$length.eQTR,0.25))
+median(eQTR2$length.eQTR) #1024pb => region +/-500pb d'un SNP
+
+eQTR[length.eQTR<1000,start.eQTR2:=start.eQTR-(500-floor(length.eQTR/2))]
+eQTR[length.eQTR<1000,end.eQTR2:=end.eQTR+(500-ceiling(length.eQTR/2))]
+
+eQTR[,length.eQTR2:=end.eQTR2-start.eQTR2]
+eQTR
+fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
+#splitte région : 
+#dans featuresReg, si eQTR <
+
+
+
+#région 
+#A Remove Car useless :
+# #clivage region possible pour cluster de SNP A et B (median A < median B, et nA<nB) si :
+# #1) maxPos A < minPos B
+# #2) nA*-log10(pval) > 1/5e(nB*-log10(pval))
+# eQTR2<-eQTR2[order(chr,start,avg.pos)]
+# #1) maxPos A < minPos B
+# #a) tester avec une region
+# 
+# #b) need a fonction ~= function dist_all()
+
+#add CpG 
+#ajout col CpG in this eQTR_df : |CpGid|pos|chr|typePrev(doit etre==type) | genePred |TSSdist | EnsemblAnnot
+# annot<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv",dec = ",")
+# annot[,locisID:=V1]
+# annot<-annot[,-c(1)]
+# ord<-names(annot)[c(length(annot),1:(length(annot)-1))]
+# annot<-annot[,..ord]
+# fwrite(annot, "../../ref/annotation_CpG_HELP_ALL_070420.csv",sep = ";")
+annot<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
+annoth<-head(annot,100)
+#1) need to add chrineRegion for merge(eQTR,annot, by=c("chrReg"))
+#test
+for(chrom in unique(annoth$chr)){
+  sub_eQTR<-eQTR[chr==chrom]
+  annoth[,chrReg:=findReg(start,eQTR)sub_eQTR$chrReg[which(sub_eQTR$start<=start&sub_eQTR$end>start)],by="locisID"]
+  
+}
+
+findReg<-function(poss,regions.dt){
+  
+  return()
+}
+annoth 
+
+
+
+#check si bien annoté :
+df<-fread("analyses/eQTL_test/2020-05-04annotRegchr12part10.txt")
+df[is.na(chrRegion),] #oui, pas de na
+sum(df$chrRegion=="")
+df[chrReg!=""]
+#work
+annot2<-df
+#collapse sub_annot
+for(chr in paste0("chr",c(1:22,"X"))){
+  print(chr)
+  for(file in list.files("analyses/eQTL_test/",pattern = paste0(chr,"part"))){
+    print(strsplit(file,chr)[[1]][2])
+    sub_annot<-fread(paste0("analyses/eQTL_test/",file))
+    annot2<-rbind(annot2,sub_annot)
+    
+  }
+}
+annot2
+annotsToKeep<-c("LocisID","start","gene",)
+eQTR.CpG<-merge(eQTR,annot2[,..annotsToKeep], by=c("chrReg"))
+#
