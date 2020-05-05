@@ -514,7 +514,7 @@ fwrite(allChrReg,file = "../../ref/2020-05-05_annot_wholeGenome_regul_genes.csv"
 
 
 #annot annot with eGenes
-allChrRegLight<-allChrReg[,.(chr,start,end,gene_id)]
+
 
 annot<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
 annot[,pos:=start]
@@ -529,78 +529,57 @@ annot<-annot[pos!=""]
 annot<-annot[!is.na(pos)]
 annot
 
-
+allChrRegLight<-allChrReg[,.(chr,start.eQTR2,end.eQTR2,gene)]
+allChrRegLight<-allChrRegLight[!is.na(gene)&gene!=""]
+allChrRegLight<-allChrRegLight[!is.na(start.eQTR2)]
 #test
 annoth<-head(annot,10000)
 
-for(chrom in unique(annoth$chr)){
-  print(chrom)
-  subChrRegLight<-allChrRegLight[chr==chrom]
-  annoth[chr==chrom,(col):=rep(sapply(pos,function(x){
-    return(subChrRegLight[x%between%list(start,end),]$gene_id[i])
-    
-  }),length=.N),by="locisID"]
-}
 
 #all, gene_id
-i<-1
-col<-paste('eGene',i,sep=".")
+#1) save nb de eGenes regulable 
 for(chrom in unique(annot$chr)){
   print(chrom)
   subChrRegLight<-allChrRegLight[chr==chrom]
-  annot[chr==chrom,(col):=rep(sapply(pos,function(x){
-    return(subChrRegLight[x%between%list(start,end),]$gene_id[i])
+  annot[chr==chrom,nb.eGenes:=sapply(pos,function(x){
+    genes<-unique(na.omit(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
+    return(length(genes))
     
-  }),length=.N),by="locisID"]
+  }),by="locisID"]
+  max(annot$nb.eGenes,na.rm = T)
 }
+maxGenes.CpG<-max(annot$nb.eGenes)
+print(maxGenes.CpG)
+#2) save genes 
 
-
-while(any(!is.na(annot[,..col]))){
-  i<-i+1
-  colAvant<-col
-  col<-paste('eGene',i,sep=".")
-  for(chrom in unique(annot$chr)){
-    print(chrom)
-    subChrRegLight<-allChrRegLight[chr==chrom]
-    annot[chr==chrom&!is.na((colAvant)),(col):=rep(sapply(pos,function(x){
-      return(subChrRegLight[x%between%list(start,end),]$gene_id[i])
-      
-    }),length=.N),by="locisID"]
-  }
-  
-  
-  
-  
-}
-
-fwrite(annot,"../../ref/2020-05-05_full_annotation_CpG.csv",sep = ";")
-
-#all, chrReg.gene
-allChrRegLight<-allChrReg[,.(chr,start,end,chrReg.gene)]
-i<-1
-col<-paste('chrReg.gene',i,sep=".")
+cols<-paste('eGene',1:maxGenes.CpG,sep=".")
+col<-cols[1]
 for(chrom in unique(annot$chr)){
   print(chrom)
   subChrRegLight<-allChrRegLight[chr==chrom]
-  annot[chr==chrom,(col):=rep(sapply(pos,function(x){
-    return(subChrRegLight[x%between%list(start,end),]$chrReg.gene[i])
+  annot[chr==chrom,(col):=sapply(pos,function(x){
+    genes<-na.omit(unique(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
+    genes<-c(genes,rep(NA,maxGenes.CpG-length(genes)))
+    return(genes[1])
     
-  }),length=.N),by="locisID"]
+  }),by="locisID"]
 }
 
-
-while(any(!is.na(annot[,..col]))){
-  i<-i+1
-  col<-paste('chrReg.gene',i,sep=".")
-  colAvant<-col
+colAvant<-col
+for(i in 2:length(cols)){
+  col<-cols[i]
+  print(col)
   for(chrom in unique(annot$chr)){
     print(chrom)
     subChrRegLight<-allChrRegLight[chr==chrom]
-    annot[chr==chrom&!is.na((colAvant)),(col):=rep(sapply(pos,function(x){
-      return(subChrRegLight[x%between%list(start,end),]$chrReg.gene[i])
+    annot[chr==chrom&!is.na((colAvant)),(col):=sapply(pos,function(x){
+      genes<-na.omit(unique(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
+      genes<-c(genes,rep(NA,maxGenes.CpG-length(genes)))
+      return(genes[i])
       
-    }),length=.N),by="locisID"]
+    }),by="locisID"]
   }
+  colAvant<-col
   
   
   
