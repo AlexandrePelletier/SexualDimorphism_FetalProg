@@ -405,13 +405,14 @@ eQTR2<-eQTR[nGenes>1]
 #1)
 eQTR[,isFirst:=(start.eQTR-start)==min(start.eQTR-start),by="chrReg"]
 eQTR[,isLast:=(end-end.eQTR)==min(end-end.eQTR),by="chrReg"]
+
 eQTR[eQTR$isFirst&!(eQTR$isLast)&end>end.eQTR,end:=end.eQTR]
 eQTR[eQTR$isLast&!(eQTR$isFirst)&start<start.eQTR,start:=start.eQTR]
 #gene ni First ni Last : region = eQTR sauf si dépasse chrineReg
 eQTR[!(eQTR$isLast)&!(eQTR$isFirst)&start<start.eQTR,start:=start.eQTR]
 eQTR[!(eQTR$isLast)&!(eQTR$isFirst)&end>end.eQTR,end:=end.eQTR]
 
-
+#2)fill hole :
 overlapRegBefore<-function(startRegs,endRegs){
   if(length(startRegs)>1&length(startRegs)==length(endRegs)){
     return(c(NA,sapply(2:length(startRegs), function(i)startRegs[i]<=endRegs[i-1])))
@@ -506,10 +507,107 @@ allChrReg[is.na(end),end:=sapply(chrReg,function(x){
   return(as.numeric(strsplit(x,":")[[1]][3]))
 })]
 allChrReg
+allChrReg[is.na(chrReg.gene),chrReg.gene:=chrReg]
 allChrReg<-allChrReg[order(chr,start,end)]
 allChrReg
-#si dans eQTR1 => gene, conf=1
+fwrite(allChrReg,file = "../../ref/2020-05-05_annot_wholeGenome_regul_genes.csv")
 
+
+#annot annot with eGenes
+allChrRegLight<-allChrReg[,.(chr,start,end,gene_id)]
+
+annot<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
+annot[,pos:=start]
+annot<-annot[,-c("start","stop","id")]
+annot
+ord<-names(annot)[c(1,2,ncol(annot),3:(ncol(annot)-1))]
+annot<-annot[,..ord]
+annot
+#remove empty annot
+annot<-annot[chr!=""]
+annot<-annot[pos!=""]
+annot<-annot[!is.na(pos)]
+annot
+
+
+#test
+annoth<-head(annot,10000)
+
+for(chrom in unique(annoth$chr)){
+  print(chrom)
+  subChrRegLight<-allChrRegLight[chr==chrom]
+  annoth[chr==chrom,(col):=rep(sapply(pos,function(x){
+    return(subChrRegLight[x%between%list(start,end),]$gene_id[i])
+    
+  }),length=.N),by="locisID"]
+}
+
+#all, gene_id
+i<-1
+col<-paste('eGene',i,sep=".")
+for(chrom in unique(annot$chr)){
+  print(chrom)
+  subChrRegLight<-allChrRegLight[chr==chrom]
+  annot[chr==chrom,(col):=rep(sapply(pos,function(x){
+    return(subChrRegLight[x%between%list(start,end),]$gene_id[i])
+    
+  }),length=.N),by="locisID"]
+}
+
+
+while(any(!is.na(annot[,..col]))){
+  i<-i+1
+  colAvant<-col
+  col<-paste('eGene',i,sep=".")
+  for(chrom in unique(annot$chr)){
+    print(chrom)
+    subChrRegLight<-allChrRegLight[chr==chrom]
+    annot[chr==chrom&!is.na((colAvant)),(col):=rep(sapply(pos,function(x){
+      return(subChrRegLight[x%between%list(start,end),]$gene_id[i])
+      
+    }),length=.N),by="locisID"]
+  }
+  
+  
+  
+  
+}
+
+fwrite(annot,"../../ref/2020-05-05_full_annotation_CpG.csv",sep = ";")
+
+#all, chrReg.gene
+allChrRegLight<-allChrReg[,.(chr,start,end,chrReg.gene)]
+i<-1
+col<-paste('chrReg.gene',i,sep=".")
+for(chrom in unique(annot$chr)){
+  print(chrom)
+  subChrRegLight<-allChrRegLight[chr==chrom]
+  annot[chr==chrom,(col):=rep(sapply(pos,function(x){
+    return(subChrRegLight[x%between%list(start,end),]$chrReg.gene[i])
+    
+  }),length=.N),by="locisID"]
+}
+
+
+while(any(!is.na(annot[,..col]))){
+  i<-i+1
+  col<-paste('chrReg.gene',i,sep=".")
+  colAvant<-col
+  for(chrom in unique(annot$chr)){
+    print(chrom)
+    subChrRegLight<-allChrRegLight[chr==chrom]
+    annot[chr==chrom&!is.na((colAvant)),(col):=rep(sapply(pos,function(x){
+      return(subChrRegLight[x%between%list(start,end),]$chrReg.gene[i])
+      
+    }),length=.N),by="locisID"]
+  }
+  
+  
+  
+}
+fwrite(annot,"../../ref/2020-05-05_full_annotation_CpG.csv",sep = ";")
+
+#si dans eQTR1 => gene, conf=1
 #sinon si dans eQTR2 => gene, conf=0.9
 #sinon si dans aucun eQTR => eQTR2 le plus proche, conf = 0.9-(dist start|end)/max
 
