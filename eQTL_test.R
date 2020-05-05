@@ -239,7 +239,10 @@ wb_eQTL3<-wb_eQTL2[!is.na(type)][,1:(ncol(wb_eQTL2)-1)]
 
 fwrite(wb_eQTL3,"../../ref/Whole_Blood.eQTL.csv",sep = ";")
 wb_eQTL<-wb_eQTL3
+
 rm(wb_eQTL2,wb_eQTL3)
+
+
 #SNP signif enrichit en 4 et 6 ?
 wb_eQTL_count<-wb_eQTL[,n.snp:=.N,by=type][!duplicated(n.snp),c('type','n.snp')]
 wb_eQTL_count<-wb_eQTL_count[!is.na(type)][order(type)]
@@ -251,6 +254,7 @@ ggplot(data = wb_eQTL_count,aes(x=type,y=cpm.snp))+geom_col()+ggtitle("sig. bloo
 fwrite(wb_eQTL_count,"summary_eQTL_Features.csv",sep = ";")
 
 #next : eQTR : region regulé par df
+features<-fread("../../ref/CD34_all_chromatin_feature.csv")
 eQTR<-features[,.(chr,start,end,type,longueur,chrReg)]
 
 #1) add region lvl : nEQTL dans la region
@@ -479,10 +483,31 @@ eQTR[!is.na(hole)]
 eQTR[eQTR$holeAfter,end:=end+floor(distHole/2)]
 eQTR[eQTR$holeBefore,start:=start-ceiling(distHole/2)]
 eQTR[!is.na(eQTR$hole)]
+eQTR[,chrReg.gene:=paste(str_extract(chr,"[0-9XY]{1,2}"),start,end,sep = ":")]
+eQTR
 fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
-#2) 
 
-#asso gene CpG :
+#2) asso gene CpG :
+#for match chrReg2 with pos CpG, need all reg even if no eQTR
+features<-fread("../../ref/CD34_all_chromatin_feature.csv")
+features
+
+features<-features[,.(chrReg,type,longueur)]
+
+eQTR
+allChrReg<-merge(features,eQTR,all=TRUE)
+allChrReg[is.na(chr),chr:=paste0("chr",str_extract(chrReg,"^[0-9XY]{1,2}"))]
+allChrReg
+allChrReg[is.na(start),start:=sapply(chrReg,function(x){
+  return(as.numeric(strsplit(x,":")[[1]][2]))
+})]
+allChrReg
+allChrReg[is.na(end),end:=sapply(chrReg,function(x){
+  return(as.numeric(strsplit(x,":")[[1]][3]))
+})]
+allChrReg
+allChrReg<-allChrReg[order(chr,start,end)]
+allChrReg
 #si dans eQTR1 => gene, conf=1
 
 #sinon si dans eQTR2 => gene, conf=0.9
