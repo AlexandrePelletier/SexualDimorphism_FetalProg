@@ -389,6 +389,7 @@ eQTR[,length.eQTR2:=end.eQTR2-start.eQTR2]
 eQTR
 
 fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
+eQTR<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv")
 #ajuster région avec bon genes : 
 #1) facile, region avec un gene reste region avec un gene
 eQTR1<-eQTR[nGenes==1,]
@@ -407,9 +408,9 @@ eQTR[!(eQTR$isLast)&!(eQTR$isFirst)&start<start.eQTR,start:=start.eQTR]
 eQTR[!(eQTR$isLast)&!(eQTR$isFirst)&end>end.eQTR,end:=end.eQTR]
 
 
-overlapRegBefore<-function(vec1,vec2){
-  if(length(vec1)>1&length(vec1)==length(vec2)){
-    return(c(NA,sapply(2:length(vec1), function(i)vec1[i]<=vec2[i-1])))
+overlapRegBefore<-function(startRegs,endRegs){
+  if(length(startRegs)>1&length(startRegs)==length(endRegs)){
+    return(c(NA,sapply(2:length(startRegs), function(i)startRegs[i]<=endRegs[i-1])))
   }else{
     return(NA)
   }
@@ -419,10 +420,66 @@ overlapRegBefore<-function(vec1,vec2){
 eQTR[,holeBefore:=!overlapRegBefore(start,end),by="chrReg"]
 eQTR
 sum(eQTR$holeBefore,na.rm = T) #50k
+eQTR[eQTR$holeBefore]
 
-#faire hole after ou calculer direct dist a
+overlapRegAfter<-function(startRegs,endRegs){
+  if(length(startRegs)>1&length(startRegs)==length(endRegs)){
+    return(c(sapply(1:(length(startRegs)-1), function(i)endRegs[i]>=startRegs[i+1]),NA))
+  }else{
+    return(NA)
+  }
+  
+}
+
+eQTR[,holeAfter:=!overlapRegAfter(start,end),by="chrReg"]
+eQTR
+
+pasteHole<-function(startRegs,endRegs){
+  if(length(startRegs)>1&length(startRegs)==length(endRegs)){
+    return(paste(endRegs[1],startRegs[2],sep = ":"))
+  }else{
+    return(NA)
+  }
+}
+eQTR[eQTR$holeBefore|eQTR$holeAfter,hole:=pasteHole(start,end),by="chrReg"]
+eQTR[!is.na(eQTR$hole),multiHole:=.N>2,by="hole"]
+eQTR[eQTR$multiHole==TRUE,] #21k
+#si plusieurs trous dans chrReg, change hole en checkant bien trou:
+#etendre flag multihole a toute la region :
+eQTR[,multiHole:=any(multiHole),by="chrReg"]
+
+eQTR[eQTR$multiHole==TRUE]#51k
+pasteMultiHole<-function(startRegs,endRegs,holeAfter,holeBefore){
+  holes<-rep(NA,length(startRegs))
+  for (i in 1:(length(startRegs)-1)){
+    #si ya un vrai trou :
+    if(holeAfter[i]&holeBefore[i+1]){
+      holes[i]<-paste(endRegs[i],startRegs[i+1],sep = ":")
+    }else{
+      holes[i]<-NA
+    }
+  }
+  
+  return(holes)
+}
+eQTR[eQTR$multiHole==TRUE,hole:=pasteMultiHole(start,end,holeAfter,holeBefore),by="chrReg"]#51k
+eQTR[eQTR$multiHole==TRUE]
 
 
+distReg<-function(startRegs,endRegs){
+  if(length(startRegs)==2&length(startRegs)==length(endRegs)){
+    return(startRegs[2]-endRegs[1])
+  }else{
+    return(NA)
+  }
+}
+eQTR[!is.na(hole),distHole:=distReg(start,end),by="hole"]
+eQTR[!is.na(hole)]
+
+eQTR[eQTR$holeAfter,end:=end+floor(distHole/2)]
+eQTR[eQTR$holeBefore,start:=start-ceiling(distHole/2)]
+eQTR[!is.na(eQTR$hole)]
+fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
 #2) 
 
 #asso gene CpG :
