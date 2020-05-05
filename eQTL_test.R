@@ -395,28 +395,33 @@ eQTR1<-eQTR[nGenes==1,]
 
 #2) regions avec 2 genes 
 eQTR2<-eQTR[nGenes>1]
-#change chrReg en fct eQTR2 :1)  geneA : start chrReg - endEQTR2, geneB, maxe start Eqtr2 le plus proche
+#change chrReg en fct eQTR :1)  geneA : start chrReg - endEQTR2, geneB, maxe start Eqtr2 le plus proche
 #2) si end geneA < start geneB=> dist median
 #1)
-eQTR2[,isFirst:=(start.eQTR-start)==min(start.eQTR-start),by="chrReg"]
-eQTR2[,isLast:=(end-end.eQTR)==min(end-end.eQTR),by="chrReg"]
-eQTR2[eQTR2$isFirst&!(eQTR2$isLast)&end>end.eQTR2,end:=end.eQTR2]
-eQTR2[eQTR2$isLast&!(eQTR2$isFirst)&start<start.eQTR2,start:=start.eQTR2]
-#gene ni First ni Last : region = eQTR2 sauf si dépasse chrineReg
-eQTR2[!(eQTR2$isLast)&!(eQTR2$isFirst)&start<start.eQTR2,start:=start.eQTR2]
-eQTR2[!(eQTR2$isLast)&!(eQTR2$isFirst)&end>end.eQTR2,end:=end.eQTR2]
+eQTR[,isFirst:=(start.eQTR-start)==min(start.eQTR-start),by="chrReg"]
+eQTR[,isLast:=(end-end.eQTR)==min(end-end.eQTR),by="chrReg"]
+eQTR[eQTR$isFirst&!(eQTR$isLast)&end>end.eQTR,end:=end.eQTR]
+eQTR[eQTR$isLast&!(eQTR$isFirst)&start<start.eQTR,start:=start.eQTR]
+#gene ni First ni Last : region = eQTR sauf si dépasse chrineReg
+eQTR[!(eQTR$isLast)&!(eQTR$isFirst)&start<start.eQTR,start:=start.eQTR]
+eQTR[!(eQTR$isLast)&!(eQTR$isFirst)&end>end.eQTR,end:=end.eQTR]
 
 
 overlapRegBefore<-function(vec1,vec2){
-  return(c(sapply(2:length(vec1), function(i)vec1[i]<=vec2[i-1])))
+  if(length(vec1)>1&length(vec1)==length(vec2)){
+    return(c(NA,sapply(2:length(vec1), function(i)vec1[i]<=vec2[i-1])))
+  }else{
+    return(NA)
+  }
+  
 }
 
-eQTR2[,withHole:=any(!overlapRegBefore(start,end)),by="chrReg"]
-eQTR2
-sum(unique(eQTR2,by = "chrReg")$withHole) #9k reg avec hole/ 155k
-length(unique(eQTR2$chrReg))
-eQTR2[eQTR2$withHole,isHole:=!c(TRUE,overlapRegBefore(start,end)),by="chrReg"]
-sum(eQTR2$isHole,na.rm = T) #10k
+eQTR[,holeBefore:=!overlapRegBefore(start,end),by="chrReg"]
+eQTR
+sum(eQTR$holeBefore,na.rm = T) #50k
+
+#faire hole after ou calculer direct dist a
+
 
 #2) 
 
