@@ -387,11 +387,49 @@ eQTR[length.eQTR<1000,end.eQTR2:=end.eQTR+(500-ceiling(length.eQTR/2))]
 
 eQTR[,length.eQTR2:=end.eQTR2-start.eQTR2]
 eQTR
+
 fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
-#splitte région : 
-#dans featuresReg, si eQTR <
+#ajuster région avec bon genes : 
+#1) facile, region avec un gene reste region avec un gene
+eQTR1<-eQTR[nGenes==1,]
+
+#2) regions avec 2 genes 
+eQTR2<-eQTR[nGenes>1]
+#change chrReg en fct eQTR2 :1)  geneA : start chrReg - endEQTR2, geneB, maxe start Eqtr2 le plus proche
+#2) si end geneA < start geneB=> dist median
+#1)
+eQTR2[,isFirst:=(start.eQTR-start)==min(start.eQTR-start),by="chrReg"]
+eQTR2[,isLast:=(end-end.eQTR)==min(end-end.eQTR),by="chrReg"]
+eQTR2[eQTR2$isFirst&!(eQTR2$isLast)&end>end.eQTR2,end:=end.eQTR2]
+eQTR2[eQTR2$isLast&!(eQTR2$isFirst)&start<start.eQTR2,start:=start.eQTR2]
+#gene ni First ni Last : region = eQTR2 sauf si dépasse chrineReg
+eQTR2[!(eQTR2$isLast)&!(eQTR2$isFirst)&start<start.eQTR2,start:=start.eQTR2]
+eQTR2[!(eQTR2$isLast)&!(eQTR2$isFirst)&end>end.eQTR2,end:=end.eQTR2]
 
 
+overlapRegBefore<-function(vec1,vec2){
+  return(c(sapply(2:length(vec1), function(i)vec1[i]<=vec2[i-1])))
+}
+
+eQTR2[,withHole:=any(!overlapRegBefore(start,end)),by="chrReg"]
+eQTR2
+sum(unique(eQTR2,by = "chrReg")$withHole) #9k reg avec hole/ 155k
+length(unique(eQTR2$chrReg))
+eQTR2[eQTR2$withHole,isHole:=!c(TRUE,overlapRegBefore(start,end)),by="chrReg"]
+sum(eQTR2$isHole,na.rm = T) #10k
+
+#2) 
+
+#asso gene CpG :
+#si dans eQTR1 => gene, conf=1
+
+#sinon si dans eQTR2 => gene, conf=0.9
+#sinon si dans aucun eQTR => eQTR2 le plus proche, conf = 0.9-(dist start|end)/max
+
+
+
+
+#sinon si dans eQTR2 => 1 gene, conf=0.9
 
 #région 
 #A Remove Car useless :
