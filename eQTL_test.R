@@ -492,33 +492,33 @@ eQTR
 # fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
 
 #2) asso gene CpG :
-#for match chrReg2 with pos CpG, need all reg even if no eQTR
-features<-fread("../../ref/CD34_all_chromatin_feature.csv")
-features
 
-features<-features[,.(chrReg,type,longueur)]
-
-eQTR
-allChrReg<-merge(features,eQTR,all=TRUE)
-allChrReg[is.na(chr),chr:=paste0("chr",str_extract(chrReg,"^[0-9XY]{1,2}"))]
-allChrReg
-allChrReg[is.na(start),start:=sapply(chrReg,function(x){
-  return(as.numeric(strsplit(x,":")[[1]][2]))
-})]
-allChrReg
-allChrReg[is.na(end),end:=sapply(chrReg,function(x){
-  return(as.numeric(strsplit(x,":")[[1]][3]))
-})]
-allChrReg
-allChrReg[is.na(chrReg.gene),chrReg.gene:=chrReg]
-allChrReg<-allChrReg[order(chr,start,end)]
-allChrReg
-fwrite(allChrReg,file = "../../ref/2020-05-05_annot_wholeGenome_regul_genes.csv")
-
+# #for match chrReg2 with pos CpG, need all reg even if no eQTR
+# features<-fread("../../ref/CD34_all_chromatin_feature.csv")
+# features
+# 
+# features<-features[,.(chrReg,type,longueur)]
+# 
+# eQTR
+# allChrReg<-merge(features,eQTR,all=TRUE)
+# allChrReg[is.na(chr),chr:=paste0("chr",str_extract(chrReg,"^[0-9XY]{1,2}"))]
+# allChrReg
+# allChrReg[is.na(start),start:=sapply(chrReg,function(x){
+#   return(as.numeric(strsplit(x,":")[[1]][2]))
+# })]
+# allChrReg
+# allChrReg[is.na(end),end:=sapply(chrReg,function(x){
+#   return(as.numeric(strsplit(x,":")[[1]][3]))
+# })]
+# allChrReg
+# allChrReg[is.na(chrReg.gene),chrReg.gene:=chrReg]
+# allChrReg<-allChrReg[order(chr,start,end)]
+# allChrReg
+# fwrite(allChrReg,file = "../../ref/2020-05-05_annot_wholeGenome_regul_genes.csv")
+# 
 
 #annot annot with eGenes
 
-
 annot<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
 annot[,pos:=start]
 annot<-annot[,-c("start","stop","id")]
@@ -532,210 +532,36 @@ annot<-annot[pos!=""]
 annot<-annot[!is.na(pos)]
 annot
 
-allChrRegLight<-allChrReg[,.(chr,start.eQTR2,end.eQTR2,gene)]
-allChrRegLight<-allChrRegLight[!is.na(gene)&gene!=""]
-allChrRegLight<-allChrRegLight[!is.na(start.eQTR2)]
+eQTR<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv")
+eQTR
+eQTRl<-eQTR[,.(chrReg,nGenes,gene,chr,start.eQTR2,end.eQTR2,length.eQTR2,pval_beta,nQTL.reg.gene,avg.pval.thr,avg.distTSS,distr.distTSS,avg.pos,sd.pos)]
+eQTRl<-eQTRl[!is.na(gene)&gene!=""]
+eQTRl
 #test
-annoth<-head(annot,10000)
+annoth<-head(annot,1000)
 
-
-#all, gene_id
-#1) save nb de eGenes regulable 
-for(chrom in unique(annot$chr)){
-  print(chrom)
-  subChrRegLight<-allChrRegLight[chr==chrom]
-  annot[chr==chrom,nb.eGenes:=sapply(pos,function(x){
-    genes<-unique(na.omit(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
-    return(length(genes))
-    
-  }),by="locisID"]
-  max(annot$nb.eGenes,na.rm = T)
-}
-maxGenes.CpG<-max(annot$nb.eGenes)
-print(maxGenes.CpG)
-#2) save genes 
-
-cols<-paste('eGene',1:maxGenes.CpG,sep=".")
-col<-cols[1]
-for(chrom in unique(annot$chr)){
-  print(chrom)
-  subChrRegLight<-allChrRegLight[chr==chrom]
-  annot[chr==chrom,(col):=sapply(pos,function(x){
-    genes<-na.omit(unique(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
-    genes<-c(genes,rep(NA,maxGenes.CpG-length(genes)))
-    return(genes[1])
-    
-  }),by="locisID"]
-}
-
-colAvant<-col
-for(i in 2:length(cols)){
-  col<-cols[i]
-  print(col)
-  for(chrom in unique(annot$chr)){
-    print(chrom)
-    subChrRegLight<-allChrRegLight[chr==chrom]
-    annot[chr==chrom&!is.na((colAvant)),(col):=sapply(pos,function(x){
-      genes<-na.omit(unique(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
-      genes<-c(genes,rep(NA,maxGenes.CpG-length(genes)))
-      return(genes[i])
-      
-    }),by="locisID"]
-  }
-  colAvant<-col
-  
-  
-  
-}
-fwrite(annot,"../../ref/2020-05-05_full_annotation_CpG.csv",sep = ";")
-
-
-#nouvel essai 
-annot<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
-annot[,pos:=start]
-annot<-annot[,-c("start","stop","id")]
-annot
-ord<-names(annot)[c(1,2,ncol(annot),3:(ncol(annot)-1))]
-annot<-annot[,..ord]
-annot
-#remove empty annot
-annot<-annot[chr!=""]
-annot<-annot[pos!=""]
-annot<-annot[!is.na(pos)]
-annot
-eQTRligtht<-eQTR[,.(chr,start.eQTR2,end.eQTR2,gene,pval_beta,nQTL.reg.gene,avg.pval.thr,avg.distTSS,distr.distTSS,avg.pos,sd.pos)]
-eQTRligtht<-eQTRligtht[!is.na(gene)&gene!=""]
-eQTRligtht<-eQTRligtht[!is.na(start.eQTR2)]
-#test
-annoth<-head(annot,10000)
-
-sRegs<-allChrRegLight[chr==annot$chr[1]&start.eQTR2<annot$pos[1]&end.eQTR2>annot$pos[1]]
+#make eQTR df annoté avec cpg :
+sRegs<-eQTRl[chr==annot$chr[1]&start.eQTR2<annot$pos[1]&end.eQTR2>annot$pos[1]]
 sRegs[,locisID:=annot$locisID[1]]
 
 for(i in 2 :nrow(annot)){
-
-  sReg<-eQTRlight[chr==annot$chr[i]&start.eQTR2<annot$pos[i]&end.eQTR2>annot$pos[i]]
+  if(i%%100000==0){
+    print(paste("locis",i,"/",nrow(annot)))
+    fwrite(sRegs,file = paste0(output,"temp_sRegs.txt"))
+  }
+  sReg<-eQTRl[chr==annot$chr[i]&start.eQTR2<annot$pos[i]&end.eQTR2>annot$pos[i]]
   sReg[,locisID:=annot$locisID[i]]
   sRegs<-rbind(sRegs,sReg)
   
 }
-#all, gene_id
-#1) save nb de eGenes regulable 
-for(chrom in unique(annot$chr)){
-  print(chrom)
-  subChrRegLight<-allChrRegLight[chr==chrom]
-  annot[chr==chrom,nb.eGenes:=sapply(pos,function(x){
-    genes<-unique(na.omit(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
-    return(length(genes))
-    
-  }),by="locisID"]
-  max(annot$nb.eGenes,na.rm = T)
-}
-maxGenes.CpG<-max(annot$nb.eGenes)
-print(maxGenes.CpG)
-#2) save genes 
 
-cols<-paste('eGene',1:maxGenes.CpG,sep=".")
-col<-cols[1]
-for(chrom in unique(annot$chr)){
-  print(chrom)
-  subChrRegLight<-allChrRegLight[chr==chrom]
-  annot[chr==chrom,(col):=sapply(pos,function(x){
-    genes<-na.omit(unique(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
-    genes<-c(genes,rep(NA,maxGenes.CpG-length(genes)))
-    return(genes[1])
-    
-  }),by="locisID"]
-}
+#merge annot df et sRegs df
 
-colAvant<-col
-for(i in 2:length(cols)){
-  col<-cols[i]
-  print(col)
-  for(chrom in unique(annot$chr)){
-    print(chrom)
-    subChrRegLight<-allChrRegLight[chr==chrom]
-    annot[chr==chrom&!is.na((colAvant)),(col):=sapply(pos,function(x){
-      genes<-na.omit(unique(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
-      genes<-c(genes,rep(NA,maxGenes.CpG-length(genes)))
-      return(genes[i])
-      
-    }),by="locisID"]
-  }
-  colAvant<-col
-  
-  
-  
-}
-fwrite(annot,"../../ref/2020-05-05_full_annotation_CpG.csv",sep = ";")
-
-
-
+#save
 
 #si dans eQTR1 => gene, conf=1
 #sinon si dans eQTR2 => gene, conf=0.9
 #sinon si dans aucun eQTR => eQTR2 le plus proche, conf = 0.9-(dist start|end)/max
 
-
-
-
 #sinon si dans eQTR2 => 1 gene, conf=0.9
 
-#région 
-#A Remove Car useless :
-# #clivage region possible pour cluster de SNP A et B (median A < median B, et nA<nB) si :
-# #1) maxPos A < minPos B
-# #2) nA*-log10(pval) > 1/5e(nB*-log10(pval))
-# eQTR2<-eQTR2[order(chr,start,avg.pos)]
-# #1) maxPos A < minPos B
-# #a) tester avec une region
-# 
-# #b) need a fonction ~= function dist_all()
-
-#add CpG 
-#ajout col CpG in this eQTR_df : |CpGid|pos|chr|typePrev(doit etre==type) | genePred |TSSdist | EnsemblAnnot
-# annot<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv",dec = ",")
-# annot[,locisID:=V1]
-# annot<-annot[,-c(1)]
-# ord<-names(annot)[c(length(annot),1:(length(annot)-1))]
-# annot<-annot[,..ord]
-# fwrite(annot, "../../ref/annotation_CpG_HELP_ALL_070420.csv",sep = ";")
-annot<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
-annoth<-head(annot,100)
-#1) need to add chrineRegion for merge(eQTR,annot, by=c("chrReg"))
-#test
-for(chrom in unique(annoth$chr)){
-  sub_eQTR<-eQTR[chr==chrom]
-  annoth[,chrReg:=findReg(start,eQTR)sub_eQTR$chrReg[which(sub_eQTR$start<=start&sub_eQTR$end>start)],by="locisID"]
-  
-}
-
-findReg<-function(poss,regions.dt){
-  
-  return()
-}
-annoth 
-
-
-
-#check si bien annoté :
-df<-fread("analyses/eQTL_test/2020-05-04annotRegchr12part10.txt")
-df[is.na(chrRegion),] #oui, pas de na
-sum(df$chrRegion=="")
-df[chrReg!=""]
-#work
-annot2<-df
-#collapse sub_annot
-for(chr in paste0("chr",c(1:22,"X"))){
-  print(chr)
-  for(file in list.files("analyses/eQTL_test/",pattern = paste0(chr,"part"))){
-    print(strsplit(file,chr)[[1]][2])
-    sub_annot<-fread(paste0("analyses/eQTL_test/",file))
-    annot2<-rbind(annot2,sub_annot)
-    
-  }
-}
-annot2
-annotsToKeep<-c("LocisID","start","gene",)
-eQTR.CpG<-merge(eQTR,annot2[,..annotsToKeep], by=c("chrReg"))
-#
