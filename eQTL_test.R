@@ -534,26 +534,61 @@ annot
 
 eQTR<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv")
 eQTR
-eQTRl<-eQTR[,.(chrReg,nGenes,gene,chr,start.eQTR2,end.eQTR2,length.eQTR2,pval_beta,nQTL.reg.gene,avg.pval.thr,avg.distTSS,distr.distTSS,avg.pos,sd.pos)]
+eQTRl<-eQTR[,.(chrReg,nGenes,gene,chr,start.eQTR2,end.eQTR2,length.eQTR2,pval_beta,nQTL.reg.gene,avg.pval.thr,avg.distTSS,distr.distTSS,avg.pos,sd.pos,chrReg.gene)]
 eQTRl<-eQTRl[!is.na(gene)&gene!=""]
 eQTRl
+eQTRll<-eQTRl[,.(chr,start.eQTR2,end.eQTR2,gene)]
 #test
 annoth<-head(annot,1000)
 
 #make eQTR df annoté avec cpg :
-sRegs<-eQTRl[chr==annot$chr[1]&start.eQTR2<annot$pos[1]&end.eQTR2>annot$pos[1]]
-sRegs[,locisID:=annot$locisID[1]]
 
-for(i in 2 :nrow(annot)){
-  if(i%%100000==0){
-    print(paste("locis",i,"/",nrow(annot)))
-    fwrite(sRegs,file = paste0(output,"temp_sRegs.txt"))
+for(chrom in unique(annot$chr)){
+  print(chrom)
+  annotl<-annot[chr==chrom]
+  start1<-0
+  for(p in 1:100){
+    f<-p/100
+    print(paste(p,"%"))
+    stop<-quantile(annotl$pos,f)
+    annotll<-annotl[pos>start1&pos<=stop]
+    print(paste(nrow(annotll),"locis"))
+    eQTRlll<-eQTRll[chr==chrom&(start.eQTR2%between%c(start1,stop)|end.eQTR2%between%c(start1,stop))]
+    print(paste(nrow(eQTRlll),"regions"))
+    sRegs<-eQTRlll[start.eQTR2<annotll$pos[1]&end.eQTR2>annotll$pos[1]]
+    sRegs[,locisID:=annotll$locisID[1]]
+    
+    for(i in 2:nrow(annotll)){
+      
+      sReg<-eQTRlll[chr==annotll$chr[i]&start.eQTR2<annotll$pos[i]&end.eQTR2>annotll$pos[i]]
+      sReg[,locisID:=annotl$locisID[i]]
+      sRegs<-rbind(sRegs,sReg)
+    }
+    fwrite(sRegs,file=paste0(output,"temp",chrom,p))
+    start1<-stop
   }
-  sReg<-eQTRl[chr==annot$chr[i]&start.eQTR2<annot$pos[i]&end.eQTR2>annot$pos[i]]
-  sReg[,locisID:=annot$locisID[i]]
-  sRegs<-rbind(sRegs,sReg)
+  
+  
+  
   
 }
+
+for(chr in paste0("chr",c(1:22,"X","Y"))){
+  print(chr)
+  for(file in list.files("analyses/eQTL_test/",pattern = chr)){
+    print(strsplit(file,chr)[[1]][2])
+    sReg<-fread(paste0("analyses/eQTL_test/",file))
+    sRegs<-rbind(sRegs,sReg)
+    
+  }
+}
+
+
+sRegs<-unique(sRegs)
+
+sRegs
+
+
 
 #merge annot df et sRegs df
 
