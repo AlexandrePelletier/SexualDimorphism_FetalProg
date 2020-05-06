@@ -328,10 +328,8 @@ eQTR<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.cs
 
 hist(eQTR$nGenes,breaks = 50) #majority of one gene by region,, but 100k region avec 2 genes, 75k avec 3genes...
 hist(eQTR[type%in%c(4,6)]$nGenes,breaks = 50) 
-#split region : si 2 clusters de SNPs distincts, en coupant au milieu de maxPosSNPGene1 et minPosSNPGene2 
-eQTR1<-eQTR[nGenes==1]
-eQTR2<-eQTR[nGenes>1]
-eQTR2
+eQTR[nGenes>1]
+
 #3 choses : 1) 1 SNP peut lier 2 genes (ex : R3HCC1L, et LOXL4)
 #2)  1 SNP contenu dans un cluster de SNP liant un gene A peut lier un gene B
 #3) les genes Symbols sont mal annoter
@@ -386,107 +384,112 @@ plot(density(eQTR2$length.eQTR)),log="x") #pique à
 abline(v=quantile(eQTR2$length.eQTR,0.25))
 median(eQTR2$length.eQTR) #1024pb => region +/-500pb d'un SNP
 
+#ajust eQTR pour avoir region d'au moins 1000pb
 eQTR[length.eQTR<1000,start.eQTR2:=start.eQTR-(500-floor(length.eQTR/2))]
 eQTR[length.eQTR<1000,end.eQTR2:=end.eQTR+(500-ceiling(length.eQTR/2))]
 
+eQTR[length.eQTR>=1000,start.eQTR2:=start.eQTR-250]
+eQTR[length.eQTR>=1000,end.eQTR2:=end.eQTR+250]
+
 eQTR[,length.eQTR2:=end.eQTR2-start.eQTR2]
 eQTR
-
+eQTR[,chrReg.gene:=paste(str_extract(chr,"[0-9XY]{1,2}"),start.eQTR2,end.eQTR2,sep = ":")]
 fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
 eQTR<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv")
-#ajuster région avec bon genes : 
-#1) facile, region avec un gene reste region avec un gene
-eQTR1<-eQTR[nGenes==1,]
-
-#2) regions avec 2 genes 
-eQTR2<-eQTR[nGenes>1]
-#change chrReg en fct eQTR :1)  geneA : start chrReg - endEQTR2, geneB, maxe start Eqtr2 le plus proche
-#2) si end geneA < start geneB=> dist median
-#1)
-eQTR[,isFirst:=(start.eQTR-start)==min(start.eQTR-start),by="chrReg"]
-eQTR[,isLast:=(end-end.eQTR)==min(end-end.eQTR),by="chrReg"]
-
-eQTR[eQTR$isFirst&!(eQTR$isLast)&end>end.eQTR,end:=end.eQTR]
-eQTR[eQTR$isLast&!(eQTR$isFirst)&start<start.eQTR,start:=start.eQTR]
-#gene ni First ni Last : region = eQTR sauf si dépasse chrineReg
-eQTR[!(eQTR$isLast)&!(eQTR$isFirst)&start<start.eQTR,start:=start.eQTR]
-eQTR[!(eQTR$isLast)&!(eQTR$isFirst)&end>end.eQTR,end:=end.eQTR]
-
-#2)fill hole :
-overlapRegBefore<-function(startRegs,endRegs){
-  if(length(startRegs)>1&length(startRegs)==length(endRegs)){
-    return(c(NA,sapply(2:length(startRegs), function(i)startRegs[i]<=endRegs[i-1])))
-  }else{
-    return(NA)
-  }
-  
-}
-
-eQTR[,holeBefore:=!overlapRegBefore(start,end),by="chrReg"]
 eQTR
-sum(eQTR$holeBefore,na.rm = T) #50k
-eQTR[eQTR$holeBefore]
-
-overlapRegAfter<-function(startRegs,endRegs){
-  if(length(startRegs)>1&length(startRegs)==length(endRegs)){
-    return(c(sapply(1:(length(startRegs)-1), function(i)endRegs[i]>=startRegs[i+1]),NA))
-  }else{
-    return(NA)
-  }
-  
-}
-
-eQTR[,holeAfter:=!overlapRegAfter(start,end),by="chrReg"]
-eQTR
-
-pasteHole<-function(startRegs,endRegs){
-  if(length(startRegs)>1&length(startRegs)==length(endRegs)){
-    return(paste(endRegs[1],startRegs[2],sep = ":"))
-  }else{
-    return(NA)
-  }
-}
-eQTR[eQTR$holeBefore|eQTR$holeAfter,hole:=pasteHole(start,end),by="chrReg"]
-eQTR[!is.na(eQTR$hole),multiHole:=.N>2,by="hole"]
-eQTR[eQTR$multiHole==TRUE,] #21k
-#si plusieurs trous dans chrReg, change hole en checkant bien trou:
-#etendre flag multihole a toute la region :
-eQTR[,multiHole:=any(multiHole),by="chrReg"]
-
-eQTR[eQTR$multiHole==TRUE]#51k
-pasteMultiHole<-function(startRegs,endRegs,holeAfter,holeBefore){
-  holes<-rep(NA,length(startRegs))
-  for (i in 1:(length(startRegs)-1)){
-    #si ya un vrai trou :
-    if(holeAfter[i]&holeBefore[i+1]){
-      holes[i]<-paste(endRegs[i],startRegs[i+1],sep = ":")
-    }else{
-      holes[i]<-NA
-    }
-  }
-  
-  return(holes)
-}
-eQTR[eQTR$multiHole==TRUE,hole:=pasteMultiHole(start,end,holeAfter,holeBefore),by="chrReg"]#51k
-eQTR[eQTR$multiHole==TRUE]
-
-
-distReg<-function(startRegs,endRegs){
-  if(length(startRegs)==2&length(startRegs)==length(endRegs)){
-    return(startRegs[2]-endRegs[1])
-  }else{
-    return(NA)
-  }
-}
-eQTR[!is.na(hole),distHole:=distReg(start,end),by="hole"]
-eQTR[!is.na(hole)]
-
-eQTR[eQTR$holeAfter,end:=end+floor(distHole/2)]
-eQTR[eQTR$holeBefore,start:=start-ceiling(distHole/2)]
-eQTR[!is.na(eQTR$hole)]
-eQTR[,chrReg.gene:=paste(str_extract(chr,"[0-9XY]{1,2}"),start,end,sep = ":")]
-eQTR
-fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
+# #ajuster région avec bon genes : 
+# #1) facile, region avec un gene reste region avec un gene
+# eQTR1<-eQTR[nGenes==1,]
+# 
+# #2) regions avec 2 genes 
+# eQTR2<-eQTR[nGenes>1]
+# #change chrReg en fct eQTR :1)  geneA : start chrReg - endEQTR2, geneB, maxe start Eqtr2 le plus proche
+# #2) si end geneA < start geneB=> dist median
+# #1)
+# eQTR[,isFirst:=(start.eQTR-start)==min(start.eQTR-start),by="chrReg"]
+# eQTR[,isLast:=(end-end.eQTR)==min(end-end.eQTR),by="chrReg"]
+# 
+# eQTR[eQTR$isFirst&!(eQTR$isLast)&end>end.eQTR,end:=end.eQTR]
+# eQTR[eQTR$isLast&!(eQTR$isFirst)&start<start.eQTR,start:=start.eQTR]
+# #gene ni First ni Last : region = eQTR sauf si dépasse chrineReg
+# eQTR[!(eQTR$isLast)&!(eQTR$isFirst)&start<start.eQTR,start:=start.eQTR]
+# eQTR[!(eQTR$isLast)&!(eQTR$isFirst)&end>end.eQTR,end:=end.eQTR]
+# 
+# #2)fill hole :
+# overlapRegBefore<-function(startRegs,endRegs){
+#   if(length(startRegs)>1&length(startRegs)==length(endRegs)){
+#     return(c(NA,sapply(2:length(startRegs), function(i)startRegs[i]<=endRegs[i-1])))
+#   }else{
+#     return(NA)
+#   }
+#   
+# }
+# 
+# eQTR[,holeBefore:=!overlapRegBefore(start,end),by="chrReg"]
+# eQTR
+# sum(eQTR$holeBefore,na.rm = T) #50k
+# eQTR[eQTR$holeBefore]
+# 
+# overlapRegAfter<-function(startRegs,endRegs){
+#   if(length(startRegs)>1&length(startRegs)==length(endRegs)){
+#     return(c(sapply(1:(length(startRegs)-1), function(i)endRegs[i]>=startRegs[i+1]),NA))
+#   }else{
+#     return(NA)
+#   }
+#   
+# }
+# 
+# eQTR[,holeAfter:=!overlapRegAfter(start,end),by="chrReg"]
+# eQTR
+# 
+# pasteHole<-function(startRegs,endRegs){
+#   if(length(startRegs)>1&length(startRegs)==length(endRegs)){
+#     return(paste(endRegs[1],startRegs[2],sep = ":"))
+#   }else{
+#     return(NA)
+#   }
+# }
+# eQTR[eQTR$holeBefore|eQTR$holeAfter,hole:=pasteHole(start,end),by="chrReg"]
+# eQTR[!is.na(eQTR$hole),multiHole:=.N>2,by="hole"]
+# eQTR[eQTR$multiHole==TRUE,] #21k
+# #si plusieurs trous dans chrReg, change hole en checkant bien trou:
+# #etendre flag multihole a toute la region :
+# eQTR[,multiHole:=any(multiHole),by="chrReg"]
+# 
+# eQTR[eQTR$multiHole==TRUE]#51k
+# pasteMultiHole<-function(startRegs,endRegs,holeAfter,holeBefore){
+#   holes<-rep(NA,length(startRegs))
+#   for (i in 1:(length(startRegs)-1)){
+#     #si ya un vrai trou :
+#     if(holeAfter[i]&holeBefore[i+1]){
+#       holes[i]<-paste(endRegs[i],startRegs[i+1],sep = ":")
+#     }else{
+#       holes[i]<-NA
+#     }
+#   }
+#   
+#   return(holes)
+# }
+# eQTR[eQTR$multiHole==TRUE,hole:=pasteMultiHole(start,end,holeAfter,holeBefore),by="chrReg"]#51k
+# eQTR[eQTR$multiHole==TRUE]
+# 
+# 
+# distReg<-function(startRegs,endRegs){
+#   if(length(startRegs)==2&length(startRegs)==length(endRegs)){
+#     return(startRegs[2]-endRegs[1])
+#   }else{
+#     return(NA)
+#   }
+# }
+# eQTR[!is.na(hole),distHole:=distReg(start,end),by="hole"]
+# eQTR[!is.na(hole)]
+# 
+# eQTR[eQTR$holeAfter,end:=end+floor(distHole/2)]
+# eQTR[eQTR$holeBefore,start:=start-ceiling(distHole/2)]
+# eQTR[!is.na(eQTR$hole)]
+# eQTR[,chrReg.gene:=paste(str_extract(chr,"[0-9XY]{1,2}"),start,end,sep = ":")]
+# eQTR
+# fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
 
 #2) asso gene CpG :
 #for match chrReg2 with pos CpG, need all reg even if no eQTR
@@ -585,6 +588,89 @@ for(i in 2:length(cols)){
   
 }
 fwrite(annot,"../../ref/2020-05-05_full_annotation_CpG.csv",sep = ";")
+
+
+#nouvel essai 
+annot<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
+annot[,pos:=start]
+annot<-annot[,-c("start","stop","id")]
+annot
+ord<-names(annot)[c(1,2,ncol(annot),3:(ncol(annot)-1))]
+annot<-annot[,..ord]
+annot
+#remove empty annot
+annot<-annot[chr!=""]
+annot<-annot[pos!=""]
+annot<-annot[!is.na(pos)]
+annot
+eQTRligtht<-eQTR[,.(chr,start.eQTR2,end.eQTR2,gene,pval_beta,nQTL.reg.gene,avg.pval.thr,avg.distTSS,distr.distTSS,avg.pos,sd.pos)]
+eQTRligtht<-eQTRligtht[!is.na(gene)&gene!=""]
+eQTRligtht<-eQTRligtht[!is.na(start.eQTR2)]
+#test
+annoth<-head(annot,10000)
+
+sRegs<-allChrRegLight[chr==annot$chr[1]&start.eQTR2<annot$pos[1]&end.eQTR2>annot$pos[1]]
+sRegs[,locisID:=annot$locisID[1]]
+
+for(i in 2 :nrow(annot)){
+
+  sReg<-eQTRlight[chr==annot$chr[i]&start.eQTR2<annot$pos[i]&end.eQTR2>annot$pos[i]]
+  sReg[,locisID:=annot$locisID[i]]
+  sRegs<-rbind(sRegs,sReg)
+  
+}
+#all, gene_id
+#1) save nb de eGenes regulable 
+for(chrom in unique(annot$chr)){
+  print(chrom)
+  subChrRegLight<-allChrRegLight[chr==chrom]
+  annot[chr==chrom,nb.eGenes:=sapply(pos,function(x){
+    genes<-unique(na.omit(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
+    return(length(genes))
+    
+  }),by="locisID"]
+  max(annot$nb.eGenes,na.rm = T)
+}
+maxGenes.CpG<-max(annot$nb.eGenes)
+print(maxGenes.CpG)
+#2) save genes 
+
+cols<-paste('eGene',1:maxGenes.CpG,sep=".")
+col<-cols[1]
+for(chrom in unique(annot$chr)){
+  print(chrom)
+  subChrRegLight<-allChrRegLight[chr==chrom]
+  annot[chr==chrom,(col):=sapply(pos,function(x){
+    genes<-na.omit(unique(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
+    genes<-c(genes,rep(NA,maxGenes.CpG-length(genes)))
+    return(genes[1])
+    
+  }),by="locisID"]
+}
+
+colAvant<-col
+for(i in 2:length(cols)){
+  col<-cols[i]
+  print(col)
+  for(chrom in unique(annot$chr)){
+    print(chrom)
+    subChrRegLight<-allChrRegLight[chr==chrom]
+    annot[chr==chrom&!is.na((colAvant)),(col):=sapply(pos,function(x){
+      genes<-na.omit(unique(subChrRegLight[x>start.eQTR2&x<end.eQTR2]$gene))
+      genes<-c(genes,rep(NA,maxGenes.CpG-length(genes)))
+      return(genes[i])
+      
+    }),by="locisID"]
+  }
+  colAvant<-col
+  
+  
+  
+}
+fwrite(annot,"../../ref/2020-05-05_full_annotation_CpG.csv",sep = ";")
+
+
+
 
 #si dans eQTR1 => gene, conf=1
 #sinon si dans eQTR2 => gene, conf=0.9
