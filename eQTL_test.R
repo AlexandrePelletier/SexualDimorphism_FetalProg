@@ -48,7 +48,8 @@ library(stringr)
 wb_eQTL$gene_idTrunked<-str_remove(wb_eQTL$gene_id,"\\..*")
 
 genes.df<-bitr(unique(wb_eQTL$gene_idTrunked),fromType = "ENSEMBL",toType = "SYMBOL",OrgDb = org.Hs.eg.db)
-#18.62% of input gene IDs are fail to map
+#18.62% of input gene IDs are fail to map 
+#/!\ use biomart a la place (code plus bas)
 head(genes.df)
 head(unique(wb_eQTL$gene_idTrunked))
 #add symbol
@@ -397,7 +398,8 @@ eQTR[,chrReg.gene:=paste(str_extract(chr,"[0-9XY]{1,2}"),start.eQTR2,end.eQTR2,s
 fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
 eQTR<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv")
 eQTR
-# #ajuster région avec bon genes : 
+
+# #ajuster région avec bon genes : #/!\ NOT RUN mais garder au cas ou le code serait utile
 # #1) facile, region avec un gene reste region avec un gene
 # eQTR1<-eQTR[nGenes==1,]
 # 
@@ -489,10 +491,7 @@ eQTR
 # eQTR[!is.na(eQTR$hole)]
 # eQTR[,chrReg.gene:=paste(str_extract(chr,"[0-9XY]{1,2}"),start,end,sep = ":")]
 # eQTR
-# fwrite(eQTR,"../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv",sep = ";")
-
-#2) asso gene CpG :
-
+# 
 # #for match chrReg2 with pos CpG, need all reg even if no eQTR
 # features<-fread("../../ref/CD34_all_chromatin_feature.csv")
 # features
@@ -516,6 +515,12 @@ eQTR
 # allChrReg
 # fwrite(allChrReg,file = "../../ref/2020-05-05_annot_wholeGenome_regul_genes.csv")
 # 
+
+
+
+
+#2) asso gene CpG :
+
 
 #annot annot with eGenes
 
@@ -623,13 +628,44 @@ CpG.regs[minDistTSS>0,distTSS:=minDistTSS+(pos-start.eQTR2)]
 CpG.regs[minDistTSS<0,distTSS:=minDistTSS-(end.eQTR2-pos)]
 #merge annot df et sRegs df
 CpG.regs<-CpG.regs[,.(locisID,chr,pos,type,feature_type_name,distTSS,gene,start.eQTR2,end.eQTR2,length.eQTR2,nQTL.reg.gene,nGenes)]
+
+CpG.regs[,nGenes.reg:=nGenes]
+CpG.regs<-CpG.regs[,-"nGenes"]
+#cpgreg par locis
+CpG.regs[!is.na(gene),nGenes.cpg:=.N,by="locisID"]
+CpG.regs[is.na(gene),nGenes.cpg:=0]
+CpG.regs<-CpG.regs[,.(locisID,chr,pos,type,feature_type_name,nGenes.cpg,distTSS,gene,start.eQTR2,end.eQTR2,length.eQTR2,nQTL.reg.gene,nGenes.reg)]
 #save
-CpG.regs
-fwrite(CpG.regs,"../../ref/allCpG_genes_whole_blood_eQTLlinks.csv",sep = ";")
+fwrite(CpG.regs,"../../ref/allCpG_annotation_genes_links_with_blood_eQTL_and_ensembl_reg_dom.csv",sep = ";")
 
-#si dans eQTR1 => gene, conf=1
-#sinon si dans eQTR2 => gene, conf=0.9
-#sinon si dans aucun eQTR => eQTR2 le plus proche, conf = 0.9-(dist start|end)/max
 
-#sinon si dans eQTR2 => 1 gene, conf=0.9
 
+
+#nb de genes regulés par locis
+sum(unique(CpG.regs,by="locisID")$nGenes.cpg>0) #436608 locis
+
+#in the 780k locis
+res<-fread("analyses/withoutIUGR/2020-04-16_res_locis_in_FC.FL_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",dec = ",")
+names(res)[1]<-"locisID"
+names(res)[7]<-"pos"
+sapply(res, class)
+names(CpG.regs)[8]<-"geneLink"
+res<-merge(res,CpG.regs,by=c("locisID","chr","pos","type"),all.x = T)
+unique(res,by="locisID")
+sum(unique(res,by="locisID")$nGenes.cpg>0,na.rm = T) #142348/780k, pas terrible
+sum(unique(res[pval<0.001],by="locisID")$nGenes.cpg>0,na.rm = T) #1000/3600, pas terrible
+sum(unique(res[pval<0.0001],by="locisID")$nGenes.cpg>0,na.rm = T) 
+hist(unique(CpG.regs,by="locisID")$nGenes.cpg,breaks = 50)
+
+#figures : 
+#nb de genes regulés par locis
+library(ggplot2)
+ggplot(unique(res,by="locisID"))+
+         geom_bar(aes(x=nGenes.cpg))
+#par type
+ggplot(unique(res[!is.na(type)],by="locisID"))+
+  geom_bar(aes(x=nGenes.cpg))+
+  facet_wrap(~type)
+
+ggplot(unique(res[!is.na(type)],by="locisID"))+
+  geom_boxplot(aes(x=as.factor(type),y=nGenes.cpg))
