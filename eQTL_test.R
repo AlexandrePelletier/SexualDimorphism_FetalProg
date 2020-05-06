@@ -549,26 +549,32 @@ for(chrom in unique(annot$chr)){
   start1<-0
   for(p in 1:100){
     f<-p/100
-    print(paste(p,"%"))
+    print(paste(chrom,p,"%"))
     stop<-quantile(annotl$pos,f)
     annotll<-annotl[pos>start1&pos<=stop]
     print(paste(nrow(annotll),"locis"))
     eQTRlll<-eQTRll[chr==chrom&(start.eQTR2%between%c(start1,stop)|end.eQTR2%between%c(start1,stop))]
     print(paste(nrow(eQTRlll),"regions"))
-    sRegs<-eQTRlll[start.eQTR2<annotll$pos[1]&end.eQTR2>annotll$pos[1]]
-    sRegs[,locisID:=annotll$locisID[1]]
     
-    for(i in 2:nrow(annotll)){
+    if(nrow(eQTRlll)>0){
+      #initialise sRegs
+      cpg<-annotll[1,]
+      sRegs<-eQTRlll[(start.eQTR2<cpg$pos)&(end.eQTR2>cpg$pos)]
+      sRegs[,locisID:=cpg$locisID]
+      sRegs[,pos:=cpg$pos]
       
-      sReg<-eQTRlll[chr==annotll$chr[i]&start.eQTR2<annotll$pos[i]&end.eQTR2>annotll$pos[i]]
-      sReg[,locisID:=annotl$locisID[i]]
-      sRegs<-rbind(sRegs,sReg)
+      for(i in 2:nrow(annotll)){
+        cpg<-annotll[i,]
+        sReg<-eQTRlll[(start.eQTR2<cpg$pos)&(end.eQTR2>cpg$pos)]
+        sReg[,locisID:=cpg$locisID]
+        sReg[,pos:=cpg$pos]
+        sRegs<-rbind(sRegs,sReg)
+      }
     }
+   
     fwrite(sRegs,file=paste0(output,"temp",chrom,p))
     start1<-stop
   }
-  
-  
   
   
 }
@@ -583,16 +589,43 @@ for(chr in paste0("chr",c(1:22,"X","Y"))){
   }
 }
 
-
+sRegs
+sRegs[duplicated(sRegs)]
+sRegs[locisID==2190609]
 sRegs<-unique(sRegs)
 
-sRegs
 
+#save this CpG-Gene links
+#1)ajout CpG info : pos, type, feature_type_name
+cols<-c("locisID","chr","pos","type","feature_type_name")
+sapply(annot, class)
+CpG.regs<-merge(sRegs,annot[,..cols],all.y = T)
+CpG.regs[locisID==2190609] #ok
+CpG.regs<-CpG.regs[,.(locisID,chr,pos,type,gene,start.eQTR2,end.eQTR2,feature_type_name)]
+#2)ajout eQTR info : distTSS, 
+eQTR
+cols<-c("nQTL.reg.gene","distr.distTSS","nGenes","length.eQTR2","start.eQTR2", "end.eQTR2",  "gene")
+CpG.regs<-merge(CpG.regs,eQTR[,..cols],by=c("start.eQTR2", "end.eQTR2",  "gene"),all.x = T)
+CpG.regs[locisID==2190609] #ok
+CpG.regs<-CpG.regs[,.(locisID,chr,pos,type,gene,start.eQTR2,end.eQTR2,length.eQTR2,nQTL.reg.gene,distr.distTSS,nGenes,feature_type_name)]
 
+#add distTSS CpG
+#1)remplace distr par min(distr)
+CpG.regs<-CpG.regs[!is.na(distr.distTSS),minDistTSS:=sapply(distr.distTSS,function(x){
+  rang<-as.numeric(strsplit(x,"/")[[1]])[c(1,5)]
+  closestTSS<-rang[which.min(abs(rang))]
+  return(closestTSS)
+})]
+#2) distCpG : si + => minDistTSS+(pos-starteQTR), si - => minDistTSS-(endeQTR-pos)
+#merge eQTR annot et sRegs
+CpG.regs[minDistTSS>0,distTSS:=minDistTSS+(pos-start.eQTR2)]
 
+CpG.regs[minDistTSS<0,distTSS:=minDistTSS-(end.eQTR2-pos)]
 #merge annot df et sRegs df
-
+CpG.regs<-CpG.regs[,.(locisID,chr,pos,type,feature_type_name,distTSS,gene,start.eQTR2,end.eQTR2,length.eQTR2,nQTL.reg.gene,nGenes)]
 #save
+CpG.regs
+fwrite(CpG.regs,"../../ref/allCpG_genes_whole_blood_eQTLlinks.csv",sep = ";")
 
 #si dans eQTR1 => gene, conf=1
 #sinon si dans eQTR2 => gene, conf=0.9
