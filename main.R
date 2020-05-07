@@ -80,7 +80,6 @@ plot(density(data_all$pct0))
 source("scripts/deter_seuilQC.R")
 names(data_all)
 #d'abord en fct msp1c et et nbNA
-
 deterSeuilQC(data_all,metrique = "msp1c",qTestes = 1:9/40) #exclu locis < q0.125
 quantile(data_all$msp1c,0.125) #6.532433e-08
 
@@ -601,9 +600,7 @@ for(compa in compas){
   
 }
 
-FCs<-data.frame()
 resParCompa<-list()
-seuilPval<-0.001
 #add quantile msp1c et conf plutot qua valeur brut (car illisible)
 q9Msp1c<-quantile(data_F$msp1c,1:9/10)
 q9ConfScore<-quantile(data_F$confidenceScore,1:9/10)
@@ -654,107 +651,9 @@ for(compa in compas){
   #
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
 }
+##SCORE CpG
 
-
-
-
-#RES PAR COMPAS
-#scRNA-seq annot
-#genes Expr
-CTRL_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInCTRL.csv",row.names = 1)
-LGA_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInLGA.csv",row.names = 1)
-listExprMat<-list(CTRL=CTRL_expr_by_pop,LGA=LGA_expr_by_pop)
-
-markers<-read.csv2("../../../Alexandre_SC/analyses/test_batch_integration/all.markers_SCTransform_CTRLandLGA_integrated.csv",row.names = 1)
-head(markers)
-#reannot 
-library(Seurat)
-source("scripts/scoreCluster.R")
-samples<-readRDS("../../../Alexandre_SC/analyses/test_batch_integration/CTRLandLGA_SCTransform_Integrated.rds")
-new.cluster.ids <- c("HSC-SELL2", "HSC-AVP", "HSC-Er", "HSC-SELL1", "EMP", "GMP",
-                     "LyP", "MkP", "proT","LMPP","preB","LT-HSC","Neu","LyB","Ly-ETS1","DC")
-names(new.cluster.ids) <- levels(samples)
-samples <- RenameIdents(samples, new.cluster.ids)
-
-for(i in 1:length(new.cluster.ids)){
-  markers$cluster[markers$cluster==as.numeric(names(new.cluster.ids)[i])]<-new.cluster.ids[i]
-}
-head(markers)
-scoresCluster<-scoreMarquageCluster(markers,samples,seuil = "intraClusterFixe",filtreMin = 2)
-write.csv2(scoresCluster,"analyses/test_scRNAseq_integration/sc_scoreClustersHSPC.csv",row.names = T)
-scoresCluster<-read.csv2("analyses/test_scRNAseq_integration/sc_scoreClustersHSPC.csv",row.names = 1)
-head(scoresCluster)
-
-resGenesParCompa<-list()
-for(compa in compas){
-  print(compa)
-  #RES PAR GENES
-  #make a df with rownames = genes, and  count of locis by genes 
-  resGenes<-resLocisToGenes(resParCompa[[compa]])
-  
-  #add genes Expr in bulk scrnaseq and in subpop
-  resGenes<-find.scGeneExpr(resGenes,listExprMat)
-  #add markers of clusters
-  resGenes<-addMarqueursClusters(scoresCluster,resGenes)
-  #add canonical/published markers of cell types
-  resGenes<-findMarqueursPops(rownames(resGenes),df = resGenes)
-  
-  #add fct and tags
-  try(resGenes<-find_fonction(rownames(resGenes),df = resGenes,save=T))
-  try(resGenes<-findIfTF(rownames(resGenes),resGenes,save=F,large = T))
-  try(resGenes<-findCbIn(rownames(resGenes),
-                         listeKeywords = list(HSPC="hematopo|myeloid|lymphoid|HSC|HSPC",
-                                              lineage="lineage decision|differentiation|cell fate",
-                                              stress="stress",
-                                              signaling="kinase|signaling|pathway"),
-                         genes_infos=resGenes))
-  #save 
-  resGenesParCompa[[compa]]<-resGenes
-  
-  
-}
-
-
-#write resLocis
-FCm<-mergeCols(FCs,mergeColsName = "FC",top = 4,filter = 20,abs = T,roundNum = 0)
-head(FCm)
-colsToMerge<-colnames(resGenes)[2:(which(colnames(resGenes)=="bulk_CTRL")-1)]
-for(compa in compas){
-  
-  print(compa)
-  resGenes<-resGenesParCompa[[compa]]
-  #garder seulement expr des 5 plus grande pop pour save ds csv
-  resGenes.merge<-mergeCols(df = resGenes,colsToMerge = colsToMerge,mergeColsName = "Expr",filter = 0.1,top = 5,abs = F)
-  
-  #RES PAR LOCIS
-  resLocis<-resParCompa[[compa]]
-  resLocis<-data.frame(row.names = rownames(resLocis),resLocis,FCm[rownames(resLocis),])
-  
-  resLocis<-annotLocis(resLocis = resLocis,resGenes =resGenes.merge )
-  
-  #save
-  resParCompa[[compa]]<-resLocis
-  write.csv2(resLocis,paste(output,"res_locis_in",compa,"top",nrow(resLocis),"pval",seuilPval,filtres,"model",model,".csv",sep = "_"),row.names = T,na = "")
-  
-}
-#SAVE ALL RES DU MODEL
-resModels<-list()
-resModels[[model]]<-list(model=models[[model]],
-                         locisSig=locisSig,
-                         res=resSig,
-                         seuilSig=seuilPval,
-                         distrib.compas=colSums(apply(resSig[,compas],2, function(x)return(x<seuilPval))),
-                         distrib.features=round(table(resSig$type)/length(resSig$type)*100,1),
-                         res.compas=resParCompa,
-                         resGenes.compas=resGenesParCompa
-                         
-                         )
-                         
-                         
-resModels[[model]]$distrib.compas
-saveRDS(resModels[[model]],file = paste(output,"LocisetGenes_AllCompas_pval",seuilPval,filtres,"model",model,'.rds'))
-
-#vulcano 
+#FIGURES RES LIMMA
 library(calibrate)
 seuilFC<-30
 seuilpval<-10^-4
@@ -778,11 +677,10 @@ for(compa in compas){
 }
 
 
+#RES PAR genes /!\ a actualiser
+#annot expr genes with CD34+ rnaseq data : 
 
-#model 4 : very more locis in CF.LF than in CM.LM, 
-#model 7 : not more locis in CF.LF than in CM.LM that pass the FC and pval threshold,
-#need to be less stringent with model 7
-
+#SCORE GENE
 
 
 ###PATHWAY ANALYSIS
@@ -791,470 +689,9 @@ library(clusterProfiler)
 library(org.Hs.eg.db)
 keytypes(org.Hs.eg.db)
 
-#M.F
-# CM.CF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.FC_top_1224_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-# C.L<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_C.L_top_4878_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-# CM.LM<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_MC.ML_top_1758_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-# CF.LF<-read.csv2("../Alexandre_Methyl/analyses/main/2020-04-01_res_locis_in_FC.FL_top_4495_pval_0.001_locisF.msp1.NA.fullMethyl_model_4_.csv")
-names(resParCompa)
-CM.CF<-resParCompa[["MC.FC"]]
 
-genes<-na.omit(CM.CF$gene)
-length(genes)
-cat(paste(genes,collapse = "\n"))
 
-#trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-head(gene.df)
-kk_CM.CF <- enrichKEGG(gene         = gene.df$ENTREZID,
-                       pAdjustMethod = "BH",
-                       pvalueCutoff  = 0.05,
-                       qvalueCutoff  = 0.15)
-head(kk_CM.CF) # none
-
-
-#GO
-GO_CM.CF <- enrichGO(gene         = gene.df$ENTREZID,
-                     OrgDb         = org.Hs.eg.db,
-                     pAdjustMethod = "BH",
-                     pvalueCutoff  = 0.01,
-                     qvalueCutoff  = 0.05,
-                     readable = T)
-head(GO_CM.CF)
-#DNA-binding transcription activator activity, RNA polymerase II-specific
-#and phosphatidylinositol-3,5-bisphosphate binding
-
-#sexual dim in response to stress
-
-resKEGG<-list()
-resGO<-list()
-#C.L
-compa<-"C.L"
-
-genes<-na.omit(resParCompa[[compa]]$gene)
-length(genes)#3714
-#trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-head(gene.df)
-kk<- enrichKEGG(gene         = gene.df$ENTREZID,
-                pAdjustMethod = "BH",
-                pvalueCutoff  = 0.05,
-                qvalueCutoff  = 0.15)
-resKEGG[[compa]]<-head(kk,50)
-
-paths<-resKEGG[[compa]]$Description
-length(paths) #38
-
-#see genes paths :
-paths<-c("hsa04550","hsa05202","hsa04360")
-genesPaths<-list()
-# de Signaling pathways regulating pluripotency
-for(path in paths){
-  genesPaths[[path]]<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(resKEGG[[compa]][path,"geneID"],"/")[[1]])]
-  print(cat(paste(genesPaths[[path]],collapse = ", ")))
-  print("")
-}
-
-#see intersect avec venn :
-allgenes<-Reduce(union,genesPaths)
-
-c3<-cbind(sapply(genesPaths, function(x){
-  return(as.numeric(allgenes%in%x))
-}))
-a<-vennCounts(c3)
-vennDiagram(a,names = trunkName(resKEGG[[compa]][paths,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
-
-#GO
-GO <- enrichGO(gene         = gene.df$ENTREZID,
-               OrgDb         = org.Hs.eg.db,
-               pAdjustMethod = "BH",
-               pvalueCutoff  = 0.01,
-               qvalueCutoff  = 0.05,
-               readable = T)
-
-resGO[[compa]]<-head(GO,50)
-BP<-resGO[[compa]]$Description
-length(BP) #5
-
-#see genes paths :
-GOs<-c("GO:0001228","GO:0035326","GO:0043425")
-genesGOs<-list()
-# de Signaling pathways regulating pluripotency
-for(go in GOs){
-  genesGOs[[go]]<-strsplit(resGO[[compa]][go,"geneID"],"/")[[1]]
-  print(cat(paste(genesGOs[[go]],collapse = ", ")))
-  print("")
-}
-
-#see intersect avec venn :
-allgenes<-Reduce(union,genesGOs)
-
-c3<-cbind(sapply(genesGOs, function(x){
-  return(as.numeric(allgenes%in%x))
-}))
-a<-vennCounts(c3)
-vennDiagram(a,names = trunkName(resGO[[compa]][GOs,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
-
-
-#CM.LM
-compa<-"MC.ML"
-genes<-na.omit(resParCompa[[compa]]$gene)
-length(genes)#975
-#trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-head(gene.df)
-kk<- enrichKEGG(gene         = gene.df$ENTREZID,
-                pAdjustMethod = "BH",
-                pvalueCutoff  = 0.05,
-                qvalueCutoff  = 0.15)
-resKEGG[[compa]]<-head(kk,50)
-
-paths<-resKEGG[[compa]]$Description
-length(paths) #3 "Hippo signaling pathway"   "Wnt signaling pathway"     "Th17 cell differentiation"
-
-#see genes paths :
-paths<-rownames(resKEGG[[compa]])
-genesPaths<-list()
-# de Signaling pathways regulating pluripotency
-for(path in paths){
-  genesPaths[[path]]<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(resKEGG[[compa]][path,"geneID"],"/")[[1]])]
-  print(cat(paste(genesPaths[[path]],collapse = ", ")))
-  print("")
-}
-
-#see intersect avec venn :
-allgenes<-Reduce(union,genesPaths)
-
-c3<-cbind(sapply(genesPaths, function(x){
-  return(as.numeric(allgenes%in%x))
-}))
-a<-vennCounts(c3)
-vennDiagram(a,names = trunkName(resKEGG[[compa]][paths,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
-
-#GO
-GO <- enrichGO(gene         = gene.df$ENTREZID,
-               OrgDb         = org.Hs.eg.db,
-               pAdjustMethod = "BH",
-               pvalueCutoff  = 0.01,
-               qvalueCutoff  = 0.05,
-               readable = T)
-
-resGO[[compa]]<-head(GO,50)
-BP<-resGO[[compa]]$Description
-length(BP) #0
-
-
-
-#CF.LF
-compa<-"FC.FL"
-genes<-na.omit(resParCompa[[compa]]$gene)
-length(genes)#3604
-#trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-head(gene.df)
-kk<- enrichKEGG(gene         = gene.df$ENTREZID,
-                pAdjustMethod = "BH",
-                pvalueCutoff  = 0.05,
-                qvalueCutoff  = 0.15)
-resKEGG[[compa]]<-head(kk,50)
-
-paths<-resKEGG[[compa]]$Description
-length(paths) #50 
-
-#see genes paths :
-paths<-rownames(resKEGG[[compa]])[1:3]
-genesPaths<-list()
-# de Signaling pathways regulating pluripotency
-for(path in paths){
-  genesPaths[[path]]<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(resKEGG[[compa]][path,"geneID"],"/")[[1]])]
-  print(cat(paste(genesPaths[[path]],collapse = ", ")))
-  print("")
-}
-
-#see intersect avec venn :
-allgenes<-Reduce(union,genesPaths)
-
-c3<-cbind(sapply(genesPaths, function(x){
-  return(as.numeric(allgenes%in%x))
-}))
-a<-vennCounts(c3)
-vennDiagram(a,names = trunkName(resKEGG[[compa]][paths,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
-
-#GO
-GO <- enrichGO(gene         = gene.df$ENTREZID,
-               OrgDb         = org.Hs.eg.db,
-               pAdjustMethod = "BH",
-               pvalueCutoff  = 0.01,
-               qvalueCutoff  = 0.05,
-               readable = T)
-
-resGO[[compa]]<-head(GO,50)
-BP<-resGO[[compa]]$Description
-length(BP) #12
-#see genes GOs :
-GOs<-rownames(resGO[[compa]])[c(1,3,9)]
-genesGOs<-list()
-# de Signaling pathways regulating pluripotency
-for(go in GOs){
-  genesGOs[[go]]<-strsplit(resGO[[compa]][go,"geneID"],"/")[[1]]
-  print(cat(paste(genesGOs[[go]],collapse = ", ")))
-  print("")
-}
-
-#see intersect avec venn :
-allgenes<-Reduce(union,genesGOs)
-
-c3<-cbind(sapply(genesGOs, function(x){
-  return(as.numeric(allgenes%in%x))
-}))
-a<-vennCounts(c3)
-vennDiagram(a,names = trunkName(resGO[[compa]][GOs,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
-
-#LM.LF
-compa<-"ML.FL"
-genes<-na.omit(resParCompa[[compa]]$gene)
-length(genes)#1201
-#trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-head(gene.df)
-kk<- enrichKEGG(gene         = gene.df$ENTREZID,
-                pAdjustMethod = "BH",
-                pvalueCutoff  = 0.05,
-                qvalueCutoff  = 0.15)
-resKEGG[[compa]]<-head(kk,50)
-
-paths<-resKEGG[[compa]]$Description
-length(paths) #24 
-
-#see genes paths :
-paths<-rownames(resKEGG[[compa]])[c(1,7,19)]
-genesPaths<-list()
-# de Signaling pathways regulating pluripotency
-for(path in paths){
-  genesPaths[[path]]<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(resKEGG[[compa]][path,"geneID"],"/")[[1]])]
-  print(cat(paste(genesPaths[[path]],collapse = ", ")))
-  print("")
-}
-
-#see intersect avec venn :
-allgenes<-Reduce(union,genesPaths)
-
-c3<-cbind(sapply(genesPaths, function(x){
-  return(as.numeric(allgenes%in%x))
-}))
-a<-vennCounts(c3)
-vennDiagram(a,names = trunkName(resKEGG[[compa]][paths,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
-
-#GO
-GO <- enrichGO(gene         = gene.df$ENTREZID,
-               OrgDb         = org.Hs.eg.db,
-               pAdjustMethod = "BH",
-               pvalueCutoff  = 0.01,
-               qvalueCutoff  = 0.05,
-               readable = T)
-
-resGO[[compa]]<-head(GO,50)
-BP<-resGO[[compa]]$Description
-length(BP) #1, "DNA-binding transcription activator activity, RNA polymerase II-specific"
-
-#Hypermet in LF
-compa<-"ML.FL"
-genes<-na.omit(resParCompa[[compa]]$gene[resParCompa[[compa]]$FC>0])
-compa<-"ML.FL_HyperMet"
-length(genes)#907
-#trad en entrez ID
-gene.df <- bitr(unique(genes), fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-head(gene.df)
-kk<- enrichKEGG(gene         = gene.df$ENTREZID,
-                pAdjustMethod = "BH",
-                pvalueCutoff  = 0.1,
-                qvalueCutoff  = 0.25)
-resKEGG[[compa]]<-head(kk,50)
-
-paths<-resKEGG[[compa]]$Description
-length(paths) #8 avec pvalueCutoff  = 0.1, et qvalueCutoff  = 0.25
-# [1] "Basal cell carcinoma"             "GnRH secretion"                   "AMPK signaling pathway"          
-# [4] "Protein digestion and absorption" "Hippo signaling pathway"          "Insulin secretion"               
-# [7] "Gastric cancer"                   "Chronic myeloid leukemia"
-
-#see genes paths :
-paths<-rownames(resKEGG[[compa]])[c(2,3,6)]
-genesPaths<-list()
-# de Signaling pathways regulating pluripotency
-for(path in paths){
-  genesPaths[[path]]<-gene.df$SYMBOL[gene.df$ENTREZID%in%c(strsplit(resKEGG[[compa]][path,"geneID"],"/")[[1]])]
-  print(cat(paste(genesPaths[[path]],collapse = ", ")))
-  print("")
-}
-
-#see intersect avec venn :
-allgenes<-Reduce(union,genesPaths)
-
-c3<-cbind(sapply(genesPaths, function(x){
-  return(as.numeric(allgenes%in%x))
-}))
-a<-vennCounts(c3)
-vennDiagram(a,names = trunkName(resKEGG[[compa]][paths,"Description"],maxLeng = 5,n.mot = 4),cex = c(1,1,1))
-
-#GO
-GO <- enrichGO(gene         = gene.df$ENTREZID,
-               OrgDb         = org.Hs.eg.db,
-               pAdjustMethod = "BH",
-               pvalueCutoff  = 0.01,
-               qvalueCutoff  = 0.05,
-               readable = T)
-
-resGO[[compa]]<-head(GO,50)
-BP<-resGO[[compa]]$Description
-length(BP) #1, "DNA-binding transcription activator activity, RNA polymerase II-specific"
-
-
-#GSEA
-library(clusterProfiler)
-library(org.Hs.eg.db)
-resAll<-readRDS("analyses/main/newLocisF/2020-04-12 LocisetGenes_AllCompas_pval 0.001 locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros model 13 .rds")
-resAll$model
-#basic : 
-##with the FC
-#make the geneList : 
-# The geneList contains three features:
-# numeric vector: fold change or other type of numerical variable
-# named vector: every number was named by the corresponding gene ID
-# sorted vector: number should be sorted in decreasing order
-
-#with FC.FL, mean FC pos (hypermet) if several CpG hypermet in a gene
-res<-resAll$res.compas$FC.FL
-head(res)
-genes<-na.omit(unique(res$gene))
-#gene.df <- bitr(genes, fromType = "SYMBOL",toType = c("ENTREZID", "SYMBOL"),OrgDb = org.Hs.eg.db)
-#genes<-gene.df$ENTREZID
-geneList<-rep(0,length(genes))
-names(geneList)<-genes
-for(i in 1:length(genes)){
-  gene<-genes[i]
-  #gene<-gene.df$SYMBOL[gene.df$ENTREZID==genes[i]]
-  
-  geneList[i]<-mean(res[res$FC>0&res$gene==gene,"FC"])
-  
-}
-head(geneList)
-length(geneList)
-#order : 
-geneList<-sort(geneList,decreasing = T)
-head(geneList)
-length(geneList) #3581
-
-#or with th function :
-geneList<-makeGeneList(res,tradInENTREZID = T,withResLocis = T,returnRank = F)
-head(geneList)
-
-kk2 <- gseKEGG(geneList     = geneList,
-               keyType = "ncbi-geneid",
-               nPerm        = 100,
-               minGSSize    = 20,
-               pvalueCutoff = 0.5,
-               verbose      = FALSE)
-head(kk2) #doesnt work
-
-#with msigDB geneList
-CanonPathGS <- read.gmt("../../ref/c2.cp.kegg.v7.1.symbols.gmt") 
-head(CanonPathGS) #it s in gene SYMBOL so :
-
-genes<-na.omit(unique(res$gene))
-geneList<-makeGeneList(res,withResLocis = T,returnRank = F)
-head(geneList)
-
-kk<- GSEA(geneList, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
-kk<-head(kk,50)
-
-#get genes from REACTOME_VESICLE_MEDIATED_TRANSPORT
-genesVes<-tr(head(kk2)["REACTOME_VESICLE_MEDIATED_TRANSPORT","core_enrichment"])
-genesVes
-
-##With my score : met a influence neg if in 6, pos if in 4, expr in HSPC,
-locis<-rownames(res)
-#influence[-1,1]
-influes<-sapply(res$type,function(x){
-  if(x==4){
-    influe<-1
-  }else if(x==6){
-    influe<--1
-  }else{
-    influe<-0
-  }
-  return(influe)
-  
-})
-
-#Met[-1,1] : hypermet chez LGA = FC pos = 1
-Met<-sapply(res$FC,function(x){
-  return(ifelse(x>0,1,-1))
-  
-})
-
-#=> si LGA hypermet sur prom,  Met*influe => 1*-1=-1=> met a influence neg sur gene (downregule le gene)
-
-#with just that and the absFC, en additionnant ces scores :
-res$basicScore<-abs(res$FC)*(Met*influes)
-max(res$basicScore)
-geneList2.mean<-makeGeneList(res,score="basicScore",withResLocis = T,aggregFUN = mean,returnRank = F)
-geneList2.sum<-makeGeneList(res,score="basicScore",withResLocis = T,aggregFUN = sum,returnRank = F)
-head(geneList2.mean,15)
-head(geneList2.sum,15)
-#    NR2F2      SOX1 LINC00461      PAX7     HPSE2   ONECUT1 
-#238.3086  199.8215  161.7815  152.6651  150.7314  147.8474 
-
-#compare to geneList with MeanFC pos:
-geneList1.mean<-makeGeneList(res,score="FC",,withResLocis = T,aggregFUN = mean,returnRank = F)
-geneList1.sum<-makeGeneList(res,score="FC",withResLocis = T,aggregFUN = sum,returnRank = F)
-head(geneList1.mean,15)
-head(geneList1.sum,15)
-head(geneList)
-# SUCLA2      ITSN2   NDUFA4L2     PTP4A2      SFXN4 PAXIP1-AS2 
-# 56.64272   56.62103   56.05162   56.05000   55.37305   55.29064 
-
-kk2.mean<- GSEA(geneList2.mean, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
-kk2.mean<-head(kk2.mean,50) #les 50 sont signifs ! 
-kk2.mean
-
-kk2.sum<- GSEA(geneList2.sum, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
-kk2.sum<-head(kk2.sum,50) #les 50 sont signifs ! 
-kk2.sum[,c(2,3,5,6)]
-
-geneList2.sum[names(geneList2.mean)]<-1
-geneList2.sum
-#wereas :
-
-kk1.mean<- GSEA(geneList1.mean, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
-kk1.mean<-head(kk1.mean,50)  
-kk1.mean[,c(2,3,5,6)] #0
-
-kk1.sum<- GSEA(geneList1.sum, TERM2GENE=CanonPathGS, verbose=FALSE,pvalueCutoff = 0.5,minGSSize = 20)
-kk1.sum<-head(kk1.sum,50) 
-kk1.sum[,c(2,3,5,6)] #0
-
-
-
-#get genes from ...
-genesVes<-tr(head(kk2)["REACTOME_VESICLE_MEDIATED_TRANSPORT","core_enrichment"])
-genesVes
-
-
-#(FCscore[0:1]: plus un FC rdt imprtznt, plus le score le sera
-FCscores<-abs(FCs[locis,"C.L"])/max(abs(FCs[locis,"C.L"]))
-
-
-
-#with cpg bias adjutstement (ebBayes)
-
-
-
-
-#! pathway visual (To do)
-
-
-
-#DMR : 
+###DMR ANALYSIS : 
 #quelle algo prendre ?
 #from An evaluation of supervised methods for identifying differentially methylated regions in Illumina methylation arrays
 #(https://academic.oup.com/bib/article/20/6/2224/5096828#191593271) : 
@@ -1350,8 +787,6 @@ for(compa in "F.M"){
   write.csv2(resDMR,file = paste(output,compa,"resDMR_comb-p_model",model,".csv",sep = "_"))
   resDMRs[[compa]]<-resDMR
 }
-
-
 #du sens bio ? 
 library(clusterProfiler)
 resDMR<-resDMRs[["FC.FL"]]
@@ -1370,17 +805,55 @@ GO_DMR <- enrichGO(gene         = gene.df$ENTREZID,
 head(GO_DMR) #transcription corepressor activity 
 
 
-#WHY THIS SEX SPE RESPONSE ?
-#parce que femelle ont les plus gros poids ?
-LGA<-batch[samples_F_F[samples_F_F%in%rownames(batch)[batch$Group_name=="L"]],]
-dim(LGA)
-plot(factor(LGA$Gender),as.numeric(LGA$PI)) 
-#non, distrib pareil
-plot(as.factor(LGA$Gender),as.numeric(LGA$Weight..g.)) 
 
 
+#BONUS : scRNA-seq annot
 
+# #reannot 
+# library(Seurat)
+# source("scripts/scoreCluster.R")
+# samples<-readRDS("../../../Alexandre_SC/analyses/test_batch_integration/CTRLandLGA_SCTransform_Integrated.rds")
+# new.cluster.ids <- c("HSC-SELL2", "HSC-AVP", "HSC-Er", "HSC-SELL1", "EMP", "GMP",
+#                      "LyP", "MkP", "proT","LMPP","preB","LT-HSC","Neu","LyB","Ly-ETS1","DC")
+# names(new.cluster.ids) <- levels(samples)
+# samples <- RenameIdents(samples, new.cluster.ids)
+# 
+# for(i in 1:length(new.cluster.ids)){
+#   markers$cluster[markers$cluster==as.numeric(names(new.cluster.ids)[i])]<-new.cluster.ids[i]
+# }
+# head(markers)
+# scoresCluster<-scoreMarquageCluster(markers,samples,seuil = "intraClusterFixe",filtreMin = 2)
+# write.csv2(scoresCluster,"analyses/test_scRNAseq_integration/sc_scoreClustersHSPC.csv",row.names = T)
 
+markers<-read.csv2("../../../Alexandre_SC/analyses/test_batch_integration/all.markers_SCTransform_CTRLandLGA_integrated.csv",row.names = 1)
+head(markers)
 
+scoresCluster<-read.csv2("analyses/test_scRNAseq_integration/sc_scoreClustersHSPC.csv",row.names = 1)
+head(scoresCluster)
 
+resGenesParCompa<-list()
+
+#for genes Expr
+CTRL_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInCTRL.csv",row.names = 1)
+LGA_expr_by_pop<-read.csv2("analyses/test_scRNAseq_integration/geneExprInLGA.csv",row.names = 1)
+listExprMat<-list(CTRL=CTRL_expr_by_pop,LGA=LGA_expr_by_pop)
+
+for(compa in compas){
+  print(compa)
+  #RES PAR GENES
+  #make a df with rownames = genes, and  count of locis by genes 
+  resGenes<-resLocisToGenes(resParCompa[[compa]]) #!function a remplacer par un datatable
+  
+  #add genes Expr in bulk scrnaseq and in subpop
+  resGenes<-find.scGeneExpr(resGenes,listExprMat)
+  #add markers of clusters
+  resGenes<-addMarqueursClusters(scoresCluster,resGenes)
+  #add canonical/published markers of cell types
+  resGenes<-findMarqueursPops(rownames(resGenes),df = resGenes)
+  
+  #save 
+  resGenesParCompa[[compa]]<-resGenes
+  
+  
+}
 
