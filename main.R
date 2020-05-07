@@ -652,6 +652,35 @@ for(compa in compas){
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
 }
 ##SCORE CpG
+#need eQTR pour confWeight Links CpG-Gene
+eQTRs<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv")
+#add eQTR1 et pval et 
+eQTRs<-eQTRs[,.(chr,start.eQTR2,end.eQTR2,start.eQTR,end.eQTR,avg.pval.thr)]
+eQTRs
+res<-merge(res,eQTRs,all.x = TRUE)[order(pval)]
+res<-res[,avg.pval.thr:=abs(avg.pval.thr)]
+
+#need also a function to calculate confidence of the links CpG-Gene for eQTL linked Gene : 
+calcLinkScore<-function(pos,start,end,signif,maxSignif=0.001475078){
+  if(pos > (start-50)& pos < (end+50)){
+    score<-1
+  }else {
+    score<-log10(50)/(log10(1+abs(pos-min(abs(c(pos-(start-50),pos-(end+50)))))))
+  }
+  #si min pval >*1 si max pval > *0.75
+  score<-score*(0.75+0.25*(signif/maxSignif))
+  
+  #ajutser pour les eQTR trop grands (donc trop incertain) : si >200, ajuste score sinon descend progressivement
+  largeur<-end-start+1
+  if(largeur>200){
+    score<-score*(log10(200)/log10(largeur+1))
+  }
+  
+  
+  return(score)
+  
+}
+
 
 for(compa in compas){
   res<-resParCompa[[compa]]
@@ -709,7 +738,7 @@ for(compa in compas){
   # confWeight [0-1] : TSS, eQTL links, (cross correl ?)
   #rank normalisé de sum de : 
   #pour les genes pas asso par eQTR : tss +1 si <1000pb, descend progressivement sinon  : 
-  res[is.na(start.eQTR2),DistScore:=sapply(abs(distTSS),function(x){
+  res[is.na(start.eQTR2),LinkScore:=sapply(abs(distTSS),function(x){
     if(x<1000){
       score<-1
     }else {
@@ -719,14 +748,9 @@ for(compa in compas){
   })]
   
   #pour les genes asso par eQTR : [pomodoro ]
-    res[is.na(start.eQTR2),DistScore:=sapply(abs(distTSS),function(x){
-      if(x<1000){
-        score<-1
-      }else {
-        score<-3/log10(x)
-      }
-      return(score)
-    })]
+  # 1 si dans eQTR1+/-50pb, baisse progress jusqu'a 0.8
+  
+  res[!is.na(start.eQTR2),LinkScore:=calcLinkScore(pos,start.eQTR,end.eQTR,avg.pval.thr),by=.(locisID,start.eQTR2,gene)]
   
   #
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
