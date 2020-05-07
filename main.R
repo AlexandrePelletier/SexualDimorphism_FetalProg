@@ -611,8 +611,8 @@ q9ConfScore<-quantile(data_F$confidenceScore,1:9/10)
 for(compa in compas){
   print(compa)
   res<- topTable(fit2,coef=compa,n =Inf)
-  )
-  res<-data.table(locisID=rownames(res),
+  
+  res<-data.table(locisID=as.numeric(rownames(res)),
                   FC=res$logFC,
                   pval=res$P.Value,
                   pval.adj=res$adj.P.Val,
@@ -626,11 +626,36 @@ for(compa in compas){
   # save all locis pval and FC : 
   
   fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
+  resParCompa[[compa]]<-res
   print("ok")
   
 }
+#now, annot res with genes :
+# annot1<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
+# annot1<-annot1[!is.na(gene),][,pos:=start][,distTSS:=posAvant][,-c("ENSEMBL_ID","start","stop","posAvant","id", "ENTREZID","HSPC1","HSPC2",
+#                                   "CTCF.Binding.Site","Promoter", "Promoter.Flanking.Region", "Open.chromatin","Enhancer",
+#                                   "TF.binding.site", "CTRL_sc",
+#                                   "LGA_sc", "eQTLScore")]
+# annot1
+# annot2<-fread("../../ref/allCpG_annotation_genes_links_with_blood_eQTL_and_ensembl_reg_dom.csv")
+# annot2<-annot2[!is.na(start.eQTR2)][,gene:=geneLink][,-c("geneLink","length.eQTR2","nQTL.reg.gene","nGenes.reg","nGenes.cpg","nCpg.gene")]
+# annot2
+# annot<-merge(annot1,annot2,all=TRUE)
+# annot
+# fwrite(annot,"../../ref/allCpG_annotation_genes_and_feature_regulatory_domain_070520.csv",sep = ";")
 
-head(resParCompa)
+annot<-fread("../../ref/allCpG_annotation_genes_and_feature_regulatory_domain_070520.csv")
+
+for(compa in compas){
+  res<-resParCompa[[compa]]
+  res<-merge(res,annot,by="locisID",all.x = T)
+  resParCompa[[compa]]<-res
+  
+  #
+  #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
+}
+
+
 
 
 #RES PAR COMPAS
