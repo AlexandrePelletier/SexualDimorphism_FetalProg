@@ -15,7 +15,7 @@ source("scripts/utils.R")
 source("scripts/FindInfosGenes.R")
 source("scripts/scRNA-seq integration.R")
 #output dir 
-script_name <- "main"
+script_name <- "eQTL_integration"
 outputDir <- file.path("analyses",script_name)
 dir.create(path = outputDir, recursive = TRUE, showWarnings = FALSE, mode = "0777")
 date<-Sys.Date()
@@ -470,9 +470,6 @@ plot(batch[IUGR,"Mat.Age"],batch[IUGR,"pct0ApresF2"],col=batch$Mat.Age_Fac)
 # LIMMA CHOIX MODEL 
 # model de ! group_sex, sequencing, batch, group_comp_fac , latino, 
 #coix bas" sur l'enrichissement enh /prom et en distance du gene le plus proche
-annot<-read.csv2("../../ref/annotation_CpG_HELP_ALL_070420.csv",row.names = 1)
-head(annot)
-
 
 models<-list()
 model<-13
@@ -590,30 +587,6 @@ hist(annot[locisSig[locisSig%in%locis5k],"posAvant"],breaks = 100)
 
 
 #MODEL De confiance : 13
-model<-13
-formule<-~0 + group_sex  +batches +latino +mat.age +group_complexity_fac
-models[[model]]<-formule
-design<-model.matrix(models[[model]])
-colnames(design)<-make.names(colnames(design))
-fit <- lmFit(data_F[,samples_F_F], design)  
-
-cont.matrix <- makeContrasts(C.I="(group_sexFC+group_sexMC)-(group_sexFI+group_sexMI)",
-                             C.L = "(group_sexFC+group_sexMC)-(group_sexFL+group_sexML)",
-                             I.L = "(group_sexFI+group_sexMI)-(group_sexFL+group_sexML)",
-                             MC.ML="group_sexMC-group_sexML",
-                             MC.MI="group_sexMC-group_sexMI",
-                             MI.ML="group_sexMI-group_sexML",
-                             FC.FL="group_sexFC-group_sexFL",
-                             FC.FI="group_sexFC-group_sexFI",
-                             ML.FL="group_sexML-group_sexFL",
-                             MI.FI="group_sexMI-group_sexFI",
-                             MC.FC="group_sexMC-group_sexFC",
-                             F.M="(group_sexFC+group_sexFL+group_sexFI)-(group_sexMI+group_sexMC+group_sexML)",
-                             levels=design)
-
-
-fit2  <- contrasts.fit(fit, cont.matrix)
-fit2  <- eBayes(fit2) #warning message :Zero sample variances detected, have been offset away from zero 
 
 #concentrons nous sur le top1000 par compa
 compas<-colnames(fit2$p.value)
@@ -628,7 +601,6 @@ for(compa in compas){
   
 }
 
-
 FCs<-data.frame()
 resParCompa<-list()
 seuilPval<-0.001
@@ -639,47 +611,22 @@ q9ConfScore<-quantile(data_F$confidenceScore,1:9/10)
 for(compa in compas){
   print(compa)
   res<- topTable(fit2,coef=compa,n =Inf)
-  #if we decided to save all locis pval and FC : 
-  write.csv2(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),row.names = T)
-  if(any(res$P.Value<seuilPval)){
-    resF<-res[res$P.Value<seuilPval,]
-    print(paste(nrow(resF),"locis passe filtre pval"))
-    FCs[rownames(resF),compa]<-resF$logFC
-    locis<-rownames(resF)
-    res<-data.frame(row.names = locis,
-                                         FC=resF$logFC,
-                                         pval=resF$P.Value,
-                                         pval.adj=resF$adj.P.Val,
-                                         topCompa=compas[as.vector(apply(fit2$p.value[locis,compas],1,which.min))],
-                     annot[locis,c("chr","start","posAvant","gene","ENTREZID","type")],
-                                         complexity=data_F[locis,"complexity"],
-                    msp1Conf=sapply(data_F[locis,"msp1c"],function(x){
-                      return(sum(x>q9Msp1c))
-                    }),
-                    ConfScore=sapply(data_F[locis,"confidenceScore"],function(x){
-                      return(sum(x>q9ConfScore))
-                    }),
-                    pubHSPC_expr=rowMeans(annot[locis,c("HSPC1","HSPC2")])
-                    
-                    
-                    
-                                         
-                                         )
-    
-    
-    resParCompa[[compa]]<-res
-    
-    #enh/prom distrib
-    
-    barplot(table(res$type)/length(res$type)*100,main = compa)
-    png(paste(output,compa,"enh.prom_distrib_top",length(locis),"locis_pval",seuilPval,"model",model,".png",sep="_"), width = 700, height = 500)
-    barplot(table(res$type)/length(res$type)*100,main = compa)
-    dev.off()
-  }else{
-    print(paste("pas de CpG pour",compa))
-    resParCompa[[compa]]<-NA
-  }
+  )
+  res<-data.table(locisID=rownames(res),
+                  FC=res$logFC,
+                  pval=res$P.Value,
+                  pval.adj=res$adj.P.Val,
+                  complexity=data_F[rownames(res),"complexity"],
+                  msp1Conf=sapply(data_F[rownames(res),"msp1c"],function(x){
+                    return(sum(x>q9Msp1c))
+                  }),
+                  confScore=sapply(data_F[rownames(res),"confidenceScore"],function(x){
+                    return(sum(x>q9ConfScore))
+                  }))
+  # save all locis pval and FC : 
   
+  fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
+  print("ok")
   
 }
 

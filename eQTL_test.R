@@ -631,10 +631,16 @@ CpG.regs<-CpG.regs[,.(locisID,chr,pos,type,feature_type_name,distTSS,gene,start.
 
 CpG.regs[,nGenes.reg:=nGenes]
 CpG.regs<-CpG.regs[,-"nGenes"]
-#cpgreg par locis
+#nGenes par locis
 CpG.regs[!is.na(gene),nGenes.cpg:=.N,by="locisID"]
 CpG.regs[is.na(gene),nGenes.cpg:=0]
-CpG.regs<-CpG.regs[,.(locisID,chr,pos,type,feature_type_name,nGenes.cpg,distTSS,gene,start.eQTR2,end.eQTR2,length.eQTR2,nQTL.reg.gene,nGenes.reg)]
+
+#nCpG par genes
+names(CpG.regs)[8]<-"geneLink"
+CpG.regs[!is.na(geneLink),nCpg.gene:=.N,by="geneLink"]
+
+
+CpG.regs<-CpG.regs[,.(locisID,chr,pos,type,feature_type_name,nGenes.cpg,distTSS,geneLink,nCpg.gene,start.eQTR2,end.eQTR2,length.eQTR2,nQTL.reg.gene,nGenes.reg)]
 #save
 fwrite(CpG.regs,"../../ref/allCpG_annotation_genes_links_with_blood_eQTL_and_ensembl_reg_dom.csv",sep = ";")
 
@@ -649,23 +655,41 @@ res<-fread("analyses/withoutIUGR/2020-04-16_res_locis_in_FC.FL_pval_1_locisF.msp
 names(res)[1]<-"locisID"
 names(res)[7]<-"pos"
 sapply(res, class)
-names(CpG.regs)[8]<-"geneLink"
+
 res<-merge(res,CpG.regs,by=c("locisID","chr","pos","type"),all.x = T)
 unique(res,by="locisID")
 sum(unique(res,by="locisID")$nGenes.cpg>0,na.rm = T) #142348/780k, pas terrible
 sum(unique(res[pval<0.001],by="locisID")$nGenes.cpg>0,na.rm = T) #1000/3600, pas terrible
 sum(unique(res[pval<0.0001],by="locisID")$nGenes.cpg>0,na.rm = T) 
-hist(unique(CpG.regs,by="locisID")$nGenes.cpg,breaks = 50)
 
-#figures : 
-#nb de genes regulés par locis
+
+#figures pour confirmer: 
 library(ggplot2)
+#nb locis avec links eQTL
+ggplot(unique(res[!is.na(type)&!is.na(nGenes.cpg)],by="locisID"))+
+  geom_bar(aes(x=nGenes.cpg>0))
+
+#distribution
+ggplot(unique(res[!is.na(type)&nGenes.cpg>0],by="locisID"))+
+  geom_bar(aes(x=nGenes.cpg))
+
+#proportion de type
+#cpg lié a un gene vs not
+ggplot(unique(res[!is.na(type)&!is.na(nGenes.cpg)],by="locisID"),aes(x=nGenes.cpg>0,fill=as.factor(type)))+
+  geom_bar(position = "fill")+
+  scale_y_continuous(labels = scales::percent)
+
+#proportion de ensemblReg
+ggplot(unique(res[!is.na(type)&!is.na(nGenes.cpg)],by="locisID"),aes(x=nGenes.cpg>0,fill=feature_type_name!=""))+
+  geom_bar()
+
+#nb de genes regulés par locis
+ggplot(unique(res[!is.na(type)&nGenes.cpg>0],by="locisID"))+
+  geom_histogram(aes(x=nCpg.gene),bins= 50)
+
+
+hist(unique(CpG.regs,by="locisID")$nGenes.cpg,breaks = 50)
 ggplot(unique(res,by="locisID"))+
          geom_bar(aes(x=nGenes.cpg))
-#par type
-ggplot(unique(res[!is.na(type)],by="locisID"))+
-  geom_bar(aes(x=nGenes.cpg))+
-  facet_wrap(~type)
 
-ggplot(unique(res[!is.na(type)],by="locisID"))+
-  geom_boxplot(aes(x=as.factor(type),y=nGenes.cpg))
+
