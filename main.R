@@ -628,14 +628,14 @@ for(compa in compas){
   
 }
 #now, annot res with genes :
-# annot1<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
-# annot1<-annot1[!is.na(gene),][,pos:=start][,distTSS:=posAvant][,-c("ENSEMBL_ID","start","stop","posAvant","id", "ENTREZID","HSPC1","HSPC2",
+#  annot1<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
+#  annot1<-annot1[,distTSS:=posAvant][,-c("ENSEMBL_ID","posAvant", "ENTREZID","HSPC1","HSPC2",
 #                                   "CTCF.Binding.Site","Promoter", "Promoter.Flanking.Region", "Open.chromatin","Enhancer",
 #                                   "TF.binding.site", "CTRL_sc",
 #                                   "LGA_sc", "eQTLScore")]
 # annot1
 # annot2<-fread("../../ref/allCpG_annotation_genes_links_with_blood_eQTL_and_ensembl_reg_dom.csv")
-# annot2<-annot2[!is.na(start.eQTR2)][,gene:=geneLink][,-c("geneLink","length.eQTR2","nQTL.reg.gene","nGenes.reg","nGenes.cpg","nCpg.gene")]
+# annot2<-annot2[,pos:=pos-1][!is.na(start.eQTR2)][,gene:=geneLink][,-c("geneLink","length.eQTR2","nQTL.reg.gene","nGenes.reg","nGenes.cpg","nCpg.gene")]
 # annot2
 # annot<-merge(annot1,annot2,all=TRUE)
 # annot
@@ -646,12 +646,94 @@ annot<-fread("../../ref/allCpG_annotation_genes_and_feature_regulatory_domain_07
 for(compa in compas){
   res<-resParCompa[[compa]]
   res<-merge(res,annot,by="locisID",all.x = T)
-  resParCompa[[compa]]<-res
+  resParCompa[[compa]]<-res[order(pval)]
   
   #
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
 }
 ##SCORE CpG
+
+for(compa in compas){
+  res<-resParCompa[[compa]]
+  #FILTER RES
+  #without type and without gene
+  nLocisAvant<-length(unique(res$locisID))
+  res<-res[!is.na(type)][!is.na(gene)&gene!=""]
+  nLocisApres<-length(unique(res$locisID))
+  print(paste(round((nLocisAvant-nLocisApres)/nLocisAvant*100,1),"% des locis non associés a des gènes"))
+  ##DMC weigtht
+  #(FC[0:1] : toavoid overfitting, we use the rank of abs(FC) as metriks normalized
+  res[,FCScore:=rank(abs(FC))/max(rank(abs(FC)))]
+
+  #pval[0:1] : the same (with rank), to have the same weight
+  res[,PvalScore:=rank(1/pval)/max(rank(1/pval))]
+  
+  res[,DMCWeight:=PvalScore+FCScore]
+  
+  ##regulatory weight : je veux un poids entre 0.5 et 2, 0.5 etant aucune annotation regulatrice,
+  #et 2 etant toutes les annotations regulatrice (4/6, CTCF/prom/enh/, TF motif) 
+  #=> on part d'un score de 0.5 et +0.5 a chaque annot
+  
+  # +1 if (4,6), +0.75 if 5, +0.5 otherwise
+  res[,TypeScore:=sapply(type,function(x){
+    if(x%in%c(4,6)){
+      score<-1
+    }else if(x==5){
+      score<-0.75
+    }else{
+      score<-0.5
+    }
+    return(score)
+  })]
+  
+  # +0.5 if(CTCF,enh,prom,)+ 0.25 if prom flanking, openchrine, #+0.5 if(TFbind site), or 0 otherwise
+  res[,EnsRegScore:=sapply(feature_type_name,function(x){
+    vecX<-tr(x)
+    if(any(c("CTCF Binding Site","Promoter","Enhancer")%in%vecX)){
+      score<-0.5
+    }else if(any(c("Open chromatin","Promoter Flanking Region")%in%vecX)){
+      score<-0.25
+    }else{
+      score<-0
+    }
+    if("TF binding site"%in%vecX){
+      score<-score+0.5
+    }
+    return(score)
+  })]
+  
+  # add the 2 score to make the regulWeight:
+  res[,RegWeight:=TypeScore+EnsRegScore]
+  
+  #ConfWeight :
+  # confWeight [0-1] : TSS, eQTL links, (cross correl ?)
+  #rank normalisé de sum de : 
+  #pour les genes pas asso par eQTR : tss +1 si <1000pb, descend progressivement sinon  : 
+  res[is.na(start.eQTR2),DistScore:=sapply(abs(distTSS),function(x){
+    if(x<1000){
+      score<-1
+    }else {
+      score<-3/log10(x)
+    }
+    return(score)
+  })]
+  
+  #pour les genes asso par eQTR : [pomodoro ]
+    res[is.na(start.eQTR2),DistScore:=sapply(abs(distTSS),function(x){
+      if(x<1000){
+        score<-1
+      }else {
+        score<-3/log10(x)
+      }
+      return(score)
+    })]
+  
+  #
+  #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
+}
+
+
+
 
 #FIGURES RES LIMMA
 library(calibrate)
