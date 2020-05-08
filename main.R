@@ -662,6 +662,11 @@ res<-res[,avg.pval.thr:=abs(avg.pval.thr)]
 
 #need also a function to calculate confidence of the links CpG-Gene for eQTL linked Gene : 
 calcLinkScore<-function(pos,start,end,signif,maxSignif=0.001475078){
+  pos<-pos[1]
+  start<-start[1]
+  end<-end[1]
+  signif<-signif[1]
+  
   if(pos > (start-50)& pos < (end+50)){
     score<-1
   }else {
@@ -673,7 +678,7 @@ calcLinkScore<-function(pos,start,end,signif,maxSignif=0.001475078){
   #ajutser pour les eQTR trop grands (donc trop incertain) : si >200, ajuste score sinon descend progressivement
   largeur<-end-start+1
   if(largeur>200){
-    score<-score*(log10(200)/log10(largeur+1))
+    score<-score*(0.75+0.25*log10(200)/log10(largeur+1))
   }
   
   
@@ -747,12 +752,15 @@ for(compa in compas){
     return(score)
   })]
   
-  #pour les genes asso par eQTR : [pomodoro ]
+  #pour les genes asso par eQTR : 
   # 1 si dans eQTR1+/-50pb, baisse progress jusqu'a 0.8
   
   res[!is.na(start.eQTR2),LinkScore:=calcLinkScore(pos,start.eQTR,end.eQTR,avg.pval.thr),by=.(locisID,start.eQTR2,gene)]
   
-  #
+  #confWeight : rank
+  
+  
+  
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
 }
 
