@@ -594,7 +594,7 @@ compas<-colnames(fit2$p.value)
 for(compa in compas){
   print(compa)
   top1000<-topTable(fit2,coef = compa, adjust="BH",number = 1000)
-  #remove F si pval <0.001
+  
   print(sum(top1000$P.Value<0.001))
  
   
@@ -627,6 +627,15 @@ for(compa in compas){
   print("ok")
   
 }
+compas<-c()
+resParCompa<-list()
+for(file in list.files("analyses/eQTL_integration/",pattern = "2020-05-07_res_locis_in_")){
+  
+  compa<-strsplit(file,"_")[[1]][5]
+  compas<-c(compas,compa)
+  resParCompa[[compa]]<-fread(paste0("analyses/eQTL_integration/2020-05-07_res_locis_in_",compa,"_allLocis_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_13_.csv"))
+}
+head(resParCompa)
 #now, annot res with genes :
 #  annot1<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
 #  annot1<-annot1[,distTSS:=posAvant][,-c("ENSEMBL_ID","posAvant", "ENTREZID","HSPC1","HSPC2",
@@ -654,12 +663,9 @@ for(compa in compas){
 ##SCORE CpG
 #need eQTR pour confWeight Links CpG-Gene
 eQTRs<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv")
-#add eQTR1 et pval et 
 eQTRs<-eQTRs[,.(chr,start.eQTR2,end.eQTR2,start.eQTR,end.eQTR,avg.pval.thr)]
-eQTRs
-res<-merge(res,eQTRs,all.x = TRUE)[order(pval)]
-res<-res[,avg.pval.thr:=abs(avg.pval.thr)]
 
+eQTRs
 #need also a function to calculate confidence of the links CpG-Gene for eQTL linked Gene : 
 calcLinkScore<-function(pos,start,end,signif,maxSignif=0.001475078){
   pos<-pos[1]
@@ -689,6 +695,10 @@ calcLinkScore<-function(pos,start,end,signif,maxSignif=0.001475078){
 
 for(compa in compas){
   res<-resParCompa[[compa]]
+  #add eQTR1 et pval et 
+  res<-merge(res,eQTRs,all.x = TRUE,by=c("chr","start.eQTR2", "end.eQTR2"))[order(pval)]
+  res<-res[,avg.pval.thr:=abs(avg.pval.thr)]
+  
   #FILTER RES
   #without type and without gene
   nLocisAvant<-length(unique(res$locisID))
@@ -697,12 +707,16 @@ for(compa in compas){
   print(paste(round((nLocisAvant-nLocisApres)/nLocisAvant*100,1),"% des locis non associés a des gènes"))
   ##DMC weigtht
   #(FC[0:1] : toavoid overfitting, we use the rank of abs(FC) as metriks normalized
-  res[,FCScore:=rank(abs(FC))/max(rank(abs(FC)))]
+  #res[,FCScore:=rank(abs(FC))/max(rank(abs(FC)))]
+  #ou
+  res[,FCScore:=abs(FC)/max(abs(FC))]
 
   #pval[0:1] : the same (with rank), to have the same weight
-  res[,PvalScore:=rank(1/pval)/max(rank(1/pval))]
+  #res[,PvalScore:=rank(1/pval)/max(rank(1/pval))]
+  #ou
+  res[,PvalScore:=-log10(pval)/max(-log10(pval))]
   
-  res[,DMCWeight:=PvalScore+FCScore]
+  res[,DMCWeight:=(PvalScore+FCScore)/2]
   
   ##regulatory weight : je veux un poids entre 0.5 et 2, 0.5 etant aucune annotation regulatrice,
   #et 2 etant toutes les annotations regulatrice (4/6, CTCF/prom/enh/, TF motif) 
@@ -737,7 +751,7 @@ for(compa in compas){
   })]
   
   # add the 2 score to make the regulWeight:
-  res[,RegWeight:=TypeScore+EnsRegScore]
+  res[,RegWeight:=(TypeScore+EnsRegScore)/2]
   
   #ConfWeight :
   # confWeight [0-1] : TSS, eQTL links, (cross correl ?)
@@ -754,18 +768,41 @@ for(compa in compas){
   
   #pour les genes asso par eQTR : 
   # 1 si dans eQTR1+/-50pb, baisse progress jusqu'a 0.8
-  
   res[!is.na(start.eQTR2),LinkScore:=calcLinkScore(pos,start.eQTR,end.eQTR,avg.pval.thr),by=.(locisID,start.eQTR2,gene)]
   
   #confWeight : rank
+  res[,ConfWeight:=LinkScore]
   
+  #/!\ add cross correl au confWeigth
   
-  
+  ##CpG score: 3DMCweight*2RegWeight*1ConfWeight/6
+  #res[,CpGScore:=(3*DMCWeight+2*RegWeight+1*ConfWeight)/6]
+  #ou
+  res[,CpGScore:=DMCWeight*RegWeight*ConfWeight]
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
 }
 
+summary(res$CpGScore)
 
 
+plot(density(res$CpGScore))
+#NOW need to make a score by gene to put in GSEA : 1) aggreg scoreCpG par gene avec moyenne pondéré des CpG par gene. 
+#2) take into account expression of the gene: if no expr in RNA seq cd34 public data, score reduce
+  #/!\ rq : better to integrate this information before : during links cpg-gene or durinf linksScore. 
+
+#need better norm than just divide by number of CpG tot, that too influencing
+#moyenne pondéré /2: pour eviter inflaté genes avec beaucoup de locis, on veut ponderé le score des CpG :
+#un gene est considéré comme tres impacté si il a 3 CpG important d'activer : (par exmple 1 sur enh, prom, genebody)
+#donc, on notre moyenne pondéré favorisera surout les 3 topCpG score par gene : 
+#ScoreGene=CpG1+CpG2+CpG3 + 0.5*CpG4 + 0.2*CpG5 ... / (sommeCoeffTot)
+
+#mais nb de CpG important dépend de cb CpG ont été rattaché au gene à la base : 
+#donc plutot que 3 disons qu'il y a x CpG important par gene, pour trouver x, nous devons prendre en compte : 
+#1) nb de CpG par gene : si peu de cpg rattaché, il ya moins de chance d'y avoir des cpg importants quand qd il yen a bcp
+#2) taile du genes : plus il est grand plus on s'attend a qu'il est plus de cpg pour le reguler
+
+#1) x=3 pour gene avec nCpG dans lespace interquartile , 2/4 si <q25/>q75, 1/5 si <q5/>q95
+#2) +1/-1 si taille gene <q25/>q75
 
 #FIGURES RES LIMMA
 library(calibrate)

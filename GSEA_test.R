@@ -117,7 +117,7 @@ head(res)
 tail(res)
 
 #ConfWeight :
-# confWeight [0-1] : TSS, eQTL links, cross correl
+# confWeight [0-1] : TSS, eQTL links, (cross correl ?)
 #rank normalisé de sum de : 
 #tss +1 si <1000pb, descend progressivement sinon  : 
 res$TSSScore<-sapply(abs(res$posAvant),function(x){
@@ -133,7 +133,8 @@ tail(res)
 
 #eQTL link : si locis +/-xpb rattaché à expression genes => +1
 #with gTex : 
-wb_eQTL<-read.csv2("../../ref/Whole_Blood.eQTL.csv")
+wb_eQTL<-fread("../../ref/Whole_Blood.eQTL.csv")
+wb_eQTL
 head(wb_eQTL)
 genes_eQTL<-unique(wb_eQTL$gene)
 
