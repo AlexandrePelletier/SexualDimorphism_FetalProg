@@ -655,7 +655,7 @@ annot<-fread("../../ref/allCpG_annotation_genes_and_feature_regulatory_domain_07
 for(compa in compas){
   res<-resParCompa[[compa]]
   res<-merge(res,annot,by="locisID",all.x = T)
-  resParCompa[[compa]]<-res[order(pval)]
+  
   #FILTER RES
   #without type and without gene
   nLocisAvant<-length(unique(res$locisID))
@@ -663,6 +663,7 @@ for(compa in compas){
   nLocisApres<-length(unique(res$locisID))
   print(paste(round((nLocisAvant-nLocisApres)/nLocisAvant*100,1),"% des locis non associés a des gènes"))
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
+  resParCompa[[compa]]<-res[order(pval)]
 }
 ##SCORE CpG
 #need eQTR pour confWeight Links CpG-Gene
@@ -671,24 +672,33 @@ eQTRs<-eQTRs[,.(chr,start.eQTR2,end.eQTR2,start.eQTR,end.eQTR,avg.pval.thr)]
 
 eQTRs
 #need also a function to calculate confidence of the links CpG-Gene for eQTL linked Gene : 
-calcLinkScore<-function(pos,start,end,signif,maxSignif=0.001475078){
-  pos<-pos[1]
-  start<-start[1]
-  end<-end[1]
-  signif<-signif[1]
-  
+calcLinkScore<-function(pos,start,end,signif=NULL,maxSignif=0.001475078){
+
+
   if(pos > (start-50)& pos < (end+50)){
     score<-1
   }else {
-    score<-log10(50)/(log10(1+abs(pos-min(abs(c(pos-(start-50),pos-(end+50)))))))
+    x<-min(abs(c(start-pos,end-pos)))
+    score<-(log10(50)/(log10(x)))^0.5
   }
-  #si min pval >*1 si max pval > *0.75
-  score<-score*(0.75+0.25*(signif/maxSignif))
+  
+  if(!is.null(signif)){
+    print('test')
+    #si min pval >*1 si max pval > *0.75
+    score<-score*(0.75+0.25*(signif/maxSignif))
+  }
+  
   
   #ajutser pour les eQTR trop grands (donc trop incertain) : si >200, ajuste score sinon descend progressivement
   largeur<-end-start+1
-  if(largeur>200){
-    score<-score*(0.75+0.25*log10(200)/log10(largeur+1))
+  if(largeur<200){
+    score<-score*1
+  }else if(largeur<10000){
+    score<-score*(0.5+0.5*(log10(200)/log10(largeur+1))^0.5)
+  }else if(largeur<100000){
+    score<-score*(0.5+0.5*(log10(200)/log10(largeur+1)))
+  }else{
+    score<-score*(0.5+0.5*(log10(200)/log10(largeur+1))^2)
   }
   
   
@@ -696,20 +706,90 @@ calcLinkScore<-function(pos,start,end,signif,maxSignif=0.001475078){
   
 }
 
+#all compas share the same regWeight and LinksScore so for one : 
+res<-resParCompa[[compa]]
+#add eQTR1 et pval et 
+res<-merge(res,eQTRs,all.x = TRUE,by=c("chr","start.eQTR2", "end.eQTR2"))[order(pval)]
+res<-res[,avg.pval.thr:=abs(avg.pval.thr)]
+
+##regulatory weight : je veux un poids entre 0.5 et 2, 0.5 etant aucune annotation regulatrice,
+#et 2 etant toutes les annotations regulatrice (4/6, CTCF/prom/enh/, TF motif) 
+#=> on part d'un score de 0.5 et +0.5 a chaque annot
+
+# +1 if (4,6), +0.75 if 5, +0.5 otherwise
+res[,TypeScore:=sapply(type,function(x){
+  if(x%in%c(4,6)){
+    score<-1
+  }else if(x==5){
+    score<-0.75
+  }else{
+    score<-0.5
+  }
+  return(score)
+})]
+
+# +0.5 if(CTCF,enh,prom,)+ 0.25 if prom flanking, openchrine, #+0.5 if(TFbind site), or 0 otherwise
+res[,EnsRegScore:=sapply(feature_type_name,function(x){
+  vecX<-tr(x)
+  if(any(c("CTCF Binding Site","Promoter","Enhancer")%in%vecX)){
+    score<-0.5
+  }else if(any(c("Open chromatin","Promoter Flanking Region")%in%vecX)){
+    score<-0.25
+  }else{
+    score<-0
+  }
+  if("TF binding site"%in%vecX){
+    score<-score+0.5
+  }
+  return(score)
+})]
+
+# add the 2 score to make the regulWeight:
+res[,RegWeight:=(TypeScore+EnsRegScore)]
+
+#ConfWeight :
+# confWeight [0-1] : TSS, eQTL links, (cross correl ?)
+#rank normalisé de sum de : 
+#pour les genes pas asso par eQTR : tss +1 si <1000pb, descend progressivement sinon  : 
+res[is.na(start.eQTR2),LinkScore:=sapply(abs(distTSS),function(x){
+  if(x<1000){
+    score<-1
+  }else if(x<20000){
+    score<-(3/(log10(x)))^0.5
+  }else if (x<100000){
+    score<-3/log10(x)
+    
+  }else{
+    score<-(3/log10(x))^2
+  }
+  return(score)
+})]
+
+#pour les genes asso par eQTR : 
+# 1 si dans eQTR1+/-50pb, baisse progress jusqu'a 0.8
+res[!is.na(start.eQTR2),LinkScore:=calcLinkScore(pos[1],start.eQTR[1],end.eQTR[1]),by=.(locisID,gene,start.eQTR2)]
+#il y en a plusieurs car un locis peut etre dans 2 eQTR (ou TSS, et eQTR) donc on prend le link score max comme reference
+res[,LinkScore.max:=max(LinkScore),by=.(locisID,gene)]
+#confWeight : rank
+res[,ConfWeight:=LinkScore.max]
+
+ref<-unique(res[,.(locisID,gene,TypeScore, EnsRegScore, RegWeight, LinkScore.max,ConfWeight)],by=c("locisID","gene"))
+#/!\ add cross correl au confWeigth
+
 
 for(compa in compas){
   print(compa)
   res<-resParCompa[[compa]]
   #add eQTR1 et pval et 
-  res<-merge(res,eQTRs,all.x = TRUE,by=c("chr","start.eQTR2", "end.eQTR2"))[order(pval)]
-  res<-res[,avg.pval.thr:=abs(avg.pval.thr)]
+  res<-merge(res,ref,all.x = TRUE,by=c("locisID","gene"))[order(pval)]
+  res<-unique(res,by=c("locisID","gene"))
   
   ##DMC weigtht
   #(FC[0:1] : toavoid overfitting, we use the rank of abs(FC) as metriks normalized
   #res[,FCScore:=rank(abs(FC))/max(rank(abs(FC)))]
   #ou
   res[,FCScore:=abs(FC)/max(abs(FC))]
-
+  
   #pval[0:1] : the same (with rank), to have the same weight
   #res[,PvalScore:=rank(1/pval)/max(rank(1/pval))]
   #ou
@@ -717,67 +797,10 @@ for(compa in compas){
   
   res[,DMCWeight:=(PvalScore+FCScore)/2]
   
-  ##regulatory weight : je veux un poids entre 0.5 et 2, 0.5 etant aucune annotation regulatrice,
-  #et 2 etant toutes les annotations regulatrice (4/6, CTCF/prom/enh/, TF motif) 
-  #=> on part d'un score de 0.5 et +0.5 a chaque annot
-  
-  # +1 if (4,6), +0.75 if 5, +0.5 otherwise
-  res[,TypeScore:=sapply(type,function(x){
-    if(x%in%c(4,6)){
-      score<-1
-    }else if(x==5){
-      score<-0.75
-    }else{
-      score<-0.5
-    }
-    return(score)
-  })]
-  
-  # +0.5 if(CTCF,enh,prom,)+ 0.25 if prom flanking, openchrine, #+0.5 if(TFbind site), or 0 otherwise
-  res[,EnsRegScore:=sapply(feature_type_name,function(x){
-    vecX<-tr(x)
-    if(any(c("CTCF Binding Site","Promoter","Enhancer")%in%vecX)){
-      score<-0.5
-    }else if(any(c("Open chromatin","Promoter Flanking Region")%in%vecX)){
-      score<-0.25
-    }else{
-      score<-0
-    }
-    if("TF binding site"%in%vecX){
-      score<-score+0.5
-    }
-    return(score)
-  })]
-  
-  # add the 2 score to make the regulWeight:
-  res[,RegWeight:=(TypeScore+EnsRegScore)/2]
-  
-  #ConfWeight :
-  # confWeight [0-1] : TSS, eQTL links, (cross correl ?)
-  #rank normalisé de sum de : 
-  #pour les genes pas asso par eQTR : tss +1 si <1000pb, descend progressivement sinon  : 
-  res[is.na(start.eQTR2),LinkScore:=sapply(abs(distTSS),function(x){
-    if(x<1000){
-      score<-1
-    }else {
-      score<-3/log10(x)
-    }
-    return(score)
-  })]
-  
-  #pour les genes asso par eQTR : 
-  # 1 si dans eQTR1+/-50pb, baisse progress jusqu'a 0.8
-  res[!is.na(start.eQTR2),LinkScore:=calcLinkScore(pos,start.eQTR,end.eQTR,avg.pval.thr),by=.(locisID,start.eQTR2,gene)]
-  
-  #confWeight : rank
-  res[,ConfWeight:=LinkScore]
-  
-  #/!\ add cross correl au confWeigth
-  
   ##CpG score: 3DMCweight*2RegWeight*1ConfWeight/6
-  res[,CpGScore:=(4*DMCWeight+2*RegWeight+2*ConfWeight)/8]
+  #res[,CpGScore:=(4*DMCWeight+2*RegWeight+2*ConfWeight)/8]
   #ou
-  #res[,CpGScore:=DMCWeight*RegWeight*ConfWeight]
+  res[,CpGScore:=DMCWeight*RegWeight*ConfWeight]
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
   
   resParCompa[[compa]]<-res
@@ -810,7 +833,7 @@ for(compa in compas){
   resGenesParCompa[[compa]]<-resGenes[,posTSS:=pos-distTSS][,.(chr,posTSS,gene,GeneScore)]
 }
 
-resGenesParCompa[[compa]]
+resGenesParCompa[[compa]][order(-GeneScore)]
 
 #GSEA
 library(clusterProfiler)
@@ -842,17 +865,45 @@ for(compa in compas){
                           verbose = FALSE)
   resKEGGParCompa[[compa]]<-res_KEGG.GSEA
 }
-
+#check :
 as.data.frame(resKEGGParCompa[["FC.FL"]])
-
 head(geneList,20)
-
 head(geneList.Entrez)
 tail(geneList.Entrez)
-
 df_KEGG.GSEA<-as.data.frame(res_KEGG.GSEA)
-
 df_KEGG.GSEA$Description
+
+#visualize data
+library(ggplot2)
+compa<-"FC.FL"
+
+rk<-resKEGGParCompa[[compa]]
+
+rkF<-resKEGGParCompa[["FC.FL"]]
+rkM<-resKEGGParCompa[["FC.FL"]]
+
+dotplot(rk, showCategory=30) + #*capability to encode another score as dot size.
+  ggtitle("KEGG pathway over-representation test")
+
+#   similarities between pathways with a graph 
+emapplot(rk)
+
+#   number of genes shared between pathways with upsetplot()
+enrichplot::upsetplot(rk)
+
+#   which genes shared between pathways
+rk2 <- setReadable(rk, 'org.Hs.eg.db', 'ENTREZID') #change ENTREZID in GeneSYmbol
+cnetplot(rk2) 
+cnetplot(rk2,foldChange = geneList) 
+
+
+#reste a faire :
+#1) add rna expr
+#2) NOte/
+#3) check relevance 
+
+#1) ADD RNA EXPR
+
 
 # Note : 
 # #un gene est considéré comme tres impacté si il a 3 CpG important d'activer : (par exmple 1 sur enh, prom, genebody)
