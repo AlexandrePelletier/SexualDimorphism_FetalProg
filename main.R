@@ -776,9 +776,9 @@ for(compa in compas){
   #/!\ add cross correl au confWeigth
   
   ##CpG score: 3DMCweight*2RegWeight*1ConfWeight/6
-  #res[,CpGScore:=(3*DMCWeight+2*RegWeight+1*ConfWeight)/6]
+  res[,CpGScore:=(4*DMCWeight+2*RegWeight+2*ConfWeight)/6]
   #ou
-  res[,CpGScore:=DMCWeight*RegWeight*ConfWeight]
+  #res[,CpGScore:=DMCWeight*RegWeight*ConfWeight]
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
 }
 
@@ -786,23 +786,74 @@ summary(res$CpGScore)
 
 
 plot(density(res$CpGScore))
+res[CpGScore>0.8]$gene
+
 #NOW need to make a score by gene to put in GSEA : 1) aggreg scoreCpG par gene avec moyenne pondéré des CpG par gene. 
 #2) take into account expression of the gene: if no expr in RNA seq cd34 public data, score reduce
   #/!\ rq : better to integrate this information before : during links cpg-gene or durinf linksScore. 
 
-#need better norm than just divide by number of CpG tot, that too influencing
-#moyenne pondéré /2: pour eviter inflaté genes avec beaucoup de locis, on veut ponderé le score des CpG :
-#un gene est considéré comme tres impacté si il a 3 CpG important d'activer : (par exmple 1 sur enh, prom, genebody)
-#donc, on notre moyenne pondéré favorisera surout les 3 topCpG score par gene : 
-#ScoreGene=CpG1+CpG2+CpG3 + 0.5*CpG4 + 0.2*CpG5 ... / (sommeCoeffTot)
+#1) 
+#a) easy, coeff en CpG en fct loi 1/x
+plot(1/1:10) #1er coef =1, 2e : 0.5, 3e 1/3...
+moyPonder<-function(CpGScore){
+  CpGScore<-sort(CpGScore,decreasing = T)
+  coeffs<-1/1:length(CpGScore)
+  return(CpGScore*coeffs/sum(coeffs))
+}
+resGenes<-unique(res[,GeneScore:=moyPonder(CpGScore),by="gene"],by="gene")[order(-GeneScore)]
+resGenes$gene
+#numeric vector
+geneList<-resGenes$GeneScore
+#named vector
+names(geneList)<-resGenes$gene
+#sorted vector
+geneList<-sort(geneList,decreasing = T)
+#better to put the rank if the score is not biologically meaningful
+geneList<-rank(geneList)
 
-#mais nb de CpG important dépend de cb CpG ont été rattaché au gene à la base : 
-#donc plutot que 3 disons qu'il y a x CpG important par gene, pour trouver x, nous devons prendre en compte : 
-#1) nb de CpG par gene : si peu de cpg rattaché, il ya moins de chance d'y avoir des cpg importants quand qd il yen a bcp
-#2) taile du genes : plus il est grand plus on s'attend a qu'il est plus de cpg pour le reguler
+head(geneList,20)
 
-#1) x=3 pour gene avec nCpG dans lespace interquartile , 2/4 si <q25/>q75, 1/5 si <q5/>q95
-#2) +1/-1 si taille gene <q25/>q75
+
+
+#GSEA : 
+library(clusterProfiler)
+library(org.Hs.eg.db)
+##KEGG
+genes.df<-bitr(names(geneList),
+               fromType = 'SYMBOL',
+               toType = 'ENTREZID',
+               OrgDb = org.Hs.eg.db)
+genes.df$FC<-geneList[genes.df$SYMBOL]
+geneList.Entrez<-genes.df$FC
+names(geneList.Entrez)<-genes.df$ENTREZID
+head(geneList.Entrez)
+tail(geneList.Entrez)
+
+res_KEGG.GSEA<- gseKEGG(geneList     = geneList.Entrez,
+                        eps=0,
+                        organism     = 'hsa',
+                        pvalueCutoff = 0.05,
+                        verbose = FALSE)
+
+df_KEGG.GSEA<-as.data.frame(res_KEGG.GSEA)
+
+df_KEGG.GSEA$Description
+
+# Note : 
+# #un gene est considéré comme tres impacté si il a 3 CpG important d'activer : (par exmple 1 sur enh, prom, genebody)
+# #donc, on notre moyenne pondéré favorisera surout les 3 topCpG score par gene : 
+# #ScoreGene=CpG1+CpG2+CpG3 + 0.5*CpG4 + 0.2*CpG5 ... / (sommeCoeffTot)
+# #mais nb de CpG important dépend de cb CpG ont été rattaché au gene à la base : 
+# #donc plutot que 3 disons qu'il y a x CpG important par gene, pour trouver x, nous devons prendre en compte : 
+# #1) nb de CpG par gene : si peu de cpg rattaché, il ya moins de chance d'y avoir des cpg importants quand qd il yen a bcp
+# #2) taile du genes : plus il est grand plus on s'attend a qu'il est plus de cpg pour le reguler
+# 
+# #1) x=3 pour gene avec nCpG dans lespace interquartile , 2/4 si <q25/>q75, 1/5 si <q5/>q95
+# #2) +1/-1 si taille gene <q25/>q75
+
+
+
+
 
 #FIGURES RES LIMMA
 library(calibrate)
