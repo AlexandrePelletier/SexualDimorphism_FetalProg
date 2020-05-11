@@ -656,8 +656,12 @@ for(compa in compas){
   res<-resParCompa[[compa]]
   res<-merge(res,annot,by="locisID",all.x = T)
   resParCompa[[compa]]<-res[order(pval)]
-  
-  #
+  #FILTER RES
+  #without type and without gene
+  nLocisAvant<-length(unique(res$locisID))
+  res<-res[!is.na(type)][!is.na(gene)&gene!=""]
+  nLocisApres<-length(unique(res$locisID))
+  print(paste(round((nLocisAvant-nLocisApres)/nLocisAvant*100,1),"% des locis non associés a des gènes"))
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
 }
 ##SCORE CpG
@@ -694,17 +698,12 @@ calcLinkScore<-function(pos,start,end,signif,maxSignif=0.001475078){
 
 
 for(compa in compas){
+  print(compa)
   res<-resParCompa[[compa]]
   #add eQTR1 et pval et 
   res<-merge(res,eQTRs,all.x = TRUE,by=c("chr","start.eQTR2", "end.eQTR2"))[order(pval)]
   res<-res[,avg.pval.thr:=abs(avg.pval.thr)]
   
-  #FILTER RES
-  #without type and without gene
-  nLocisAvant<-length(unique(res$locisID))
-  res<-res[!is.na(type)][!is.na(gene)&gene!=""]
-  nLocisApres<-length(unique(res$locisID))
-  print(paste(round((nLocisAvant-nLocisApres)/nLocisAvant*100,1),"% des locis non associés a des gènes"))
   ##DMC weigtht
   #(FC[0:1] : toavoid overfitting, we use the rank of abs(FC) as metriks normalized
   #res[,FCScore:=rank(abs(FC))/max(rank(abs(FC)))]
@@ -776,18 +775,21 @@ for(compa in compas){
   #/!\ add cross correl au confWeigth
   
   ##CpG score: 3DMCweight*2RegWeight*1ConfWeight/6
-  res[,CpGScore:=(4*DMCWeight+2*RegWeight+2*ConfWeight)/6]
+  res[,CpGScore:=(4*DMCWeight+2*RegWeight+2*ConfWeight)/8]
   #ou
   #res[,CpGScore:=DMCWeight*RegWeight*ConfWeight]
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
+  
+  resParCompa[[compa]]<-res
 }
 
+#check :
 summary(res$CpGScore)
-
 
 plot(density(res$CpGScore))
 res[CpGScore>0.8]$gene
 
+#GENESCORE
 #NOW need to make a score by gene to put in GSEA : 1) aggreg scoreCpG par gene avec moyenne pondéré des CpG par gene. 
 #2) take into account expression of the gene: if no expr in RNA seq cd34 public data, score reduce
   #/!\ rq : better to integrate this information before : during links cpg-gene or durinf linksScore. 
@@ -800,40 +802,53 @@ moyPonder<-function(CpGScore){
   coeffs<-1/1:length(CpGScore)
   return(CpGScore*coeffs/sum(coeffs))
 }
-resGenes<-unique(res[,GeneScore:=moyPonder(CpGScore),by="gene"],by="gene")[order(-GeneScore)]
-resGenes$gene
-#numeric vector
-geneList<-resGenes$GeneScore
-#named vector
-names(geneList)<-resGenes$gene
-#sorted vector
-geneList<-sort(geneList,decreasing = T)
-#better to put the rank if the score is not biologically meaningful
-geneList<-rank(geneList)
+
+resGenesParCompa<-list()
+for(compa in compas){
+  res<-resParCompa[[compa]]
+  resGenes<-unique(res[,GeneScore:=moyPonder(CpGScore),by="gene"][,nCpG:=.N,by=gene],by="gene")[order(-GeneScore)]
+  resGenesParCompa[[compa]]<-resGenes[,posTSS:=pos-distTSS][,.(chr,posTSS,gene,GeneScore)]
+}
+
+resGenesParCompa[[compa]]
+
+#GSEA
+library(clusterProfiler)
+library(org.Hs.eg.db)
+resKEGGParCompa<-list()
+for(compa in compas){
+  resGenes<-resGenesParCompa[[compa]]
+  #input :
+  #numeric vector
+  geneList<-resGenes$GeneScore
+  #named vector
+  names(geneList)<-resGenes$gene
+  #sorted vector
+  geneList<-sort(geneList,decreasing = T)
+  #better to put the rank if the score is not biologically meaningful
+  geneList<-rank(geneList)
+  ##KEGG
+  genes.df<-bitr(names(geneList),
+                 fromType = 'SYMBOL',
+                 toType = 'ENTREZID',
+                 OrgDb = org.Hs.eg.db)
+  genes.df$FC<-geneList[genes.df$SYMBOL]
+  geneList.Entrez<-genes.df$FC
+  names(geneList.Entrez)<-genes.df$ENTREZID
+  res_KEGG.GSEA<- gseKEGG(geneList     = round(rank(sort(geneList.Entrez,decreasing = T)),0),
+                          eps=0,
+                          organism     = 'hsa',
+                          pvalueCutoff = 0.1,
+                          verbose = FALSE)
+  resKEGGParCompa[[compa]]<-res_KEGG.GSEA
+}
+
+as.data.frame(resKEGGParCompa[["FC.FL"]])
 
 head(geneList,20)
 
-
-
-#GSEA : 
-library(clusterProfiler)
-library(org.Hs.eg.db)
-##KEGG
-genes.df<-bitr(names(geneList),
-               fromType = 'SYMBOL',
-               toType = 'ENTREZID',
-               OrgDb = org.Hs.eg.db)
-genes.df$FC<-geneList[genes.df$SYMBOL]
-geneList.Entrez<-genes.df$FC
-names(geneList.Entrez)<-genes.df$ENTREZID
 head(geneList.Entrez)
 tail(geneList.Entrez)
-
-res_KEGG.GSEA<- gseKEGG(geneList     = geneList.Entrez,
-                        eps=0,
-                        organism     = 'hsa',
-                        pvalueCutoff = 0.05,
-                        verbose = FALSE)
 
 df_KEGG.GSEA<-as.data.frame(res_KEGG.GSEA)
 
