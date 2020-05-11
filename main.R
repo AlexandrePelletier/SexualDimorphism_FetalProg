@@ -788,19 +788,19 @@ for(compa in compas){
   #(FC[0:1] : toavoid overfitting, we use the rank of abs(FC) as metriks normalized
   #res[,FCScore:=rank(abs(FC))/max(rank(abs(FC)))]
   #ou
-  res[,FCScore:=abs(FC)/max(abs(FC))]
+  res[,FCScore:=FC/max(abs(FC))]
   
   #pval[0:1] : the same (with rank), to have the same weight
   #res[,PvalScore:=rank(1/pval)/max(rank(1/pval))]
   #ou
   res[,PvalScore:=-log10(pval)/max(-log10(pval))]
   
-  res[,DMCWeight:=(PvalScore+FCScore)/2]
+  res[,DMCWeight:=PvalScore*FCScore]
   
   ##CpG score: 3DMCweight*2RegWeight*1ConfWeight/6
-  #res[,CpGScore:=(4*DMCWeight+2*RegWeight+2*ConfWeight)/8]
+  res[,CpGScore:=(4*DMCWeight+2*RegWeight+2*ConfWeight)/8]
   #ou
-  res[,CpGScore:=DMCWeight*RegWeight*ConfWeight]
+  #res[,CpGScore:=DMCWeight*RegWeight*ConfWeight]
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
   
   resParCompa[[compa]]<-res
@@ -813,27 +813,25 @@ plot(density(res$CpGScore))
 res[CpGScore>0.8]$gene
 
 #GENESCORE
-#NOW need to make a score by gene to put in GSEA : 1) aggreg scoreCpG par gene avec moyenne pondéré des CpG par gene. 
+#NOW need to make a score by gene to put in GSEA : 1) aggreg scoreCpG par gene . 
 #2) take into account expression of the gene: if no expr in RNA seq cd34 public data, score reduce
   #/!\ rq : better to integrate this information before : during links cpg-gene or durinf linksScore. 
 
 #1) 
-#a) easy, coeff en CpG en fct loi 1/x
-plot(1/1:10) #1er coef =1, 2e : 0.5, 3e 1/3...
-moyPonder<-function(CpGScore){
-  CpGScore<-sort(CpGScore,decreasing = T)
-  coeffs<-1/1:length(CpGScore)
-  return(CpGScore*coeffs/sum(coeffs))
-}
+#a) easy, prend le score max par gene
 
 resGenesParCompa<-list()
 for(compa in compas){
   res<-resParCompa[[compa]]
-  resGenes<-unique(res[,GeneScore:=moyPonder(CpGScore),by="gene"][,nCpG:=.N,by=gene],by="gene")[order(-GeneScore)]
+  resGenes<-unique(res[,GeneScore:=max(CpGScore),by="gene"][,nCpG:=.N,by=gene],by="gene")[order(-GeneScore)]
   resGenesParCompa[[compa]]<-resGenes[,posTSS:=pos-distTSS][,.(chr,posTSS,gene,GeneScore)]
 }
 
-resGenesParCompa[[compa]][order(-GeneScore)]
+gf<-head(resGenesParCompa[["FC.FL"]][order(-GeneScore)]$gene,100)
+gm<-head(resGenesParCompa[["MC.ML"]][order(-GeneScore)]$gene,100)
+setdiff(gf,gm)
+plot(density(resGenesParCompa[["FC.FL"]]$GeneScore))
+plot(density(resGenesParCompa[["MC.ML"]]$GeneScore))
 
 #GSEA
 library(clusterProfiler)
@@ -849,7 +847,7 @@ for(compa in compas){
   #sorted vector
   geneList<-sort(geneList,decreasing = T)
   #better to put the rank if the score is not biologically meaningful
-  geneList<-rank(geneList)
+  #geneList<-rank(geneList)
   ##KEGG
   genes.df<-bitr(names(geneList),
                  fromType = 'SYMBOL',
@@ -858,10 +856,88 @@ for(compa in compas){
   genes.df$FC<-geneList[genes.df$SYMBOL]
   geneList.Entrez<-genes.df$FC
   names(geneList.Entrez)<-genes.df$ENTREZID
-  res_KEGG.GSEA<- gseKEGG(geneList     = round(rank(sort(geneList.Entrez,decreasing = T)),0),
-                          eps=0,
+  res_KEGG.GSEA<- gseKEGG(geneList     = geneList.Entrez,
                           organism     = 'hsa',
-                          pvalueCutoff = 0.1,
+                          pvalueCutoff = 0.05,
+                          verbose = FALSE)
+  resKEGGParCompa[[compa]]<-res_KEGG.GSEA
+}
+#check :
+
+rkF<-as.data.frame(resKEGGParCompa[["FC.FL"]])
+rkM<-as.data.frame(resKEGGParCompa[["MC.ML"]])
+rkL<-as.data.frame(resKEGGParCompa[["ML.FL"]])
+rkC<-as.data.frame(resKEGGParCompa[["MC.FC"]])
+
+setdiff(rkF$Description,rkM$Description) 
+setdiff(rkM$Description,rkF$Description)
+setdiff(rkL$Description,rkC$Description)
+intersect(setdiff(rkL$Description,rkC$Description),setdiff(rkF$Description,rkM$Description)) #spé Femelle LGA
+
+setdiff(as.data.frame(resKEGGParCompa[["FC.FL"]])$Description,as.data.frame(resKEGGParCompa[["MC.ML"]])$Description)
+
+
+plot(density(resGenesParCompa[["FC.FL"]]$GeneScore))
+plot(density(resGenesParCompa[["MC.ML"]]$GeneScore))
+
+#visualize data
+library(ggplot2)
+library(patchwork)
+
+rkF<-resKEGGParCompa[["FC.FL"]]
+rkM<-resKEGGParCompa[["MC.ML"]]
+
+
+p1<-dotplot(rkF, showCategory=30) + #*capability to encode another score as dot size.
+  ggtitle("female")
+
+p2<-dotplot(rkM, showCategory=30) + #*capability to encode another score as dot size.
+  ggtitle("male")
+
+p1+p2
+
+emapplot(rkF)#   similarities between pathways  
+emapplot(rkM)
+enrichplot::upsetplot(rk) #   number of genes shared between pathways 
+
+rk2 <- setReadable(rk, 'org.Hs.eg.db', 'ENTREZID') #change ENTREZID in GeneSYmbol
+cnetplot(rk2) 
+cnetplot(rk2,foldChange = geneList) #genes shared between pathways
+
+#b) moyenne ponderer : coeff(1/1:10) #1er coef =1, 2e : 0.5, 3e 1/3...
+# moyPonder<-function(CpGScore){
+#   CpGScore<-sort(CpGScore,decreasing = T)
+#   coeffs<-1/1:length(CpGScore)
+#   return(sum(CpGScore*coeffs)/sum(coeffs))
+# }
+
+
+#GSEA
+library(clusterProfiler)
+library(org.Hs.eg.db)
+resKEGGParCompa<-list()
+for(compa in compas){
+  resGenes<-resGenesParCompa[[compa]]
+  #input :
+  #numeric vector
+  geneList<-resGenes$GeneScore
+  #named vector
+  names(geneList)<-resGenes$gene
+  #sorted vector
+  geneList<-sort(geneList,decreasing = T)
+  #better to put the rank if the score is not biologically meaningful
+  #geneList<-rank(geneList)
+  ##KEGG
+  genes.df<-bitr(names(geneList),
+                 fromType = 'SYMBOL',
+                 toType = 'ENTREZID',
+                 OrgDb = org.Hs.eg.db)
+  genes.df$FC<-geneList[genes.df$SYMBOL]
+  geneList.Entrez<-genes.df$FC
+  names(geneList.Entrez)<-genes.df$ENTREZID
+  res_KEGG.GSEA<- gseKEGG(geneList     = rank(geneList.Entrez),
+                          organism     = 'hsa',
+                          pvalueCutoff = 0.15,
                           verbose = FALSE)
   resKEGGParCompa[[compa]]<-res_KEGG.GSEA
 }
@@ -880,7 +956,7 @@ compa<-"FC.FL"
 rk<-resKEGGParCompa[[compa]]
 
 rkF<-resKEGGParCompa[["FC.FL"]]
-rkM<-resKEGGParCompa[["FC.FL"]]
+rkM<-resKEGGParCompa[["MC.ML"]]
 
 dotplot(rk, showCategory=30) + #*capability to encode another score as dot size.
   ggtitle("KEGG pathway over-representation test")
@@ -896,6 +972,7 @@ rk2 <- setReadable(rk, 'org.Hs.eg.db', 'ENTREZID') #change ENTREZID in GeneSYmbo
 cnetplot(rk2) 
 cnetplot(rk2,foldChange = geneList) 
 
+#
 
 #reste a faire :
 #1) add rna expr
