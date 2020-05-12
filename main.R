@@ -722,8 +722,10 @@ res[,TypeScore:=sapply(type,function(x){
     score<-1
   }else if(x==5){
     score<-0.75
-  }else{
+  }else if(x%in%1:3){
     score<-0.5
+  }else{
+    score<-0.25
   }
   return(score)
 })]
@@ -774,6 +776,26 @@ res[,LinkScore.max:=max(LinkScore),by=.(locisID,gene)]
 res[,ConfWeight:=LinkScore.max]
 
 ref<-unique(res[,.(locisID,gene,TypeScore, EnsRegScore, RegWeight, LinkScore.max,ConfWeight)],by=c("locisID","gene"))
+#1) cb dans ensReg , 4/6, eQTR ?
+#dans ensReg si score !=0
+ref[EnsRegScore!=0] #628k/700k
+ref[EnsRegScore>0.25] #546k/700k
+ref[EnsRegScore==1] #5k/700k
+
+#dans 4/6 ou 5 si score >0>5
+ref[TypeScore>0.5] #506k/700k
+ref[TypeScore>0.75] #546k/700k
+ref[EnsRegScore==1] #5k/700k
+
+#dans eQTR ? LinkScore.max ==1
+ref[LinkScore.max==1] #192k/700k
+
+#2)=> remove locis with ni dans prom/enh ni dans 4/5/6 ni dans eQTR
+reff<-ref[EnsRegScore>0.25|TypeScore>0.5|LinkScore.max==1]
+reff #611k
+
+#3) sum :
+
 #/!\ add cross correl au confWeigth
 
 
@@ -982,13 +1004,17 @@ cnetplot(rk2,foldChange = geneList)
 #1) ADD RNA EXPR
 
 
+
+
+
+
 # Note : 
 # #un gene est considéré comme tres impacté si il a 3 CpG important d'activer : (par exmple 1 sur enh, prom, genebody)
 # #donc, on notre moyenne pondéré favorisera surout les 3 topCpG score par gene : 
 # #ScoreGene=CpG1+CpG2+CpG3 + 0.5*CpG4 + 0.2*CpG5 ... / (sommeCoeffTot)
 # #mais nb de CpG important dépend de cb CpG ont été rattaché au gene à la base : 
 # #donc plutot que 3 disons qu'il y a x CpG important par gene, pour trouver x, nous devons prendre en compte : 
-# #1) nb de CpG par gene : si peu de cpg rattaché, il ya moins de chance d'y avoir des cpg importants quand qd il yen a bcp
+# #1) nb de CpG par gene : si peu de cpg rattaché, il ya moins de chance d'y avoir des cpg importants que quand il yen a bcp
 # #2) taile du genes : plus il est grand plus on s'attend a qu'il est plus de cpg pour le reguler
 # 
 # #1) x=3 pour gene avec nCpG dans lespace interquartile , 2/4 si <q25/>q75, 1/5 si <q5/>q95
