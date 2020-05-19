@@ -798,12 +798,13 @@ reff #611k
 
 #/!\ add cross correl au confWeigth
 
-
+resParCompa2<-list()
 for(compa in compas){
   print(compa)
   res<-resParCompa[[compa]]
   #add eQTR1 et pval et 
-  res<-merge(res,ref,all.x = TRUE,by=c("locisID","gene"))[order(pval)]
+  res<-res[locisID%chin%reff$locisID]
+  res<-merge(res,reff,all.x = TRUE,by=c("locisID","gene"))[order(pval)]
   res<-unique(res,by=c("locisID","gene"))
   
   ##DMC weigtht
@@ -825,7 +826,7 @@ for(compa in compas){
   #res[,CpGScore:=DMCWeight*RegWeight*ConfWeight]
   #fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
   
-  resParCompa[[compa]]<-res
+  resParCompa2[[compa]]<-res
 }
 
 #check :
@@ -839,13 +840,12 @@ res[CpGScore>0.8]$gene
 #2) take into account expression of the gene: if no expr in RNA seq cd34 public data, score reduce
   #/!\ rq : better to integrate this information before : during links cpg-gene or durinf linksScore. 
 
-#1) 
-#a) easy, prend le score max par gene
+#1)sumlocis
 
 resGenesParCompa<-list()
 for(compa in compas){
-  res<-resParCompa[[compa]]
-  resGenes<-unique(res[,GeneScore:=max(CpGScore),by="gene"][,nCpG:=.N,by=gene],by="gene")[order(-GeneScore)]
+  res<-resParCompa2[[compa]]
+  resGenes<-unique(res[,GeneScore:=sum(CpGScore),by="gene"][,nCpG:=.N,by=gene],by="gene")[order(-GeneScore)]
   resGenesParCompa[[compa]]<-resGenes[,posTSS:=pos-distTSS][,.(chr,posTSS,gene,GeneScore)]
 }
 
