@@ -53,11 +53,18 @@ resCpG.Genes
 #~~ II) Calculate The CpG Score ~~
 #CpGScore = DMCScore [-inf:inf] * Regulatory weight[0.5-1] * LinksWeight [0.5-1]
 
+#>0) filter no significant locis : pval> 0.001 and FC <20
+plot(density(resCpG.Genes$FC))
+resCpG.Genes<-resCpG.Genes[pval>0.01,FC:=0]
+resCpG.Genes<-resCpG.Genes[FC<20,FC:=0]
+
 # > 1) DMCScore = FC * PvalWeight[0.1,1]
 plot(density(resCpG.Genes$FC))
-#PvalWeight[0.1,1]
+#PvalWeight[0-1]
+plot(density(resCpG.Genes$pval),log="x")
 resCpG.Genes[,PvalWeight:=(-log10(pval)/8)]
 plot(density(resCpG.Genes$PvalWeight))
+min(resCpG.Genes$PvalWeight)
 #multiply the 2 score
 resCpG.Genes[,DMCScore:=PvalWeight*FC]
 plot(density(resCpG.Genes$DMCScore))
@@ -176,20 +183,23 @@ plot(density(resCpG.Genes$LinksWeight))
 # > finally :
 resCpG.Genes[,CpGScore:=DMCScore*RegWeight*LinksWeight]
 plot(density(resCpG.Genes$CpGScore))
+
 plot(density(resCpG.Genes[CpGScore>50]$CpGScore))
 topGenesWithCpGScore<-head(resCpG.Genes[order(-CpGScore)]$gene,100)
 topGenesWithDMCWeight<-head(resCpG.Genes[order(-DMCWeight)]$gene,100)
 setdiff(topGenesWithCpGScore,topGenesWithDMCWeight) 
 
 
+
 #~~ summarize the CpGs Scores to a Gene Score  ~~
 # problem : genes are linked to several CpG...
 library(ggplot2)
 resCpG.Genes[,nCpG.Gene:=.N,by=.(gene)]
+resCpG.Genes[CpGScore!=0,nCpGSig.Gene:=.N,by=.(gene)]
 
 resCpG.Genes
-ggplot(resCpG.Genes)+
-  geom_bar(aes(x=nCpG.Gene))
+ggplot(resCpG.Genes[CpGScore!=0])+
+  geom_bar(aes(x=nCpGSig.Gene))
 # ...How to summarize the CpG score to a gene score ??
 #to consider :
 #- a big gene is most susceptible to have a lot of CpG, so more easy for it to have a high CpGscore => distrib more important
@@ -225,12 +235,13 @@ moyPond<-function(CpGScores){
 resCpG.Genes[,GeneScore2:=moyPond(CpGScore),by="gene"]
 
 resGenes<-unique(resCpG.Genes,by="gene")[order(-GeneScore2)]
+
 resGenes
 resGenes$gene[1:100]
 plot(density(resGenes$nCpG.Gene))
 plot(density(resGenes$coef))
 plot(density(resGenes$GeneScore2))
-
+abline(v=(median(resGenes$GeneScore2,0.75)))
 #gene rank 
 #hyoereth generank
 resGenes[,GeneRankHM:=rank(GeneScore2)]
@@ -262,18 +273,19 @@ geneList.Entrez<-genes.df$GeneScore
 names(geneList.Entrez)<-genes.df$ENTREZID
 resKEGG<- gseKEGG(geneList     = geneList.Entrez,
                         organism     = 'hsa',
-                        pvalueCutoff = 0.05,
-                        verbose = FALSE)
+                        verbose = FALSE,pvalueCutoff = 0.5,exponent = 1)
 head(resKEGG,10)
 dotplot(resKEGG, showCategory=30)
-enrichplot::gseaplot2(resKEGG,geneSetID = 1,title = as.data.frame(resKEGG)$Description[1])
-nrow(as.data.frame(resKEGG)) 
-enrichplot::gseaplot2(resKEGG,geneSetID = )
+enrichplot::gseaplot2(resKEGG,geneSetID = 5,title = as.data.frame(resKEGG)$Description[5])
+nrow(as.data.frame(resKEGG)) #26
+
 emapplot(resKEGG)
-saveRDS(resKEGG,"analyses/withoutIUGR/2020-05-19_CF.LF_clusterProf_object_GSEA_CpGScoreMax.Gene.rds")
-write.csv2(as.data.frame(setReadable(resKEGG,org.Hs.eg.db,keyType = "ENTREZID")),"analyses/withoutIUGR/2020-05-19_CF.LF_res_GSEA_CpGScoreMax.Gene.csv")
+saveRDS(resKEGG,"analyses/withoutIUGR/2020-05-20_CF.LF_clusterProf_object_GSEA_CpGScore2.rds")
+write.csv2(as.data.frame(setReadable(resKEGG,org.Hs.eg.db,keyType = "ENTREZID")),"analyses/withoutIUGR/2020-05-20_CF.LF_res_GSEA_CpGScore2.csv")
 
+#FIN DU SCRIPT A JOUR
 
+## ANALYSE MALE A METTRE A JOUR
 #compare with FC of the min pvalue locis by gene
 resCpG.Genes[,is.min.pval:=pval==min(pval),by=gene]
 resGenes2<-resCpG.Genes[is.min.pval==TRUE,]
