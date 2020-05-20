@@ -51,19 +51,19 @@ resCpG.Genes<-resCpG.Genes[!is.na(gene)]
 resCpG.Genes
 
 #~~ II) Calculate The CpG Score ~~
-#CpGScore = DMCScore [-1:1] * Regulatory weight[0.5-1] * LinksWeight [0.5-1]
+#CpGScore = DMCScore [-inf:inf] * Regulatory weight[0.5-1] * LinksWeight [0.5-1]
 
-# > 1) DMCScore
-resCpG.Genes[,FCScore:=FC/max(abs(FC))]
-
-plot(density(resCpG.Genes$FCScore))
-resCpG.Genes[,PvalScore:=-log10(pval)/max(-log10(pval))]
-plot(density(resCpG.Genes$pval))
+# > 1) DMCScore = FC * PvalWeight[0.1,1]
+plot(density(resCpG.Genes$FC))
+#PvalWeight[0.1,1]
+resCpG.Genes[,PvalWeight:=(-log10(pval)/8)]
+plot(density(resCpG.Genes$PvalWeight))
 #multiply the 2 score
-resCpG.Genes[,DMCScore:=PvalScore*FCScore]
+resCpG.Genes[,DMCScore:=PvalWeight*FC]
 plot(density(resCpG.Genes$DMCScore))
 
-# > 2) Regulatory weight [0.5-1] = 0.5 + 0.5 * (TypeScore{0,0.4,0.66,1} + EnsRegScore{0,0.25,0.5,0.75,1}) /2
+
+# > 2) Regulatory weight [0.5-2] = 0.5 + 1.5 * (TypeScore{0,0.4,0.66,1} + EnsRegScore{0,0.25,0.5,0.75,1}) 
 #     TypeScore{0,0.2,0.33,0.5}
 resCpG.Genes[,TypeScore:=sapply(type,function(x){
   if(x%in%c(4,6)){
@@ -96,7 +96,7 @@ resCpG.Genes[,EnsRegScore:=sapply(feature_type_name,function(x){
 })]
 plot(density(resCpG.Genes$EnsRegScore))
 # Regulatory weight:
-resCpG.Genes[,RegWeight:=(0.5+0.5*((TypeScore+EnsRegScore)/2))]
+resCpG.Genes[,RegWeight:=(0.5+1.5*((TypeScore+EnsRegScore)/2))]
 plot(density(resCpG.Genes[!duplicated(locisID)]$RegWeight))
 
 
@@ -126,7 +126,7 @@ eQTRs
 resCpG.Genes<-merge(resCpG.Genes,eQTRs,all.x = TRUE,by=c("chr","start.eQTR2", "end.eQTR2"))[order(pval)]
 resCpG.Genes
 
-#   * I make a function to calculate confidence of the links CpG-Gene for eQTL linked Gene : 
+#   * I made a function to calculate confidence of the links CpG-Gene for eQTL linked Gene : 
 calcLinkScore<-function(pos,start,end,signif=NULL,maxSignif=0.001475078){
   
   # i) linkScore ~ CpG distance of the eQTL region (eQTR)
@@ -176,7 +176,7 @@ plot(density(resCpG.Genes$LinksWeight))
 # > finally :
 resCpG.Genes[,CpGScore:=DMCScore*RegWeight*LinksWeight]
 plot(density(resCpG.Genes$CpGScore))
-plot(density(resCpG.Genes[CpGScore>0.8]$CpGScore))
+plot(density(resCpG.Genes[CpGScore>50]$CpGScore))
 topGenesWithCpGScore<-head(resCpG.Genes[order(-CpGScore)]$gene,100)
 topGenesWithDMCWeight<-head(resCpG.Genes[order(-DMCWeight)]$gene,100)
 setdiff(topGenesWithCpGScore,topGenesWithDMCWeight) 
@@ -192,12 +192,51 @@ ggplot(resCpG.Genes)+
   geom_bar(aes(x=nCpG.Gene))
 # ...How to summarize the CpG score to a gene score ??
 #to consider :
-#- a big gene is most susceptible to have a lot of CpG
+#- a big gene is most susceptible to have a lot of CpG, so more easy for it to have a high CpGscore => distrib more important
 #- some CpGs in the same regulatory region, they are markers for the same regulation
-#for the moment : GeneScore = max(CpG) 
 
-resGenes<-unique(resCpG.Genes[,GeneScore:=max(CpGScore),by="gene"],by="gene")[order(-GeneScore)]
+#=>  the GeneScore need to integrate 1) the CpGScore max and 2) the distribution of the score, 3) the number of CpG associated with the score
+
+#GeneScore[-inf:inf] = c*max(CpG) + (1-c)*q75(CpGScore)
+#with c[0.5-1] ~ nCpG associated to the gene. 
+# c=0.5 for a gene with a lot of CpG  => bigger coef for the q75Score because distrib most important than with few cpG 
+# c=1 for a gene with 1 CpG => just the max(CpG) is important
+#  c= 0.5+0.5*sqrt(1/nCpG)
+resCpG.Genes[,coef:=0.5+0.5*sqrt(1/nCpG.Gene)]
+
+resCpG.Genes[,GeneScore:=coef*max(CpGScore)+(1-coef)*median(CpGScore),by="gene"]
+
+resGenes<-unique(resCpG.Genes,by="gene")[order(-GeneScore)]
 resGenes
+resGenes$gene[1:100]
+plot(density(resGenes$nCpG.Gene))
+plot(density(resGenes$coef))
+plot(density(resGenes$GeneScore))
+
+#more precise : GeneScore2[-inf:inf]= moy ponder ci*CpgScore/sum(ci) avec ci~1/nCpG
+
+moyPond<-function(CpGScores){
+  CpGScores<-sort(CpGScores,decreasing = T)
+  coefs<-sapply(1:length(CpGScores), function(x)1/(x))
+  
+  return(sum(CpGScores*coefs)/sqrt(sum(coefs)))
+}
+
+resCpG.Genes[,GeneScore2:=moyPond(CpGScore),by="gene"]
+
+resGenes<-unique(resCpG.Genes,by="gene")[order(-GeneScore2)]
+resGenes
+resGenes$gene[1:100]
+plot(density(resGenes$nCpG.Gene))
+plot(density(resGenes$coef))
+plot(density(resGenes$GeneScore2))
+
+#gene rank 
+#hyoereth generank
+resGenes[,GeneRankHM:=rank(GeneScore2)]
+resGenes[GeneRankHM==min(resGenes$GeneRankHM)]
+
+
 
 #But don't take into account if the gene is multi-regulated.
 #idea to improve : summarize CpGScore by regulatory region and sum this scores to have a GeneScore
@@ -208,7 +247,7 @@ library(clusterProfiler)
 library(org.Hs.eg.db)
 #input :
 #numeric vector
-geneList<-resGenes$GeneScore
+geneList<-resGenes$GeneScore2
 #named vector
 names(geneList)<-resGenes$gene
 #sorted vector
@@ -225,9 +264,11 @@ resKEGG<- gseKEGG(geneList     = geneList.Entrez,
                         organism     = 'hsa',
                         pvalueCutoff = 0.05,
                         verbose = FALSE)
-head(resKEGG)
+head(resKEGG,10)
 dotplot(resKEGG, showCategory=30)
-
+enrichplot::gseaplot2(resKEGG,geneSetID = 1,title = as.data.frame(resKEGG)$Description[1])
+nrow(as.data.frame(resKEGG)) 
+enrichplot::gseaplot2(resKEGG,geneSetID = )
 emapplot(resKEGG)
 saveRDS(resKEGG,"analyses/withoutIUGR/2020-05-19_CF.LF_clusterProf_object_GSEA_CpGScoreMax.Gene.rds")
 write.csv2(as.data.frame(setReadable(resKEGG,org.Hs.eg.db,keyType = "ENTREZID")),"analyses/withoutIUGR/2020-05-19_CF.LF_res_GSEA_CpGScoreMax.Gene.csv")
@@ -253,8 +294,8 @@ resKEGG2<- gseKEGG(geneList     = geneList.Entrez,
                   verbose = FALSE)
 
 #compare 
-nrow(as.data.frame(resKEGG)) #184
-nrow(as.data.frame(resKEGG2)) #78
+nrow(as.data.frame(resKEGG)) #36
+nrow(as.data.frame(resKEGG2)) #82
 setdiff(as.data.frame(resKEGG)$Description,as.data.frame(resKEGG2)$Description)
 setdiff(as.data.frame(resKEGG2)$Description,as.data.frame(resKEGG)$Description)
 
@@ -272,13 +313,13 @@ emapplot(resKEGG2)
 
 #les males
 #differentially methylated datas :
-resCpGM<-fread("analyses/withoutIUGR/2020-04-16_res_locis_in_MC.ML_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",
+resCpGM<-fread("analyses/withoutIUGR/2020-04-16_res_locis_in_FC.FL_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",
               dec = ",")
 resCpGM<-resCpGM[,locisID:=V1][,pos:=start-1][,-c("V1","start")][,.(locisID,chr,pos,pval,FC)]
 resCpGM
 
 
-#~~ link CpGs to genes ~~
+#~~ I) link CpGs to genes ~~
 
 annot<-fread("../../ref/allCpG_annotation_genes_and_feature_regulatory_domain_070520.csv")
 
@@ -293,33 +334,35 @@ length(unique(resCpGM.Genes$locisID)) # 786277
 resCpGM.Genes<-resCpGM.Genes[!is.na(gene)]
 resCpGM.Genes
 
-#~~ Calculate The CpG Score ~~
-#CpGScore = 4* DMC weight + 2* LinksWeight + 2* Regulatory weight
+#~~ II) Calculate The CpG Score ~~
+#CpGScore = DMCScore [-inf:inf] * Regulatory weight[0.5-1] * LinksWeight [0.5-1]
 
-# > DMC weight
-resCpGM.Genes[,FCScore:=FC/max(abs(FC))]
-plot(density(resCpGM.Genes$FCScore))
+# > 1) DMCScore
+
+plot(density(resCpGM.Genes$FC))
 resCpGM.Genes[,PvalScore:=-log10(pval)/max(-log10(pval))]
 plot(density(resCpGM.Genes$pval))
 #multiply the 2 score
-resCpGM.Genes[,DMCWeight:=PvalScore*FCScore]
-plot(density(resCpGM.Genes$DMCWeight))
+resCpGM.Genes[,DMCScore:=PvalScore*FC]
+plot(density(resCpGM.Genes$DMCScore))
 
-# > Regulatory weight 
+
+# > 2) Regulatory weight [0.5-1] = 0.5 + 0.5 * (TypeScore{0,0.4,0.66,1} + EnsRegScore{0,0.25,0.5,0.75,1}) /2
+#     TypeScore{0,0.2,0.33,0.5}
 resCpGM.Genes[,TypeScore:=sapply(type,function(x){
   if(x%in%c(4,6)){
     score<-1
   }else if(x==5){
-    score<-0.75
+    score<-0.66
   }else if(x%in%1:3){
-    score<-0.5
+    score<-0.4
   }else{
-    score<-0.25
+    score<-0
   }
   return(score)
 })]
 plot(density(resCpGM.Genes$TypeScore))
-# +0.5 if(CTCF,enh,prom,)+ 0.25 if prom flanking, openchrine, #+0.5 if(TFbind site), or 0 otherwise
+#   EnsRegScore{0,0.25,0.5,0.75,1}
 source("scripts/utils.R")
 resCpGM.Genes[,EnsRegScore:=sapply(feature_type_name,function(x){
   vecX<-tr(x)
@@ -336,13 +379,14 @@ resCpGM.Genes[,EnsRegScore:=sapply(feature_type_name,function(x){
   return(score)
 })]
 plot(density(resCpGM.Genes$EnsRegScore))
-# add up the 2 score to make the Regulatory weight:
-resCpGM.Genes[,RegWeight:=(TypeScore+EnsRegScore)]
-plot(density(resCpGM.Genes$RegWeight))
+# Regulatory weight:
+resCpGM.Genes[,RegWeight:=(0.5+0.5*((TypeScore+EnsRegScore)/2))]
+plot(density(resCpGM.Genes[!duplicated(locisID)]$RegWeight))
 
 
-#> Links Weight
-# - for CpG associated to a gene based on TSS proximity  
+
+# > 3) Links Weight[0.5-1] = 0.5 + 0.5 * (TypeScore{0,0.4,0.66,1} + EnsRegScore{0,0.25,0.5,0.75,1}) /2
+#   - for CpG associated to a gene based on TSS proximity  
 resCpGM.Genes[is.na(start.eQTR2),LinkScore:=sapply(abs(distTSS),function(x){
   if(x<1000){
     score<-1
@@ -366,10 +410,10 @@ eQTRs
 resCpGM.Genes<-merge(resCpGM.Genes,eQTRs,all.x = TRUE,by=c("chr","start.eQTR2", "end.eQTR2"))[order(pval)]
 resCpGM.Genes
 
-#   * I make a function to calculate confidence of the links CpG-Gene for eQTL linked Gene : 
+#   * I made a function to calculate confidence of the links CpG-Gene for eQTL linked Gene : 
 calcLinkScore<-function(pos,start,end,signif=NULL,maxSignif=0.001475078){
   
-  #1) linkScore ~ CpG distance of the eQTL region (eQTR)
+  # i) linkScore ~ CpG distance of the eQTL region (eQTR)
   if(pos > (start-50)& pos < (end+50)){
     score<-1
   }else {
@@ -384,8 +428,8 @@ calcLinkScore<-function(pos,start,end,signif=NULL,maxSignif=0.001475078){
   }
   
   
-  #ajust score if eQTL region too large (because too much uncertainty) 
-  #: si >200, ajuste score sinon descend progressivement
+  # ii) ajust score if eQTL region too large (because too much uncertainty) 
+  #    si >200, ajuste score sinon descend progressivement
   largeur<-end-start+1
   if(largeur<200){
     score<-score*1
@@ -401,18 +445,20 @@ calcLinkScore<-function(pos,start,end,signif=NULL,maxSignif=0.001475078){
   return(score)
   
 }
+#   *calculate linkScore for eQTL-based CpG-Gene pairs :
 resCpGM.Genes[!is.na(start.eQTR2),LinkScore:=calcLinkScore(pos[1],start.eQTR[1],end.eQTR[1]),by=.(locisID,gene,start.eQTR2)]
 lines(density(resCpGM.Genes[!is.na(start.eQTR2)]$LinkScore),col=2)
 
-resCpGM.Genes[,LinksWeight:=max(LinkScore),by=.(locisID,gene)]
+resCpGM.Genes[,LinksWeight:=0.5+0.5*max(LinkScore),by=.(locisID,gene)]
 resCpGM.Genes<-resCpGM.Genes[,isBestLinks:=LinkScore==max(LinkScore),by=c("locisID","gene")][isBestLinks==TRUE]
 resCpGM.Genes<-unique(resCpGM.Genes)
 plot(density(resCpGM.Genes$LinksWeight))
 
 #Note : i would like to be more precise in the calculation of this links score
 
+
 # > finally :
-resCpGM.Genes[,CpGScore:=(4*DMCWeight+2*RegWeight+2*LinksWeight)/8]
+resCpGM.Genes[,CpGScore:=DMCScore*RegWeight*LinksWeight]
 plot(density(resCpGM.Genes$CpGScore))
 plot(density(resCpGM.Genes[CpGScore>0.8]$CpGScore))
 topGenesWithCpGScore<-head(resCpGM.Genes[order(-CpGScore)]$gene,100)
@@ -424,33 +470,47 @@ setdiff(topGenesWithCpGScore,topGenesWithDMCWeight)
 # problem : genes are linked to several CpG...
 library(ggplot2)
 resCpGM.Genes[,nCpG.Gene:=.N,by=.(gene)]
+
 resCpGM.Genes
 ggplot(resCpGM.Genes)+
   geom_bar(aes(x=nCpG.Gene))
 # ...How to summarize the CpG score to a gene score ??
 #to consider :
-#- a big gene is most susceptible to have a lot of CpG
+#- a big gene is most susceptible to have a lot of CpG, so more easy for it to have a high CpGscore => distrib more important
 #- some CpGs in the same regulatory region, they are markers for the same regulation
-#for the moment : GeneScore = max(CpG) 
 
-resGenesM<-unique(resCpGM.Genes[,GeneScore:=max(CpGScore),by="gene"],by="gene")[order(-GeneScore)]
-resGenesM
+#=>  the GeneScore need to integrate 1) the CpGScore max and 2) the distribution of the score, 3) the number of CpG associated with the score
+
+#GeneScore[0-1] = c*max(CpG) + (1-c)*q75(CpGScore)
+#with c[0.5-1] ~ nCpG associated to the gene. 
+# c=0.5 for a gene with a lot of CpG  => bigger coef for the q75Score because distrib most important than with few cpG 
+# c=1 for a gene with 1 CpG => just the max(CpG) is important
+#  c= 0.5+0.5*sqrt(1/nCpG)
+resCpGM.Genes[,coef:=0.5+0.5*sqrt(1/nCpG.Gene)]
+
+resCpGM.Genes[,GeneScore:=coef*max(CpGScore)+(1-coef)*quantile(CpGScore,0.75),by="gene"]
+
+resGenes<-unique(resCpGM.Genes,by="gene")[order(-GeneScore)]
+resGenes
+resGenes$gene[1:100]
+plot(density(resGenes$nCpG.Gene))
+plot(density(resGenes$coef))
+plot(density(resGenes$GeneScore))
 
 #But don't take into account if the gene is multi-regulated.
 #idea to improve : summarize CpGScore by regulatory region and sum this scores to have a GeneScore
+
 
 #GSEA
 library(clusterProfiler)
 library(org.Hs.eg.db)
 #input :
 #numeric vector
-geneList<-resGenesM$GeneScore
+geneList<-resGenes$GeneScore
 #named vector
-names(geneList)<-resGenesM$gene
+names(geneList)<-resGenes$gene
 #sorted vector
 geneList<-sort(geneList,decreasing = T)
-
-geneList
 
 genes.df<-bitr(names(geneList),
                fromType = 'SYMBOL',
@@ -463,12 +523,13 @@ resKEGGM<- gseKEGG(geneList     = geneList.Entrez,
                   organism     = 'hsa',
                   pvalueCutoff = 0.05,
                   verbose = FALSE)
-head(resKEGGM)
+head(resKEGGM,12)
 dotplot(resKEGGM, showCategory=30)
-
+enrichplot::gseaplot2(resKEGGM,geneSetID = 9)
+nrow(as.data.frame(resKEGGM))
 emapplot(resKEGGM)
 saveRDS(resKEGGM,"analyses/withoutIUGR/2020-05-19_CM.LM_clusterProf_object_GSEA_CpGScoreMax.Gene.rds")
-write.csv2(as.data.frame(setReadable(resKEGG,org.Hs.eg.db,keyType = "ENTREZID")),"analyses/withoutIUGR/2020-05-19_CM.LM_res_GSEA_CpGScoreMax.Gene.csv")
+write.csv2(as.data.frame(setReadable(resKEGGM,org.Hs.eg.db,keyType = "ENTREZID")),"analyses/withoutIUGR/2020-05-19_CM.LM_res_GSEA_CpGScoreMax.Gene.csv")
 
 #compare
 setdiff(as.data.frame(resKEGG)$Description,as.data.frame(resKEGGM)$Description)
