@@ -414,5 +414,9 @@ annotCpGResWithBMRes<-function(resCpG,resBM=NULL,chrPosCol="chrRegion",
 }
 
 
+extr<-function(x){
+  r<-range(x)
+  return(r[which(abs(r)==max(abs(r)))])
+}
 
 
