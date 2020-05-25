@@ -498,6 +498,10 @@ formule<- ~0 + group_sex  + batches  + latino + mat.age + group_complexity_fac
 models[[model]]<-formule
 design<-model.matrix(models[[model]])
 #resModels<-list()
+sum(samples_F_F%in%rownames(batch)[batch$Group_name=="C"&batch$Gender=="F"])
+data_FF<-data_F[,samples_F_F]
+data_FF$locisID<-rownames(data_FF)
+fwrite(data_FF[,c("locisID",names(data_FF)[1:(ncol(data_FF)-1)])],file = "../../ref/2020-05-25_methyl_data_before_limma.csv",sep = ";")
 
 colnames(design)<-make.names(colnames(design))
 fit <- lmFit(data_F[,samples_F_F], design)  
@@ -620,6 +624,7 @@ for(compa in compas){
                   confScore=sapply(data_F[rownames(res),"confidenceScore"],function(x){
                     return(sum(x>q9ConfScore))
                   }))
+  
   # save all locis pval and FC : 
   
   fwrite(res,paste(output,"res_locis_in",compa,"allLocis",filtres,"model",model,".csv",sep = "_"),sep=";")
