@@ -693,3 +693,5 @@ ggplot(unique(res,by="locisID"))+
          geom_bar(aes(x=nGenes.cpg))
 
 
+
+
