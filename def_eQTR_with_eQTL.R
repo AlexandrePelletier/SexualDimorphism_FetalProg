@@ -349,14 +349,51 @@ plot(density(CpG.regs$eQTL.CpGLinks))
 #GeneLinks-CpG_Score = log10((RegScore*distScore))
 CpG.regs[,Gene.CpGLinks:=log10(RegScore*distScore)] #integrate with RegScore : mean of pval of eQTL in the region
 plot(density(CpG.regs$Gene.CpGLinks)) 
-#integr with annot :
 
 #save this new CpG-Gene links
+fwrite(CpG.regs,"../../ref/2020-06-01_CpG_Gene_links_based_on_whole_blood_eQTL.csv",sep=";")
 
 #2020-06-01
-#4) add metaeQTL
+library(data.table)
+#4) add metaeQTL : on veut avoir une ref de asso eqtl-gene stable across tissues.
 meta_eQTL<-fread("../../../../../Downloads/GTEx_Analysis_v8.metasoft.txt")
-meta_eQTL
+meta_eQTL 
+# choose  RE2 as model stat : New random effects model optimized to detect associations under heterogeneity. (Han and Eskin, AJHG 2011)
+#STAT2_RE2	RE2 statistic heterogeneity part
+plot(density(meta_eQTL$STAT2_RE2))
+# Q  stat is an Heterogeneity estimates : for each snp-gene pair, association is it heterogen between tissue of same sample ?
+cor(meta_eQTL$Q,meta_eQTL$STAT2_RE2,use = "complete.obs") #0.985788
+plot(density(na.omit(meta_eQTL$Q)))
+summary(meta_eQTL$Q)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+#     0.0    57.6    81.8   123.5   130.0  9078.0  399262 
+
+plot(density(na.omit(meta_eQTL[PVALUE_Q<0.01]$Q)))
+summary(meta_eQTL[PVALUE_Q<0.01]$Q)
+# Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+# 6.635   82.215  108.403  161.000  168.524 9078.040 
+
+#also Isquare to estimate heterogeneity
+cor(meta_eQTL$I_SQUARE,meta_eQTL$STAT2_RE2,use = "complete.obs") #0.44
+plot(density(na.omit(meta_eQTL$I_SQUARE)))
+meta_eQTL[I_SQUARE>90] #Q, stat2_RE2 high too if ++ study, but not if peu de study => bonne metrique pour filitrer
+
+
+#FILTRER POUR HETEROGENEITE TROP GRANDE
+meta_eQTL[I_SQUARE>50]#6M / 13M
+meta_eQTL<-meta_eQTL[I_SQUARE<50]
+
+#select gighly conserved signif snp-gene pairs across tiisues with pvalue_RE2 
+plot(density(log10(meta_eQTL$PVALUE_RE2))) 
+#take only high significant asso : 
+summary(-log10(meta_eQTL$PVALUE_RE2)) #3rd quarter will be on cutoff : ~10^-30
+# Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+# 0.000019  4.174217 11.871462       Inf 28.743995       Inf 
+
+meta_eQTL<-meta_eQTL[PVALUE_RE2<10^-30,]
+meta_eQTL #1599039 snp-gene pair
+meta_eQTL[order(-PVALUE_RE2)]
+
 #stat :
 nrow(meta_eQTL) #2 414 653 variant-gene pairs
 length(unique(meta_eQTL$gene_id)) #dans 12360 gene differents 
@@ -566,9 +603,139 @@ meta_eQTL[,RegScore:=mean(-log10(pval_nominal)),by=.(gene_id,eQTR)]
 max(meta_eQTL$RegScore)#221
 fwrite(meta_eQTL,"../../ref/2020-05-31_Whole_Blood.eQTL_with_eQTR.csv",sep=";")
 
-#4) confidenceLinks based on most signif eQTL proximity 
+#4) make eQTR :
 
-#5) correct distTSS
+meta_eQTL<-meta_eQTL[order(chr,gene_id,pos)]
+head(meta_eQTL,100)
+meta_eQTR<-meta_eQTL[!is.na(eQTR)]
 
-#in, CpGScore : correct filtration based on TSS => based on this new Linksscore
+meta_eQTR[,start.eQTR:=min(pos),by=.(gene_id,eQTR)]
+meta_eQTR[,end.eQTR:=max(pos),by=.(gene_id,eQTR)]
+meta_eQTR[,n.eQTL:=.N,by=.(gene_id,eQTR)]
+meta_eQTR[,length.eQTR:=end.eQTR-start.eQTR]
+summary(meta_eQTR$length.eQTR)
+plot(density((meta_eQTR$length.eQTR)))
+meta_eQTR<-meta_eQTR[minLocal==T]
+meta_eQTR
+meta_eQTRl<-meta_eQTR[,.(chr,pos,eQTR,start.eQTR,end.eQTR,n.eQTL,RegScore,gene,tss_distance,pval_nominal)][!is.na(gene)&gene!=""]
+meta_eQTRl
+#add +/-500pb pour eQTR with only 1 cpg
+meta_eQTRl[n.eQTL==1,start.eQTR:=start.eQTR-500]
+meta_eQTRl[n.eQTL==1,end.eQTR:=end.eQTR+500]
+fwrite(meta_eQTRl,"../../ref/2020-05-31_Whole_Blood.eQTR_light.csv",sep=";")
 
+
+#5) add locis
+cpgs<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
+cpgs<-cpgs[,.(locisID,chr,pos)]
+cpgs
+#remove empty annot
+cpgs<-cpgs[chr!=""]
+cpgs<-cpgs[pos!=""]
+cpgs<-cpgs[!is.na(pos)]
+cpgs
+eQTRll<-meta_eQTRl[,.(chr,start.eQTR,end.eQTR,gene)]
+rm(translator,meta_eQTL,eQTR,meta_eQTRl)
+output<-"analyses/eQTL_integration/2020-05-31"
+options(future.globals.maxSize = 4000 * 1024^2)
+for(chrom in unique(cpgs$chr)){
+  print(chrom)
+  cpgsl<-cpgs[chr==chrom]
+  start1<-0
+  for(p in 1:100){
+    f<-p/100
+    print(paste(chrom,p,"%"))
+    stop<-quantile(cpgsl$pos,f)
+    cpgsll<-cpgsl[pos>start1&pos<=stop]
+    print(paste(nrow(cpgsll),"locis"))
+    eQTRlll<-eQTRll[chr==chrom&(start.eQTR%between%c(start1,stop)|end.eQTR%between%c(start1,stop))]
+    print(paste(nrow(eQTRlll),"regions"))
+    
+    if(nrow(eQTRlll)>0){
+      #initialise sRegs
+      cpg<-cpgsll[1,]
+      sRegs<-eQTRlll[(start.eQTR<cpg$pos)&(end.eQTR>cpg$pos)]
+      sRegs[,locisID:=cpg$locisID]
+      sRegs[,pos:=cpg$pos]
+      
+      for(i in 2:nrow(cpgsll)){
+        cpg<-cpgsll[i,]
+        sReg<-eQTRlll[(start.eQTR<cpg$pos)&(end.eQTR>cpg$pos)]
+        sReg[,locisID:=cpg$locisID]
+        sReg[,pos:=cpg$pos]
+        sRegs<-rbind(sRegs,sReg)
+      }
+    }
+    
+    fwrite(sRegs,file=paste0(output,"temp",chrom,p))
+    start1<-stop
+  }
+  
+  
+}
+sRegs<-sRegs[1,]
+
+for(file in list.files("analyses/eQTL_integration/",pattern = "temp")){
+  print(strsplit(file,"chr")[[1]][2])
+  sReg<-fread(paste0("analyses/eQTL_integration/",file))
+  sRegs<-rbind(sRegs,sReg)
+  
+}
+
+
+sRegs
+sRegs[duplicated(sRegs)]
+sRegs[locisID==2190609]
+sRegs<-unique(sRegs)
+sRegs[locisID==2190609]
+
+# add  eQTR info : 
+#to avoid conflict, "pos" column of eQTR > "pos.eQTL"
+meta_eQTRl<-fread("../../ref/2020-05-31_Whole_Blood.eQTR_light.csv")
+
+
+meta_eQTRl<-meta_eQTRl[,pos.eQTL:=pos][,-"pos"]
+#same for tss_distance
+meta_eQTRl<-meta_eQTRl[,tss_dist.eQTL:=tss_distance][,-"tss_distance"]
+meta_eQTRl<-unique(meta_eQTRl)
+sRegs
+CpG.regs<-merge(sRegs,meta_eQTRl,by=c('chr','start.eQTR','end.eQTR','gene'),all.x = T,allow.cartesian = T)
+
+CpG.regs[locisID==2190609] #ok
+CpG.regs
+
+#add distTSS CpG
+#1) dist from eQTL
+CpG.regs[,eQTL_dist:=pos-pos.eQTL]
+summary(CpG.regs$eQTL_dist)
+plot(density(CpG.regs$eQTL_dist))
+CpG.regs[eQTL_dist>50000] #il y a des cpg tres loins de l'eqtl, 
+#on enleve CpGlinks si a > 5kb du most signif
+CpG.regs<-CpG.regs[abs(eQTL_dist)<5000] 
+CpG.regs #492262 cpg-gene links
+plot(density(CpG.regs$eQTL_dist))
+#2) dist from tss
+CpG.regs[,tss_dist:=tss_dist.eQTL+eQTL_dist]
+CpG.regs
+summary(CpG.regs$tss_dist)
+plot(density(CpG.regs$tss_dist))
+#eQTL-CpG_Score = -log10(pval)* distScore [1 if +/-500, 0.9 if +/- 1000, 0.8 +/-1500, 0.7 +/-2k,0.6+/-2500]
+
+
+CpG.regs[,distScore:=sapply(abs(eQTL_dist),function(x){
+  if(x<500){
+    distScore<-1 
+  }else {
+    distScore<-1-0.4*x/2500
+  }
+  
+  return(distScore)
+})]
+
+plot(density(CpG.regs$eQTL.CpGLinks)) 
+#GeneLinks-CpG_Score = log10((RegScore*distScore))
+CpG.regs[,Gene.CpGLinks:=log10(RegScore*distScore)] #integrate with RegScore : mean of pval of eQTL in the region
+plot(density(CpG.regs$Gene.CpGLinks)) 
+
+#save this new CpG-Gene links
+fwrite(CpG.regs,"../../ref/2020-06-01_CpG_Gene_links_based_on_whole_blood_eQTL.csv",sep=";")
