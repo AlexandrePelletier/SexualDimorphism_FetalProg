@@ -111,7 +111,7 @@ resCpG.Genes
 plot(density(resCpG.Genes$meth.change))
 #PvalWeight[0-1]
 plot(density(log10(resCpG.Genes$pval)))
-resCpG.Genes[,PvalWeight:=(-log10(pval)/8)] #
+resCpG.Genes[,PvalWeight:=(-log10(pval))] #
 plot(density(resCpG.Genes$PvalWeight))
 
 #multiply the 2 score
@@ -135,9 +135,8 @@ resCpG.Genes[,TypeScore:=sapply(type,function(x){
 plot(density(resCpG.Genes$TypeScore))
 
 #   EnsRegScore{0,0.25,0.5,0.75,1}
-source("scripts/utils.R")
 resCpG.Genes[,EnsRegScore:=sapply(feature_type_name,function(x){
-  vecX<-tr(x)
+  vecX<-strsplit(x,"/")[[1]]
   if(any(c("CTCF Binding Site","Promoter","Enhancer")%in%vecX)){
     score<-0.5
   }else if(any(c("Open chromatin","Promoter Flanking Region")%in%vecX)){
@@ -152,72 +151,37 @@ resCpG.Genes[,EnsRegScore:=sapply(feature_type_name,function(x){
 })]
 plot(density(resCpG.Genes$EnsRegScore))
 # Regulatory weight:
-resCpG.Genes[,RegWeight:=(0.5+1.5*((TypeScore+EnsRegScore)/2))]
+resCpG.Genes[,RegWeight:=(0.4+1.6*((TypeScore+EnsRegScore)/2))]
+
 plot(density(resCpG.Genes[!duplicated(locisID)]$RegWeight))
 
 
 
 # > 3) Links Weight[0.5-1] = 0.5+0.5*max(LinkScore [0-1])
 #   - for CpG associated to a gene based on TSS proximity  
-resCpG.Genes[is.na(start.eQTR2),LinkScore:=sapply(abs(distTSS),function(x){
+resCpG.Genes[in.eQTR==FALSE,LinkScore:=sapply(abs(tss_dist),function(x){
   if(x<1000){
     score<-1
   }else if(x<20000){
-    score<-(3/(log10(x)))
+    score<-3/(log10(x))
   }else if (x<100000){
-    score<-3/log10(x)^2
+    score<-(3/log10(x))^2
     
   }else{
     score<-(3/log10(x))^3
   }
   return(score)
 })]
-plot(density(resCpG.Genes[is.na(start.eQTR2)]$LinkScore))
+plot(density(resCpG.Genes[in.eQTR==FALSE]$LinkScore))
 
 # - for CpG associated to a gene based on eQTL studies: 
+#de base, linksscore =1
 
-#BEFORE
-#   *need eQTR : most precise eQTL region
-eQTRs<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv")
-eQTRs<-eQTRs[,.(chr,start.eQTR2,end.eQTR2,start.eQTR,end.eQTR,gene)]
-eQTRs
-resCpG.Genes<-merge(resCpG.Genes,eQTRs,all.x = TRUE,by=c("chr","start.eQTR2", "end.eQTR2","gene"))[order(pval)]
-resCpG.Genes
+resCpG.Genes[in.eQTR==TRUE,LinkScore:=1] 
 
-#   * for the moment i just ponderate the linkScore based on the length of the region 
-# : if the region is very large, CpG have less chance to be really link to gene (too much uncertainty)
-calcLinkScore<-function(pos,start,end){
-  score<-1
-  # # i) linkScore ~ CpG distance of the eQTL region (eQTR)
-  # if(pos > (start-50)& pos < (end+50)){
-  #   score<-1
-  # }else {
-  #   x<-min(abs(c(start-pos,end-pos)))
-  #   score<-(log10(50)/(log10(x)))^0.5
-  # }
-  # 
-  # ii) ajust score if eQTL region too large (because too much uncertainty) 
-  #    si >1000, ajuste score sinon descend progressivement
-  width<-end-start+1
-  if(width<1000){
-    score<-score*1
-  }else if(width<10000){
-    score<-score*(0.5+0.5*(log10(1000)/log10(width+1)))
-  }else if(width<100000){
-    score<-score*(0.5+0.5*(log10(1000)/log10(width+1))^2)
-  }else{
-    score<-score*(0.5+0.5*(log10(1000)/log10(width+1))^3)
-  }
-  
-  
-  return(score)
-  
-}
-  #   *calculate linkScore for eQTL-based CpG-Gene pairs :
-resCpG.Genes[!is.na(start.eQTR2),LinkScore:=calcLinkScore(pos[1],start.eQTR[1],end.eQTR[1]),by=.(locisID,gene,start.eQTR2)]
-
-#NOW 
-CpG.regs[,distScore:=sapply(abs(eQTL_dist),function(x){
+#but, filter for low signif asso, and add bonus if highly signif eQTR and close to best eQTL
+plot(density(na.omit(resCpG.Genes$eQTL_dist)))
+resCpG.Genes[in.eQTR==TRUE,distScore:=sapply(abs(eQTL_dist),function(x){
   if(x<500){
     distScore<-1 
   }else {
@@ -226,32 +190,39 @@ CpG.regs[,distScore:=sapply(abs(eQTL_dist),function(x){
   
   return(distScore)
 })]
+plot(density(na.omit(resCpG.Genes$avg.mlog10.pv.eQTLs)))
 
-CpG.regs[,Gene.CpGLinks:=avg.mlog10.pv.eQTLs*distScore] #integrate with RegScore : mean of pval of eQTL in the region
-plot(density(CpG.regs$Gene.CpGLinks)) 
-summary(CpG.regs$Gene.CpGLinks)
+plot(density(na.omit(resCpG.Genes$avg.mlog10.pv.eQTLs)))
+resCpG.Genes[in.eQTR==TRUE,RegScore:=avg.mlog10.pv.eQTLs*distScore] #integrate with RegScore : mean of pval of eQTL in the region
+
+plot(density(na.omit(resCpG.Genes$RegScore))) 
+#remove low signif links (<4) and add bonus if 
+abline(v=4)
+summary(na.omit(resCpG.Genes$RegScore))
+resCpG.Genes<-resCpG.Genes[RegScore>4|in.eQTR==F]
+#and add bonus ; +1*regScore/220
+
+resCpG.Genes[in.eQTR==TRUE,LinkScore:=LinkScore+1*RegScore/max(RegScore)]
+plot(density(resCpG.Genes$LinkScore))
+resCpG.Genes[LinkScore>1.5]
 # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 #0.001   5.056   7.971  12.019  13.895 221.354 
 
-
-
-lines(density(resCpG.Genes[!is.na(start.eQTR2)]$LinkScore),col=2)
-
-plot(density(resCpG.Genes[!is.na(start.eQTR2)]$LinkScore))
-
-resCpG.Genes[,LinksWeight:=0.5+0.5*max(LinkScore),by=.(locisID,gene)]
-
-#because eQTR can overlap...
-# resCpG.Genes<-resCpG.Genes[,nEQTR.CpgGeneLink:=.N,by=c("locisID","gene")]
-# plot(density(resCpG.Genes$nEQTR.CpgGeneLink))
-
+#because of some tss_distance dismatch between eQTRlinked and not, there is different linkScore
+resCpG.Genes[,nEQTR.CpgGeneLink:=.N,by=c("locisID","gene")]
+plot(density(resCpG.Genes$nEQTR.CpgGeneLink))
+resCpG.Genes[nEQTR.CpgGeneLink>1]
 #...we select the best linkScore by cpg-gene pair
 resCpG.Genes<-resCpG.Genes[,isBestLinks:=LinkScore==max(LinkScore),by=c("locisID","gene")][isBestLinks==TRUE]
-resCpG.Genes<-unique(resCpG.Genes)
+resCpG.Genes<-unique(resCpG.Genes[,-c("isClosest","isBestLinks")])
+#for same linksWeught
+resCpG.Genes<-unique(resCpG.Genes,by=c("locisID","gene"))
+#and finally calculate the linksWeight
+resCpG.Genes[,LinksWeight:=0.3+1.2*(LinkScore/2)]
 plot(density(resCpG.Genes$LinksWeight))
 
-#IMPROV3 : maybe i could be more precise in the calculation of this links score 
-#(take into account the signifiance of the link + the number of eQTL, and also the proximity of the CpG with the eQTL)
+
+
 
 
 # > finally :
@@ -265,18 +236,20 @@ lines(density(resCpG.Genes[pval<0.001]$CpGScore),col=2) #majority of significant
 lines(density(resCpG.Genes[meth.change>20]$CpGScore),col=3) #high meth.Change CpG are pull down 
 lines(density(resCpG.Genes[pval<0.001& meth.change>20]$CpGScore),col=4) # but keep a good score if significant
 
-nrow(resCpG.Genes[pval>0.01 & CpGScore>15]) # 5 CpG have a high CpGScore wereas pvalue >1%
-resCpG.Genes[pval>0.01 & CpGScore>15] #because high meth.change, pval close to 1%, in promoter, and close to gene
+nrow(resCpG.Genes[pval>0.01 & CpGScore>120]) # 29 CpG have a high CpGScore wereas pvalue >1%
+resCpG.Genes[pval>0.01 & CpGScore>120][order(-CpGScore)] #because 1) in highly signif eQTR, high meth.change, pval close to 1%, in promoter, and close to gene
 
 plot(density(resCpG.Genes[pval>0.01 ]$CpGScore)) 
-abline(v=quantile(resCpG.Genes[pval>0.01 ]$CpGScore,0.999)) #99,9% non significant CpG have a CpG score < 13
+abline(v=quantile(resCpG.Genes[pval>0.01 ]$CpGScore,0.999)) #99,9% non significant CpG have a CpG score < 103
 
-nrow(resCpG.Genes[meth.change<20 & CpGScore>15]) # no CpG with small meth.change have a CpGScore >15
+nrow(resCpG.Genes[meth.change<20 & CpGScore>120]) # no CpG with small meth.change have a CpGScore >120
 plot(density(resCpG.Genes[abs(meth.change)<20 ]$CpGScore)) 
-abline(v=quantile(resCpG.Genes[abs(meth.change)<20 ]$CpGScore,0.999))#99,9% of small meth.change CpG have a CpG score < 7
+abline(v=quantile(resCpG.Genes[abs(meth.change)<20 ]$CpGScore,0.999))#99,9% of small meth.change CpG have a CpG score < 55
 
 # some validation plots : 
 # my score highlight mostly CpG with high pvalue and meth.change : 
+library(ggplot2)
+library(patchwork)
 m <- ggplot(resCpG.Genes, aes( y = CpGScore))
 
 m1<-m +geom_point(aes(x=-log10(pval)))
@@ -305,9 +278,6 @@ m4
 m5<-m + geom_point(aes(x = LinksWeight))
 md5<-m5 + stat_density_2d(aes(x = LinksWeight,fill = after_stat(level)), geom = "polygon")
 md5
-
-# QU1 : Is there better way to "statistically" validate my score ?
-
 
 
 #~~ III) summarize the CpGs Scores to a Gene Score  ~~

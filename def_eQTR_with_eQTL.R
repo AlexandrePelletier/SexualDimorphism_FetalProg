@@ -286,7 +286,7 @@ for(chrom in unique(cpgs$chr)){
   
   
 }
-sRegs<-sRegs[1,]
+sRegs<-fread("analyses/eQTL_integration/2020-05-31tempchr101")
 
 for(file in list.files("analyses/eQTL_integration/",pattern = "temp")){
   print(strsplit(file,"chr")[[1]][2])
@@ -332,23 +332,12 @@ CpG.regs[,tss_dist:=tss_dist.eQTL+eQTL_dist]
 CpG.regs
 summary(CpG.regs$tss_dist)
 plot(density(CpG.regs$tss_dist))
-#eQTL-CpG_Score = -log10(pval)* distScore [1 if +/-500, 0.9 if +/- 1000, 0.8 +/-1500, 0.7 +/-2k,0.6+/-2500]
 
+#refine th dataframe before save
+CpG.regs<-CpG.regs[,avg.mlog10.pv.eQTLs:=RegScore][,-"RegScore"]
+plot(density(CpG.regs$avg.mlog10.pv.eQTLs))
 
-CpG.regs[,distScore:=sapply(abs(eQTL_dist),function(x){
-  if(x<500){
-    distScore<-1 
-  }else {
-    distScore<-1-0.4*x/2500
-  }
-  
-  return(distScore)
-})]
-
-plot(density(CpG.regs$eQTL.CpGLinks)) 
-#GeneLinks-CpG_Score = log10((RegScore*distScore))
-CpG.regs[,Gene.CpGLinks:=log10(RegScore*distScore)] #integrate with RegScore : mean of pval of eQTL in the region
-plot(density(CpG.regs$Gene.CpGLinks)) 
+summary(CpG.regs$avg.mlog10.pv.eQTLs)
 
 #save this new CpG-Gene links
 fwrite(CpG.regs,"../../ref/2020-06-01_CpG_Gene_links_based_on_whole_blood_eQTL.csv",sep=";")
