@@ -23,6 +23,8 @@
 # 3) the Genomic region of the CpG is linked to the gene expression (eQTL study), 
 # with a confidence Score of the links => LinksWeight
 
+#2020-06-01 CpGScore v2
+
 options(stringsAsFactors=F)
 set.seed(12345)
 
@@ -37,39 +39,69 @@ resCpG
 
 
 #~~ I) link CpGs to genes ~~
-
-annot<-fread("../../ref/allCpG_annotation_genes_and_feature_regulatory_domain_070520.csv")
-annot<-annot[!(is.na(gene)|gene=="")]
-annot
 # 2 types of CpG-Gene links
 # - the closest TSS from a CpG is associated with them
-annot[is.na(start.eQTR2)]
+annot<-fread("../../ref/allCpG_annotation_genes_and_feature_regulatory_domain_070520.csv")
+cpg.gene1<-annot[!(is.na(gene)|gene=="")&is.na(start.eQTR2)][,.(locisID,gene,distTSS)]
+annot<-annot[,.(locisID,chr,pos,type,feature_type_name)]
+cpg.gene1
+annot
 
 # - the CpG is in a region with eQTL (SNP associated with a change of expression of a gene)
-annot[!is.na(start.eQTR2)]
+cpg.gene2<-fread("../../ref/2020-06-01_CpG_Gene_links_based_on_whole_blood_eQTL.csv")
+cpg.gene2<-cpg.gene2[,in.eQTR:=TRUE][,.(locisID,gene,tss_dist,in.eQTR,avg.mlog10.pv.eQTLs,eQTL_dist)]
+cpg.gene2
+intersect(cpg.gene1[gene=="SIRT1"]$locisID,cpg.gene2[gene=="SIRT1"]$locisID)
+cpg.gene1[locisID==1187983]
+cpg.gene2[locisID==1187983]
+#homogeneize the 2 dt before merge
+cpg.gene1<-cpg.gene1[,tss_dist:=distTSS][,-'distTSS']
+cpg.gene2[,tss_dist:=tss_dist+1]
+merge(cpg.gene1,cpg.gene2)#only 10k5/236k match cpg-gene => ~5%
+unique(cpg.gene2,by="locisID")
+
+cpgs.genes<-merge(cpg.gene1,cpg.gene2,all=T)
+cpgs.genes
+cpgs.genes[locisID==987]
+cpgs.genes[is.na(in.eQTR),in.eQTR:=FALSE]
+cpgs.genes
 # It is based on blood eQTL get in : https://gtexportal.org/home/datasets 
 #file path is : GTEx_Analysis_v8_eQTL/Whole_Blood.v8.signif_variant_gene_pairs.txt
 
 ##IMPROV1 : i plan to integrate also the meta_analysis provide by GTEx of all tissues to get 
 # the variant_gene_pairs conserved across tissue (to improve confidence of the link)
 
-resCpG.Genes<-merge(resCpG,annot,by=c("locisID","chr","pos"),all.x = T)
+#add annot 
+cpgs.genes<-merge(cpgs.genes,annot,all.x = T,by="locisID")
+#merge with res
+resCpG.Genes<-merge(resCpG,cpgs.genes,by=c("locisID","chr","pos"),all.x = T)
 resCpG.Genes
 
 #there is CpG without gene associated, we remove them
-sum(is.na(resCpG.Genes$gene)) #339390
+sum(is.na(resCpG.Genes$gene)) #315608
 length(unique(resCpG.Genes$locisID)) # 786277
 resCpG.Genes<-resCpG.Genes[!is.na(gene)]
 resCpG.Genes
 
-#in eQTL analysis there is CpG linked to several Gene, to avoid background noise
-#we select just 1 gene by CpG : the closest gene
-resCpG.Genes[is.na(start.eQTR2),closest.Genes:=T,by=.(locisID)]
-resCpG.Genes[!is.na(start.eQTR2),closest.Genes:=distTSS==min(distTSS),by=.(locisID)]
-resCpG.Genes<-resCpG.Genes[closest.Genes==T]
-resCpG.Genes
+#in eQTL analysis there is CpG linked to several Gene : 
+resCpG.Genes[,nGene.CpG:=.N,by=.(locisID)]
+hist(resCpG.Genes$nGene.CpG,breaks = 50)
+resCpG.Genes[nGene.CpG>50]
+#there is duplicated row, we conseve unique locisID-gene pairing 
+resCpG.Genes<-unique(resCpG.Genes)
+hist(resCpG.Genes$nGene.CpG)
+resCpG.Genes[nGene.CpG>50]
+resCpG.Genes[locisID==8342]
+#there is multiple row for the same eQTR, just the eQTL-dist change, we select the closest
+resCpG.Genes[in.eQTR==TRUE,isClosest:=eQTL_dist==min(eQTL_dist),by=.(locisID,gene)]
+resCpG.Genes[in.eQTR==FALSE,isClosest:=TRUE]
 
-#IMPROV2 : here i could choose the best links according to better metrics than distTSS (number and signifiance of eQTL-Gene link in the region,...)
+resCpG.Genes<-resCpG.Genes[isClosest==TRUE]
+resCpG.Genes[,nGene.CpG:=.N,by=.(locisID)]
+hist(resCpG.Genes$nGene.CpG)
+resCpG.Genes[nGene.CpG>10]
+
+resCpG.Genes
 
 
 #~~ II) Calculate The CpG Score ~~
@@ -143,6 +175,8 @@ resCpG.Genes[is.na(start.eQTR2),LinkScore:=sapply(abs(distTSS),function(x){
 plot(density(resCpG.Genes[is.na(start.eQTR2)]$LinkScore))
 
 # - for CpG associated to a gene based on eQTL studies: 
+
+#BEFORE
 #   *need eQTR : most precise eQTL region
 eQTRs<-fread("../../ref/CD34_chromatin_feature_region_annotated_with_BloodeQTL.csv")
 eQTRs<-eQTRs[,.(chr,start.eQTR2,end.eQTR2,start.eQTR,end.eQTR,gene)]
@@ -181,6 +215,25 @@ calcLinkScore<-function(pos,start,end){
 }
   #   *calculate linkScore for eQTL-based CpG-Gene pairs :
 resCpG.Genes[!is.na(start.eQTR2),LinkScore:=calcLinkScore(pos[1],start.eQTR[1],end.eQTR[1]),by=.(locisID,gene,start.eQTR2)]
+
+#NOW 
+CpG.regs[,distScore:=sapply(abs(eQTL_dist),function(x){
+  if(x<500){
+    distScore<-1 
+  }else {
+    distScore<-1-0.5*x/2500
+  }
+  
+  return(distScore)
+})]
+
+CpG.regs[,Gene.CpGLinks:=avg.mlog10.pv.eQTLs*distScore] #integrate with RegScore : mean of pval of eQTL in the region
+plot(density(CpG.regs$Gene.CpGLinks)) 
+summary(CpG.regs$Gene.CpGLinks)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#0.001   5.056   7.971  12.019  13.895 221.354 
+
+
 
 lines(density(resCpG.Genes[!is.na(start.eQTR2)]$LinkScore),col=2)
 
@@ -546,6 +599,8 @@ moyPond<-function(CpGScores){
   
   return(sum(CpGScores*coefs)/sqrt(sum(coefs)))
 }
+
+
 
 
 
