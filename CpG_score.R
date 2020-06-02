@@ -549,21 +549,17 @@ resGenes<-unique(resCpG.Genes,by="gene")[order(-GeneScore)]
 
 #OTHER TEST OF CpG-score SUMMARIZING : 
 #so i decided to alleviate the weigth of the number of CpG like this :
-moyPond<-function(CpGScores){
-  CpGScores<-CpGScores[order(abs(CpGScores),decreasing = T)]
-  coefs<-sapply(1:length(CpGScores), function(x)1/(x))
-  
-  return(sum(CpGScores*coefs)/(sum(coefs)))
-}
 
-#geneSCORE3
 
-resCpG.Genes[,GeneScore3:=max(CpGScore)+moyPond(CpGScore[CpGScore!=max(CpGScore)]),by="gene"]
+#geneSCORE3 : the sum
+
+resCpG.Genes[,GeneScore3:=sum(CpGScore),by="gene"]
 
 resGenes2<-unique(resCpG.Genes,by="gene")[order(-GeneScore3)]
 
 resGenes2
 resGenes2$gene[1:100]
+
 
 plot(density(resGenes2$GeneScore3))
 
@@ -574,33 +570,92 @@ abline(v=60)
 library(clusterProfiler)
 library(org.Hs.eg.db)
 plot(density(resGenes2$GeneScore3))
-abline(v=60)
-genesGS<-resGenes2[GeneScore3>70]$gene
+abline(v=300)
+genesGS<-resGenes2[GeneScore3>300]$gene
 
-length(genesGS) #1035
+length(genesGS) #1212
 
 rkGS <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
                    pAdjustMethod = "BH",
-                   pvalueCutoff  = 0.1)
-
+                   pvalueCutoff  = 0.05)
 
 
 dfkGS<-as.data.frame(rkGS)
 
-
-nrow(dfkGS) #19
+nrow(dfkGS) #25
 dfkGS
 dotplot(rkGS,showCategory=30)
 
 dfkGS<-data.table(dfkGS)
-dfkGS[,GeneScore.avg:=mean(resGenes$GeneScore[resGenes$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
+dfkGS[,GeneScore.avg:=mean(resGenes2$GeneScore3[resGenes2$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
 dfkGS
-dotplot(rkGS,x=dfkGS$GeneScore.avg,showCategory=19)
+dotplot(rkGS,x=dfkGS$GeneScore.avg,showCategory=38)
 emapplot(rkGS)
 
+#for Male
+cpgs.genes.score<-resCpG.Genes[,-c("pval","meth.change","DMCScore","PvalWeight","GeneScore","GeneScore2","GeneScore3")]
+
+resCpGM<-fread("analyses/withoutIUGR/2020-04-16_res_locis_in_MC.ML_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",dec = ",")
+resCpGM<-resCpGM[,locisID:=V1][,pos:=start-1][,meth.change:=FC][,-c("V1","start")][,.(locisID,chr,pos,pval,meth.change)]
+resCpGM
+resCpGM.Genes<-merge(resCpGM,cpgs.genes.score,by=c("locisID","chr","pos"))
+# > 1) DMCScore = meth.change * PvalWeight[0,1]
+plot(density(resCpGM.Genes$meth.change))
+#PvalWeight[0-1]
+plot(density(log10(resCpGM.Genes$pval)))
+resCpGM.Genes[,PvalWeight:=(-log10(pval)/3)] #
+plot(density(resCpGM.Genes$PvalWeight))
+
+#multiply the 2 score
+resCpGM.Genes[,DMCScore:=PvalWeight*meth.change]
+plot(density(resCpGM.Genes$DMCScore))
+
+resCpGM.Genes[,CpGScore:=DMCScore*RegWeight*LinksWeight]
+plot(density(resCpGM.Genes$CpGScore))
+
+#geneSCORE : the sum over th ncpgtot
+
+resCpGM.Genes[,GeneScore:=sum(CpGScore),by="gene"]
 
 
 
+resGenes<-unique(resCpGM.Genes,by="gene")[order(-GeneScore)]
+
+resGenes
+resGenes$gene[1:100]
 
 
+plot(density(resGenes$GeneScore))
+
+
+abline(v=100)
+
+genesGS<-resGenes[abs(GeneScore)>300]$gene
+
+
+length(genesGS) #203
+
+rkGSM <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.05)
+
+
+dfkGSM<-as.data.frame(rkGSM)
+
+
+nrow(dfkGSM) #14
+dfkGSM
+dotplot(rkGSM,showCategory=30)
+
+dfkGSM<-data.table(dfkGSM)
+dfkGSM[,GeneScore.avg:=mean(resGenes2$GeneScore3[resGenes2$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
+dfkGSM
+dotplot(rkGSM,x=dfkGSM$GeneScore.avg,showCategory=38)
+emapplot(rkGSM)
+
+#diff with femame
+setdiff(dfkGS$Description,dfkGSM$Description)
+
+
+setdiff(dfkGSM$Description,dfkGS$Description)
 
