@@ -111,7 +111,7 @@ resCpG.Genes
 plot(density(resCpG.Genes$meth.change))
 #PvalWeight[0-1]
 plot(density(log10(resCpG.Genes$pval)))
-resCpG.Genes[,PvalWeight:=(-log10(pval))] #
+resCpG.Genes[,PvalWeight:=(-log10(pval)/3)] #
 plot(density(resCpG.Genes$PvalWeight))
 
 #multiply the 2 score
@@ -227,6 +227,7 @@ plot(density(resCpG.Genes$LinksWeight))
 
 # > finally :
 resCpG.Genes[,CpGScore:=DMCScore*RegWeight*LinksWeight]
+
 plot(density(resCpG.Genes$CpGScore))
 
 
@@ -236,13 +237,13 @@ lines(density(resCpG.Genes[pval<0.001]$CpGScore),col=2) #majority of significant
 lines(density(resCpG.Genes[meth.change>20]$CpGScore),col=3) #high meth.Change CpG are pull down 
 lines(density(resCpG.Genes[pval<0.001& meth.change>20]$CpGScore),col=4) # but keep a good score if significant
 
-nrow(resCpG.Genes[pval>0.01 & CpGScore>120]) # 29 CpG have a high CpGScore wereas pvalue >1%
-resCpG.Genes[pval>0.01 & CpGScore>120][order(-CpGScore)] #because 1) in highly signif eQTR, high meth.change, pval close to 1%, in promoter, and close to gene
+nrow(resCpG.Genes[pval>0.01 & CpGScore>40]) # 29 CpG have a high CpGScore wereas pvalue >1%
+resCpG.Genes[pval>0.01 & CpGScore>40][order(-CpGScore)] #because 1) in highly signif eQTR, high meth.change, pval close to 1%, in promoter, and close to gene
 
 plot(density(resCpG.Genes[pval>0.01 ]$CpGScore)) 
 abline(v=quantile(resCpG.Genes[pval>0.01 ]$CpGScore,0.999)) #99,9% non significant CpG have a CpG score < 103
 
-nrow(resCpG.Genes[meth.change<20 & CpGScore>120]) # no CpG with small meth.change have a CpGScore >120
+nrow(resCpG.Genes[meth.change<20 & CpGScore>40]) # no CpG with small meth.change have a CpGScore >40
 plot(density(resCpG.Genes[abs(meth.change)<20 ]$CpGScore)) 
 abline(v=quantile(resCpG.Genes[abs(meth.change)<20 ]$CpGScore,0.999))#99,9% of small meth.change CpG have a CpG score < 55
 
@@ -285,12 +286,12 @@ md5
 # problem : genes are linked to several CpG...
 library(ggplot2)
 resCpG.Genes[,nCpG.Gene:=.N,by=.(gene)]
-resCpG.Genes[CpGScore>10,nCpGSig.Gene:=.N,by=.(gene)]
+resCpG.Genes[CpGScore>40,nCpGSig.Gene:=.N,by=.(gene)]
 
 ggplot(resCpG.Genes)+
   geom_bar(aes(x=nCpG.Gene))
 
-ggplot(resCpG.Genes[CpGScore>10])+
+ggplot(resCpG.Genes[CpGScore>40])+
   geom_bar(aes(x=nCpGSig.Gene))
 
 # ...How to summarize the CpG score to a Gene score ??
@@ -313,12 +314,12 @@ plot(unique(resCpG.Genes$coef),unique(resCpG.Genes$nCpG.Gene))
 
 resCpG.Genes[,GeneScore:=coef*CpGScore[which.max(abs(CpGScore))]+(1-coef)*median(CpGScore),by="gene"]
 
-fwrite(resCpG.Genes,"analyses/withoutIUGR/2020-05-26_CF.LF_CpG_Gene_score.csv",sep=";")
+fwrite(resCpG.Genes,"analyses/withoutIUGR/2020-06-02_CF.LF_CpG_Gene_scorev2.csv",sep=";")
 
-resGenes<-unique(resCpG.Genes,by="gene")[order(-GeneScore)]
+resGenes<-unique(resCpG.Genes[order(pval)],by="gene")[order(-GeneScore)]
 
 plot(density(resGenes$GeneScore))
-abline(v=15)
+abline(v=40)
 
 # VALIDATION : 
 
@@ -346,10 +347,10 @@ median(resCpG.Genes[gene=="L2HGDH"]$CpGScore)
 library(clusterProfiler)
 library(org.Hs.eg.db)
 plot(density(resGenes$GeneScore))
-abline(v=15)
-genesGS<-resGenes[GeneScore>15]$gene
+abline(v=40)
+genesGS<-resGenes[GeneScore>40]$gene
 
-length(genesGS) #1697
+length(genesGS) #991
 
 rkGS <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
                        pAdjustMethod = "BH",
@@ -366,10 +367,6 @@ dfkGS[,GeneScore.avg:=mean(resGenes$GeneScore[resGenes$gene %in% tr(geneID,tradE
 dfkGS
 dotplot(rkGS,x=dfkGS$GeneScore.avg)
 emapplot(rkGS)
-
-saveRDS(rkGS,"analyses/withoutIUGR/2020-05-24_CF.LF_clusterProfObject_ORA_GeneScore1_thr15.rds")
-write.csv2(as.data.frame(setReadable(rkGS,org.Hs.eg.db,keyType = "ENTREZID")),"analyses/withoutIUGR/2020-05-24_CF.LF_res_ORA_GeneScore1_thr15.csv")
-
 
 #IN PATHWAY MAP
 
@@ -454,7 +451,7 @@ emapplot(res.compa,pie="count",showCategory =11 )
 
 
 
-#2020-05-29 NEW GENESCORE pour VALORISER GENE AVEC ++ High CpGScore
+#NEW GENESCORE pour VALORISER GENE AVEC ++ High CpGScore
 #new geneSCORE
 resCpG.Genes[,ismaxCpGScore:=CpGScore==max(CpGScore),by=.(locisID,gene)]
 resCpG.Genes<-resCpG.Genes[ismaxCpGScore==T][order(gene,-CpGScore)]
@@ -467,16 +464,16 @@ resGenes2
 resGenes2$gene[1:100]
 
 plot(density(resGenes2$GeneScore2))
-abline(v=25)
+abline(v=60)
 #OVER-REPRESENTATION TEST
 #genes candidat : GeneScore2 >25
 library(clusterProfiler)
 library(org.Hs.eg.db)
 plot(density(resGenes2$GeneScore2))
-abline(v=25)
-genesGS<-resGenes2[GeneScore2>25]$gene
+abline(v=60)
+genesGS<-resGenes2[GeneScore2>60]$gene
 
-length(genesGS) #2100
+length(genesGS) #1841
 
 rkGS <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
                    pAdjustMethod = "BH",
@@ -484,18 +481,15 @@ rkGS <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)
 
 
 dfkGS<-as.data.frame(rkGS)
-nrow(dfkGS) #15
+nrow(dfkGS) #18
 dfkGS
 dotplot(rkGS,showCategory=30)
 
 dfkGS<-data.table(dfkGS)
 dfkGS[,GeneScore.avg:=mean(resGenes$GeneScore[resGenes$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
 dfkGS
-dotplot(rkGS,x=dfkGS$GeneScore.avg,showCategory=15)
+dotplot(rkGS,x=dfkGS$GeneScore.avg,showCategory=18)
 emapplot(rkGS)
-
-saveRDS(rkGS,"analyses/withoutIUGR/2020-05-29_CF.LF_clusterProfObject_ORA_GeneScore2maxPlusMean_thr25.rds")
-write.csv2(as.data.frame(setReadable(rkGS,org.Hs.eg.db,keyType = "ENTREZID")),"analyses/withoutIUGR/2020-05-29_CF.LF_res_ORA_GeneScore2maxPlusMean_thr25.csv")
 
 
 #genes candidat : top100
@@ -506,11 +500,11 @@ abline(v=min(resGenes2[gene%in%genesGS]$GeneScore2))
 
 rkGS <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
                    pAdjustMethod = "BH",
-                   pvalueCutoff  = 0.5)
+                   pvalueCutoff  = 0.1)
 
 
 dfkGS<-as.data.frame(rkGS)
-nrow(dfkGS) #17
+nrow(dfkGS) #3
 dfkGS
 dotplot(rkGS,showCategory=30)
 
@@ -520,8 +514,6 @@ dfkGS
 dotplot(rkGS,x=dfkGS$GeneScore.avg,showCategory=17)
 emapplot(rkGS)
 
-saveRDS(rkGS,"analyses/withoutIUGR/2020-05-29_CF.LF_clusterProfObject_ORA_GeneScore2maxPlusMean_top100.rds")
-write.csv2(as.data.frame(setReadable(rkGS,org.Hs.eg.db,keyType = "ENTREZID")),"analyses/withoutIUGR/2020-05-29_CF.LF_res_ORA_GeneScore2maxPlusMean_top100.csv")
 #numeric vector
 geneList<-resGenes2$GeneScore2
 #named vector
@@ -555,22 +547,56 @@ resCpG.Genes[str_detect(gene,"IRS")]
 resGenes<-unique(resCpG.Genes,by="gene")[order(-GeneScore)]
 
 
-
-#ANNEXE
 #OTHER TEST OF CpG-score SUMMARIZING : 
-#more precise than just the median , my first idea was symply with a ponderate mean:
-#Genescore = sum(c_i*CpgScore)/sum(c_i) avec c_1 = 1 for the max(CpGScore) , then c_i = 1/rank(CpGScore_i)
-#but the geneScore for gene with numerous CpG was too much push down (because lot of CpG with CpG score=0)
-
 #so i decided to alleviate the weigth of the number of CpG like this :
 moyPond<-function(CpGScores){
   CpGScores<-CpGScores[order(abs(CpGScores),decreasing = T)]
   coefs<-sapply(1:length(CpGScores), function(x)1/(x))
   
-  return(sum(CpGScores*coefs)/sqrt(sum(coefs)))
+  return(sum(CpGScores*coefs)/(sum(coefs)))
 }
 
+#geneSCORE3
 
+resCpG.Genes[,GeneScore3:=max(CpGScore)+moyPond(CpGScore[CpGScore!=max(CpGScore)]),by="gene"]
+
+resGenes2<-unique(resCpG.Genes,by="gene")[order(-GeneScore3)]
+
+resGenes2
+resGenes2$gene[1:100]
+
+plot(density(resGenes2$GeneScore3))
+
+
+abline(v=60)
+#OVER-REPRESENTATION TEST
+#genes candidat : GeneScore2 >25
+library(clusterProfiler)
+library(org.Hs.eg.db)
+plot(density(resGenes2$GeneScore3))
+abline(v=60)
+genesGS<-resGenes2[GeneScore3>70]$gene
+
+length(genesGS) #1035
+
+rkGS <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.1)
+
+
+
+dfkGS<-as.data.frame(rkGS)
+
+
+nrow(dfkGS) #19
+dfkGS
+dotplot(rkGS,showCategory=30)
+
+dfkGS<-data.table(dfkGS)
+dfkGS[,GeneScore.avg:=mean(resGenes$GeneScore[resGenes$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
+dfkGS
+dotplot(rkGS,x=dfkGS$GeneScore.avg,showCategory=19)
+emapplot(rkGS)
 
 
 
