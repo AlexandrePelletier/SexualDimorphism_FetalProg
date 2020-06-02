@@ -960,3 +960,31 @@ res.compa<-compareCluster(candidat_genes.list,
 dotplot(res.compa,showCategory =30,size='count')
 
 emapplot(res.compa,pie="count",showCategory =30 )
+#save dts
+fwrite(resCpG.Genes[,GeneScore.v1:=GeneScore]
+       [,GeneScore.v2:=GeneScore3]
+       [,GeneScore.v3:=GeneScore9]
+       [,.(locisID,chr,pos,pval,PvalWeight,meth.change,DMCScore,
+                gene,tss_dist,in.eQTR,avg.mlog10.pv.eQTLs,eQTL_dist,LinkScore,LinksWeight,
+                type,TypeScore,feature_type_name,EnsRegScore,RegWeight,CpGScore,
+                nGene.CpG,nCpGSig.Gene,GeneScore.v1,GeneScore.v2,GeneScore.v3)],
+       file = "analyses/withoutIUGR/2020-06-02_CF.LF_CpG_Gene_scorev3.csv",
+       sep = ";")
+
+resCpGM.Genes[,coef:=0.5+0.5*sqrt(1/nCpG.Gene)]
+
+resCpGM.Genes[,GeneScore:=coef*CpGScore[which.max(abs(CpGScore))]+(1-coef)*median(CpGScore),by="gene"]
+
+
+resCpGM.Genes[,GeneScore3:=sum(CpGScore),by="gene"]
+
+fwrite(resCpGM.Genes[,GeneScore.v1:=GeneScore]
+       [,GeneScore.v2:=GeneScore3]
+       [,GeneScore.v3:=GeneScore9]
+       [,.(locisID,chr,pos,pval,PvalWeight,meth.change,DMCScore,
+           gene,tss_dist,in.eQTR,avg.mlog10.pv.eQTLs,eQTL_dist,LinkScore,LinksWeight,
+           type,TypeScore,feature_type_name,EnsRegScore,RegWeight,CpGScore,
+           nGene.CpG,nCpGSig.Gene,GeneScore.v1,GeneScore.v2,GeneScore.v3)],
+       file = "analyses/withoutIUGR/2020-06-02_CM.LM_CpG_Gene_scorev3.csv",
+       sep = ";")
+
