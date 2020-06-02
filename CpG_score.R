@@ -286,12 +286,12 @@ md5
 # problem : genes are linked to several CpG...
 library(ggplot2)
 resCpG.Genes[,nCpG.Gene:=.N,by=.(gene)]
-resCpG.Genes[CpGScore>40,nCpGSig.Gene:=.N,by=.(gene)]
+resCpG.Genes[pval<10^-3,nCpGSig.Gene:=.N,by=.(gene)]
 
 ggplot(resCpG.Genes)+
   geom_bar(aes(x=nCpG.Gene))
 
-ggplot(resCpG.Genes[CpGScore>40])+
+ggplot(resCpG.Genes)+
   geom_bar(aes(x=nCpGSig.Gene))
 
 # ...How to summarize the CpG score to a Gene score ??
@@ -514,37 +514,8 @@ dfkGS
 dotplot(rkGS,x=dfkGS$GeneScore.avg,showCategory=17)
 emapplot(rkGS)
 
-#numeric vector
-geneList<-resGenes2$GeneScore2
-#named vector
-names(geneList)<-resGenes2$gene
-#sorted vector
-geneList<-sort(geneList,decreasing = T)
-genes.df<-bitr(names(geneList),
-               fromType = 'SYMBOL',
-               toType = 'ENTREZID',
-               OrgDb = org.Hs.eg.db)
-genes.df$GeneScore<-geneList[genes.df$SYMBOL]
-geneList.Entrez<-genes.df$GeneScore
-names(geneList.Entrez)<-genes.df$ENTREZID
-
-pathw <- pathview(gene.data  = geneList.Entrez,
-                  pathway.id = "hsa00640", 
-                  species    = "hsa",
-                  limit      = list(gene=max(abs(geneList)), cpd=1),
-                  kegg.dir ="analyses/withoutIUGR/pathwaysMap" 
-)
 
 
-#SEE GENE
-library(stringr)
-library(clusterProfiler)
-resCpG.Genes<-fread("analyses/withoutIUGR/2020-05-26_CF.LF_CpG_Gene_score.csv",sep=";")
-resCpG.Genes[gene=="SOD2"]
-
-
-resCpG.Genes[str_detect(gene,"IRS")]
-resGenes<-unique(resCpG.Genes,by="gene")[order(-GeneScore)]
 
 
 #OTHER TEST OF CpG-score SUMMARIZING : 
@@ -554,19 +525,132 @@ resGenes<-unique(resCpG.Genes,by="gene")[order(-GeneScore)]
 #geneSCORE3 : the sum
 
 resCpG.Genes[,GeneScore3:=sum(CpGScore),by="gene"]
+plot(density(na.omit(log10(resCpG.Genes$CpGScore))))
+resCpG.Genes[CpGScore==0]
 
-resGenes2<-unique(resCpG.Genes,by="gene")[order(-GeneScore3)]
+resCpG.Genes[,GeneScore.inv:=sum(1/(abs(CpGScore)+1)),by="gene"]
+resCpG.Genes[,sqrt.inv.geneScore:=sum(sqrt(1/(abs(CpGScore)+1))),by="gene"]
+resCpG.Genes[,nCpGWeight:=1/log1p(GeneScore.inv)]
+
+resCpG.Genes[,nCpGWeight2:=1+(1/sqrt.inv.geneScore)]
+
+resCpG.Genes[,nCpGWeight3:=1/GeneScore.inv]
+
+resCpG.Genes[nCpGWeight>10 & nCpG.Gene>1]
+plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight)
+
+plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight)
+plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight2)
+plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight3)
+resCpG.Genes[,nCpGWeight.norm:=sqrt(log1p(nCpGWeight)),by="gene"]
+
+
+resCpG.Genes[,nCpGWeight.norm2:=sqrt(log1p(GeneScore.inv)),by="gene"]
+
+resCpG.Genes[,nCpGWeight.norm3:=sqrt(log1p(nCpGWeight3)),by="gene"]
+plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight.norm3)
+resCpG.Genes[,nCpGWeight.norm3.2:=sqrt(nCpGWeight3)]
+abline(v=20) #need def opti ncpg.sig pour avoir confiance dans le gene
+plot(resGenes2$nCpG.Gene,resGenes2$nCpGSig.Gene)
+plot(resGenes2[nCpG.Gene<0]$nCpG.Gene,resGenes2[nCpG.Gene<50]$nCpGSig.Gene)
+#=> 7 CpG link to a gene is optimal to have confidence of the meth.change impact
+plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight.norm3)
+abline(v=7)
+resGenes2[nCpGWeight.norm3>1.6][order(-nCpGWeight.norm3)]
+summary(resGenes2[nCpG.Gene==7]$nCpGWeight.norm3)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.3746  0.4519  0.5021  0.5213  0.5711  0.8583 
+
+plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight.norm3.2)
+abline(v=7) #need def opti ncpg.sig pour avoir confiance dans le gene
+
+resGenes2[nCpGWeight.norm3.2>5][order(-nCpGWeight.norm3)]
+summary(resGenes2[nCpG.Gene==7]$nCpGWeight.norm3.2)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.3881  0.4760  0.5354  0.5634  0.6210  1.0435 
+
+resCpG.Genes[,GeneScore4:=sum(CpGScore)*nCpGWeight.norm,by="gene"]
+resCpG.Genes[,GeneScore5:=sum(CpGScore)*nCpGWeight.norm2,by="gene"]
+
+resCpG.Genes[,GeneScore6:=sum(CpGScore)*nCpGWeight2,by="gene"]
+resCpG.Genes[,GeneScore7:=sum(CpGScore)*nCpGWeight.norm3,by="gene"]
+resCpG.Genes[,GeneScore8:=sum(CpGScore)*(0.2+nCpGWeight.norm3),by="gene"]
+resCpG.Genes[,GeneScore9:=sum(CpGScore)*(0.4+nCpGWeight.norm3.2),by="gene"]
+
+resGenes2<-unique(resCpG.Genes,by="gene")
+plot(density(resGenes2$GeneScore3))
+plot(density(resGenes2$GeneScore4))
+plot(density(resGenes2$GeneScore5))
+plot(density(resGenes2$GeneScore6))
+plot(density(resGenes2$GeneScore7))
+plot(density(resGenes2$GeneScore8))
+plot(density(resGenes2$GeneScore9))
+
+plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight.norm)
+plot(resGenes2$nCpG.Gene,resGenes2$GeneScore3)
+plot(resGenes2$nCpG.Gene,resGenes2$GeneScore4)
+plot(resGenes2$nCpG.Gene,resGenes2$GeneScore5)
+plot(resGenes2$nCpG.Gene,resGenes2$GeneScore6)
+plot(resGenes2$nCpG.Gene,resGenes2$GeneScore7)
+plot(resGenes2$nCpG.Gene,resGenes2$GeneScore8)
+plot(resGenes2$nCpG.Gene,resGenes2$GeneScore9)
+
+
+plot(resGenes2$nCpG.Gene,resGenes2$GeneScore8,col=as.numeric(resGenes2$locisID==1072294))
+
+
+plot(resGenes2[nCpG.Gene<100]$nCpG.Gene,resGenes2[nCpG.Gene<100]$GeneScore3)
+plot(resGenes2[nCpG.Gene<100]$nCpG.Gene,resGenes2[nCpG.Gene<100]$GeneScore4)
+plot(resGenes2[nCpG.Gene<100]$nCpG.Gene,resGenes2[nCpG.Gene<100]$GeneScore6)
+plot(resGenes2[nCpG.Gene<100]$nCpG.Gene,resGenes2[nCpG.Gene<100]$GeneScore7)
+plot(resGenes2[nCpG.Gene<100]$nCpG.Gene,resGenes2[nCpG.Gene<100]$GeneScore8)
+plot(resGenes2[nCpG.Gene<100]$nCpG.Gene,resGenes2[nCpG.Gene<100]$GeneScore9)
+
+abline(h=300)
+abline(v=20)
+
+resGenes2[nCpG.Gene==1&GeneScore9>=200]
 
 resGenes2
-resGenes2$gene[1:100]
+genesDiff<-setdiff(resGenes2[order(-GeneScore4)]$gene[1:1000],resGenes2[order(-GeneScore3)]$gene[1:1000])
+length(genesDiff) #103
+resGenes2[gene%in% genesDiff & rank(GeneScore4)-rank(GeneScore3)>quantile(rank(GeneScore4)-rank(GeneScore3),0.75)] #> 243 rank de diff pour les 25% meilleurs decallage de gene
+#remonte bien SETD9, qui a un bon methchange mais relativement peu de cpg
 
 
-plot(density(resGenes2$GeneScore3))
+genesDiff2<-setdiff(resGenes2[order(-GeneScore5)]$gene[1:1000],resGenes2[order(-GeneScore3)]$gene[1:1000])
+length(genesDiff2)
+q75.2<-quantile(rank(resGenes2$GeneScore5)-rank(resGenes2$GeneScore3),0.75) #> 382 rank de diff pour les 25% meilleurs decallage de gene
+resGenes2[gene%in% genesDiff2 & rank(GeneScore5)-rank(GeneScore3)>q75.2] #remonte si 1cpg+++signif, si ++ cpgsig /gene
+#mais n'avantage pas assez les genes avec peu de cpg
+
+genesDiff3<-setdiff(resGenes2[order(-GeneScore6)]$gene[1:1000],resGenes2[order(-GeneScore3)]$gene[1:1000])
+length(genesDiff3) #18
+q75.2<-quantile(rank(resGenes2$GeneScore5)-rank(resGenes2$GeneScore3),0.75) #> 382 rank de diff pour les 25% meilleurs decallage de gene
+resGenes2[gene%in% genesDiff2 & rank(GeneScore5)-rank(GeneScore3)>q75.2] 
+
+genesDiff4<-setdiff(resGenes2[order(-GeneScore9)]$gene[1:1000],resGenes2[order(-GeneScore3)]$gene[1:1000])
+length(genesDiff4) #151/1000
+q75.3<-quantile(rank(resGenes2$GeneScore9)-rank(resGenes2$GeneScore3),0.75) #> 322 rank de diff pour les 25% meilleurs decallage de gene
+subres<-resGenes2[gene%in% genesDiff4 & rank(GeneScore9)-rank(GeneScore3)>q75.3] 
+summary(subres[,.(pval,meth.change,nCpG.Gene,nCpGSig.Gene)])
+# pval            meth.change      nCpG.Gene      nCpGSig.Gene   
+# Min.   :7.010e-07   Min.   :27.50   Min.   : 1.00   Min.   : 1.000  
+# 1st Qu.:1.936e-04   1st Qu.:35.18   1st Qu.:12.50   1st Qu.: 1.000  
+# Median :5.598e-04   Median :39.37   Median :25.00   Median : 1.000  
+# Mean   :1.233e-03   Mean   :40.08   Mean   :21.08   Mean   : 1.916  
+# 3rd Qu.:1.645e-03   3rd Qu.:44.82   3rd Qu.:29.00   3rd Qu.: 2.000  
+# Max.   :1.097e-02   Max.   :59.80   Max.   :43.00   Max.   :20.000
+#c'est divers ==> le score ne privéligie pas un certain type de gene (e.g, gene a 1 cpg)
 
 
-abline(v=60)
+plot(resGenes2[nCpG.Gene<20]$nCpG.Gene,resGenes2[nCpG.Gene<20]$GeneScore3,col=3)
+points(resGenes2[nCpG.Gene<20]$nCpG.Gene,resGenes2[nCpG.Gene<20]$GeneScore9,col=2)
+points(resGenes2[nCpG.Gene<20&nCpGSig.Gene>5]$nCpG.Gene,resGenes2[nCpG.Gene<20&nCpGSig.Gene>5]$GeneScore9,col=4)
+
+
 #OVER-REPRESENTATION TEST
-#genes candidat : GeneScore2 >25
+#with GeneScore3 
 library(clusterProfiler)
 library(org.Hs.eg.db)
 plot(density(resGenes2$GeneScore3))
@@ -589,9 +673,131 @@ dotplot(rkGS,showCategory=30)
 dfkGS<-data.table(dfkGS)
 dfkGS[,GeneScore.avg:=mean(resGenes2$GeneScore3[resGenes2$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
 dfkGS
-dotplot(rkGS,x=dfkGS$GeneScore.avg,showCategory=38)
+dotplot(rkGS,x=dfkGS$GeneScore.avg,showCategory=25)
+emapplot(rkGS)
+upsetplot(rkGS)
+enrichplot::upsetplot(rkGS,n=25)
+#SEE GENE
+library(stringr)
+library(clusterProfiler)
+library(pathview)
+#numeric vector
+geneList<-resGenes2$GeneScore3
+#named vector
+names(geneList)<-resGenes2$gene
+#sorted vector
+geneList<-sort(geneList,decreasing = T)
+genes.df<-bitr(names(geneList),
+               fromType = 'SYMBOL',
+               toType = 'ENTREZID',
+               OrgDb = org.Hs.eg.db)
+genes.df$GeneScore<-geneList[genes.df$SYMBOL]
+geneList.Entrez<-genes.df$GeneScore
+names(geneList.Entrez)<-genes.df$ENTREZID
+
+pathw <- pathview(gene.data  = geneList.Entrez,
+                  pathway.id = "hsa04930", 
+                  species    = "hsa",
+                  limit      = list(gene=max(abs(geneList.Entrez)), cpd=1),
+                  kegg.dir ="analyses/withoutIUGR/pathwaysMap" 
+)
+  #for Male
+cpgs.genes.score<-resCpG.Genes[,-c("pval","meth.change","DMCScore","PvalWeight","GeneScore","GeneScore2","GeneScore3")]
+
+resCpGM<-fread("analyses/withoutIUGR/2020-04-16_res_locis_in_MC.ML_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",dec = ",")
+resCpGM<-resCpGM[,locisID:=V1][,pos:=start-1][,meth.change:=FC][,-c("V1","start")][,.(locisID,chr,pos,pval,meth.change)]
+resCpGM
+resCpGM.Genes<-merge(resCpGM,cpgs.genes.score,by=c("locisID","chr","pos"))
+# > 1) DMCScore = meth.change * PvalWeight[0,1]
+plot(density(resCpGM.Genes$meth.change))
+#PvalWeight[0-1]
+plot(density(log10(resCpGM.Genes$pval)))
+resCpGM.Genes[,PvalWeight:=(-log10(pval)/3)] #
+plot(density(resCpGM.Genes$PvalWeight))
+#multiply the 2 score
+resCpGM.Genes[,DMCScore:=PvalWeight*meth.change]
+plot(density(resCpGM.Genes$DMCScore))
+
+resCpGM.Genes[,CpGScore:=DMCScore*RegWeight*LinksWeight]
+plot(density(resCpGM.Genes$CpGScore))
+#geneSCORE : the sum over th ncpgtot
+resCpGM.Genes[,GeneScore:=sum(CpGScore),by="gene"]
+resGenes<-unique(resCpGM.Genes,by="gene")[order(-GeneScore)]
+resGenes
+resGenes$gene[1:100]
+plot(density(resGenes$GeneScore))
+abline(v=100)
+genesGS<-resGenes[abs(GeneScore)>300]$gene
+length(genesGS) #203
+rkGSM <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.05)
+
+dfkGSM<-as.data.frame(rkGSM)
+nrow(dfkGSM) #14
+dfkGSM
+dotplot(rkGSM,showCategory=30)
+dfkGSM<-data.table(dfkGSM)
+dfkGSM[,GeneScore.avg:=mean(resGenes2$GeneScore3[resGenes2$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
+dfkGSM
+dotplot(rkGSM,x=dfkGSM$GeneScore.avg,showCategory=38)
+emapplot(rkGSM)
+
+#diff with female
+setdiff(dfkGS$Description,dfkGSM$Description)
+setdiff(dfkGSM$Description,dfkGS$Description)
+
+#with GeneScore9 
+library(clusterProfiler)
+library(org.Hs.eg.db)
+plot(density(resGenes2$GeneScore9))
+abline(v=170)
+genesGS<-resGenes2[GeneScore9>170]$gene
+
+length(genesGS) #1592
+
+rkGS <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.05)
+
+
+dfkGS<-as.data.frame(rkGS)
+
+nrow(dfkGS) #25
+dfkGS
+dotplot(rkGS,showCategory=30)
+
+dfkGS<-data.table(dfkGS)
+dfkGS[,GeneScore.avg:=mean(resGenes2$GeneScore9[resGenes2$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
+dfkGS
+dotplot(rkGS,x=dfkGS$GeneScore.avg,showCategory=25)
 emapplot(rkGS)
 
+enrichplot::upsetplot(rkGS,n=25)
+#SEE GENE
+library(stringr)
+library(clusterProfiler)
+library(pathview)
+#numeric vector
+geneList<-resGenes2$GeneScore9
+#named vector
+names(geneList)<-resGenes2$gene
+#sorted vector
+geneList<-sort(geneList,decreasing = T)
+genes.df<-bitr(names(geneList),
+               fromType = 'SYMBOL',
+               toType = 'ENTREZID',
+               OrgDb = org.Hs.eg.db)
+genes.df$GeneScore<-geneList[genes.df$SYMBOL]
+geneList.Entrez<-genes.df$GeneScore
+names(geneList.Entrez)<-genes.df$ENTREZID
+
+pathw <- pathview(gene.data  = geneList.Entrez,
+                  pathway.id = "hsa04930", 
+                  species    = "hsa",
+                  limit      = list(gene=max(abs(geneList.Entrez)), cpd=1),
+                  kegg.dir ="analyses/withoutIUGR/pathwaysMap" 
+)
 #for Male
 cpgs.genes.score<-resCpG.Genes[,-c("pval","meth.change","DMCScore","PvalWeight","GeneScore","GeneScore2","GeneScore3")]
 
@@ -605,57 +811,152 @@ plot(density(resCpGM.Genes$meth.change))
 plot(density(log10(resCpGM.Genes$pval)))
 resCpGM.Genes[,PvalWeight:=(-log10(pval)/3)] #
 plot(density(resCpGM.Genes$PvalWeight))
-
 #multiply the 2 score
 resCpGM.Genes[,DMCScore:=PvalWeight*meth.change]
 plot(density(resCpGM.Genes$DMCScore))
 
 resCpGM.Genes[,CpGScore:=DMCScore*RegWeight*LinksWeight]
 plot(density(resCpGM.Genes$CpGScore))
-
-#geneSCORE : the sum over th ncpgtot
-
-resCpGM.Genes[,GeneScore:=sum(CpGScore),by="gene"]
-
-
-
-resGenes<-unique(resCpGM.Genes,by="gene")[order(-GeneScore)]
-
+#geneSCORE9
+resCpGM.Genes[,GeneScore.inv:=sum(1/(abs(CpGScore)+1)),by="gene"]
+resCpGM.Genes[,nCpGWeight3:=1/GeneScore.inv]
+resCpGM.Genes[,nCpGWeight.norm3.2:=sqrt(nCpGWeight3)]
+resCpGM.Genes[,GeneScore9:=sum(CpGScore)*(0.4+nCpGWeight.norm3.2),by="gene"]
+resGenes<-unique(resCpGM.Genes,by="gene")
 resGenes
-resGenes$gene[1:100]
+resGenes[order(-GeneScore9)]$gene[1:100]
 
-
-plot(density(resGenes$GeneScore))
-
-
-abline(v=100)
-
-genesGS<-resGenes[abs(GeneScore)>300]$gene
-
-
-length(genesGS) #203
-
+#Male WIth the same cutof
+plot(density(resGenes$GeneScore9))
+abline(v=170)
+genesGS<-resGenes[abs(GeneScore9)>170]$gene
+length(genesGS) #214
 rkGSM <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
-                   pAdjustMethod = "BH",
-                   pvalueCutoff  = 0.05)
-
+                    pAdjustMethod = "BH",
+                    pvalueCutoff  = 0.05)
 
 dfkGSM<-as.data.frame(rkGSM)
 
-
-nrow(dfkGSM) #14
+nrow(dfkGSM) #17
 dfkGSM
 dotplot(rkGSM,showCategory=30)
-
 dfkGSM<-data.table(dfkGSM)
 dfkGSM[,GeneScore.avg:=mean(resGenes2$GeneScore3[resGenes2$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
 dfkGSM
 dotplot(rkGSM,x=dfkGSM$GeneScore.avg,showCategory=38)
 emapplot(rkGSM)
 
-#diff with femame
+#diff with female
 setdiff(dfkGS$Description,dfkGSM$Description)
+# [1] "Transcriptional misregulation in cancer"            
+# [2] "Basal cell carcinoma"                               
+# [3] "Rap1 signaling pathway"                             
+# [4] "Human papillomavirus infection"                     
+# [5] "Gastric cancer"                                     
+# [6] "Maturity onset diabetes of the young"               
+# [7] "MAPK signaling pathway"                             
+# [8] "Parathyroid hormone synthesis, secretion and action"
+# [9] "Breast cancer"                                      
+# [10] "Regulation of actin cytoskeleton"                   
+# [11] "Proteoglycans in cancer"                            
+# [12] "Notch signaling pathway"                            
+# [13] "TGF-beta signaling pathway"                         
+# [14] "Prostate cancer"                                    
+# [15] "Hedgehog signaling pathway"                         
+# [16] "Thyroid cancer"                                     
+# [17] "Melanogenesis"                                      
+# [18] "Phospholipase D signaling pathway"                  
+# [19] "Cortisol synthesis and secretion"    
+setdiff(dfkGSM$Description,dfkGS$Description)
+# [1] "Wnt signaling pathway"                               
+# [2] "Neurotrophin signaling pathway"                      
+# [3] "AGE-RAGE signaling pathway in diabetic complications"
+# [4] "HIF-1 signaling pathway"                             
+# [5] "Oxytocin signaling pathway"                          
+# [6] "Chronic myeloid leukemia"                            
+# [7] "Cellular senescence"                                 
+# [8] "Yersinia infection"                                  
+# [9] "B cell receptor signaling pathway"                   
+# [10] "C-type lectin receptor signaling pathway"            
+# [11] "GnRH secretion"           
+
+#male with the same nb of gene than female (1592)
+
+genesGS<-resGenes[order(-GeneScore9)]$gene[1:1592]
+length(genesGS) #1592
+plot(density(resGenes$GeneScore9))
+abline(v=resGenes[order(-GeneScore9)]$GeneScore9[1592])#88
+rkGSM <- enrichKEGG(gene         = bitr(genesGS,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
+                    pAdjustMethod = "BH",
+                    pvalueCutoff  = 0.05)
+
+dfkGSM<-as.data.frame(rkGSM)
+
+nrow(dfkGSM) #55
+dfkGSM
+dotplot(rkGSM,showCategory=30)
+dfkGSM<-data.table(dfkGSM)
+dfkGSM[,GeneScore.avg:=mean(resGenes$GeneScore9[resGenes$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
+dfkGSM
+dotplot(rkGSM,x=dfkGSM$GeneScore.avg,showCategory=55)
+emapplot(rkGSM,showCategory=55)
+
+#diff with female
+setdiff(dfkGS$Description,dfkGSM$Description)
+# [1] "Parathyroid hormone synthesis, secretion and action"
+# [2] "Regulation of actin cytoskeleton"                   
+# [3] "Notch signaling pathway"                            
+# [4] "Hedgehog signaling pathway"                         
+# [5] "Thyroid cancer"                                     
+# [6] "Cortisol synthesis and secretion"    
 
 
 setdiff(dfkGSM$Description,dfkGS$Description)
 
+# [1] "Wnt signaling pathway"                               
+# [2] "mTOR signaling pathway"                              
+# [3] "Acute myeloid leukemia"                              
+# [4] "Spinocerebellar ataxia"                              
+# [5] "AMPK signaling pathway"                              
+# [6] "Non-small cell lung cancer"                          
+# [7] "Neurotrophin signaling pathway"                      
+# [8] "Choline metabolism in cancer"                        
+# [9] "Endometrial cancer"                                  
+# [10] "Glioma"                                              
+# [11] "Chronic myeloid leukemia"                            
+# [12] "Fc gamma R-mediated phagocytosis"                    
+# [13] "Circadian rhythm"                                    
+# [14] "Central carbon metabolism in cancer"                 
+# [15] "Colorectal cancer"                                   
+# [16] "Cellular senescence"                                 
+# [17] "Phosphatidylinositol signaling system"               
+# [18] "Growth hormone synthesis, secretion and action"      
+# [19] "Fc epsilon RI signaling pathway"                     
+# [20] "Platelet activation"                                 
+# [21] "Prolactin signaling pathway"                         
+# [22] "EGFR tyrosine kinase inhibitor resistance"           
+# [23] "Longevity regulating pathway - multiple species"     
+# [24] "cAMP signaling pathway"                              
+# [25] "Endocrine resistance"                                
+# [26] "Adherens junction"                                   
+# [27] "Longevity regulating pathway"                        
+# [28] "Autophagy - animal"                                  
+# [29] "Alzheimer disease"                                   
+# [30] "HIF-1 signaling pathway"                             
+# [31] "AGE-RAGE signaling pathway in diabetic complications"
+# [32] "Bacterial invasion of epithelial cells"              
+# [33] "Insulin signaling pathway"                           
+# [34] "Adrenergic signaling in cardiomyocytes"              
+# [35] "Ras signaling pathway"                               
+# [36] "Thyroid hormone signaling pathway"   
+
+#compa male female
+candidat_genes.list<-list(female=bitr(resGenes2[GeneScore9>170]$gene,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
+                          male=bitr(resGenes[GeneScore9>170]$gene,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID)
+res.compa<-compareCluster(candidat_genes.list,
+                          fun = "enrichKEGG",
+                          organism="hsa",
+                          pvalueCutoff=0.05) 
+dotplot(res.compa,showCategory =30,size='count')
+
+emapplot(res.compa,pie="count",showCategory =30 )
