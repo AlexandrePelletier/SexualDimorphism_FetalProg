@@ -32,10 +32,10 @@ library(data.table)
 
 
 #differentially methylated datas :
-resCpG<-fread("analyses/withoutIUGR/2020-04-16_res_locis_in_FC.FL_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",
+resCpGF<-fread("analyses/withoutIUGR/2020-04-16_res_locis_in_FC.FL_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",
               dec = ",")
-resCpG<-resCpG[,locisID:=V1][,pos:=start-1][,meth.change:=FC][,-c("V1","start")][,.(locisID,chr,pos,pval,meth.change)]
-resCpG
+resCpGF<-resCpGF[,locisID:=V1][,pos:=start-1][,meth.change:=FC][,-c("V1","start")][,.(locisID,chr,pos,pval,meth.change)]
+resCpGF
 
 
 #~~ I) link CpGs to genes ~~
@@ -74,53 +74,53 @@ cpgs.genes
 #add annot 
 cpgs.genes<-merge(cpgs.genes,annot,all.x = T,by="locisID")
 #merge with res
-resCpG.Genes<-merge(resCpG,cpgs.genes,by=c("locisID","chr","pos"),all.x = T)
-resCpG.Genes
+resCpGF.Genes<-merge(resCpGF,cpgs.genes,by=c("locisID","chr","pos"),all.x = T)
+resCpGF.Genes
 
 #there is CpG without gene associated, we remove them
-sum(is.na(resCpG.Genes$gene)) #315608
-length(unique(resCpG.Genes$locisID)) # 786277
-resCpG.Genes<-resCpG.Genes[!is.na(gene)]
-resCpG.Genes
+sum(is.na(resCpGF.Genes$gene)) #315608
+length(unique(resCpGF.Genes$locisID)) # 786277
+resCpGF.Genes<-resCpGF.Genes[!is.na(gene)]
+resCpGF.Genes
 
 #in eQTL analysis there is CpG linked to several Gene : 
-resCpG.Genes[,nGene.CpG:=.N,by=.(locisID)]
-hist(resCpG.Genes$nGene.CpG,breaks = 50)
-resCpG.Genes[nGene.CpG>50]
+resCpGF.Genes[,nGene.CpG:=.N,by=.(locisID)]
+hist(resCpGF.Genes$nGene.CpG,breaks = 50)
+resCpGF.Genes[nGene.CpG>50]
 #there is duplicated row, we conseve unique locisID-gene pairing 
-resCpG.Genes<-unique(resCpG.Genes)
-hist(resCpG.Genes$nGene.CpG)
-resCpG.Genes[nGene.CpG>50]
-resCpG.Genes[locisID==8342]
+resCpGF.Genes<-unique(resCpGF.Genes)
+hist(resCpGF.Genes$nGene.CpG)
+resCpGF.Genes[nGene.CpG>50]
+resCpGF.Genes[locisID==8342]
 #there is multiple row for the same eQTR, just the eQTL-dist change, we select the closest
-resCpG.Genes[in.eQTR==TRUE,isClosest:=eQTL_dist==min(eQTL_dist),by=.(locisID,gene)]
-resCpG.Genes[in.eQTR==FALSE,isClosest:=TRUE]
+resCpGF.Genes[in.eQTR==TRUE,isClosest:=eQTL_dist==min(eQTL_dist),by=.(locisID,gene)]
+resCpGF.Genes[in.eQTR==FALSE,isClosest:=TRUE]
 
-resCpG.Genes<-resCpG.Genes[isClosest==TRUE]
-resCpG.Genes[,nGene.CpG:=.N,by=.(locisID)]
-hist(resCpG.Genes$nGene.CpG)
-resCpG.Genes[nGene.CpG>10]
+resCpGF.Genes<-resCpGF.Genes[isClosest==TRUE]
+resCpGF.Genes[,nGene.CpG:=.N,by=.(locisID)]
+hist(resCpGF.Genes$nGene.CpG)
+resCpGF.Genes[nGene.CpG>10]
 
-resCpG.Genes
+resCpGF.Genes
 
 
 #~~ II) Calculate The CpG Score ~~
 #CpGScore = DMCScore [-inf:inf] * Regulatory weight[0.5-2] * LinksWeight [0.5-1]
 
 # > 1) DMCScore = meth.change * PvalWeight[0,1]
-plot(density(resCpG.Genes$meth.change))
+plot(density(resCpGF.Genes$meth.change))
 #PvalWeight[0-1]
-plot(density(log10(resCpG.Genes$pval)))
-resCpG.Genes[,PvalWeight:=(-log10(pval)/3)] #
-plot(density(resCpG.Genes$PvalWeight))
+plot(density(log10(resCpGF.Genes$pval)))
+resCpGF.Genes[,PvalWeight:=(-log10(pval)/3)] #
+plot(density(resCpGF.Genes$PvalWeight))
 
 #multiply the 2 score
-resCpG.Genes[,DMCScore:=PvalWeight*meth.change]
-plot(density(resCpG.Genes$DMCScore))
+resCpGF.Genes[,DMCScore:=PvalWeight*meth.change]
+plot(density(resCpGF.Genes$DMCScore))
 
 # > 2) Regulatory weight [0.5-2] = 0.5 + 1.5 * (TypeScore{0,0.4,0.66,1} + EnsRegScore{0,0.25,0.5,0.75,1})/2 
 #     TypeScore{0,0.4,0.66,1} 
-resCpG.Genes[,TypeScore:=sapply(type,function(x){
+resCpGF.Genes[,TypeScore:=sapply(type,function(x){
   if(x%in%c(4,6)){
     score<-1
   }else if(x==5){
@@ -132,10 +132,10 @@ resCpG.Genes[,TypeScore:=sapply(type,function(x){
   }
   return(score)
 })]
-plot(density(resCpG.Genes$TypeScore))
+plot(density(resCpGF.Genes$TypeScore))
 
 #   EnsRegScore{0,0.25,0.5,0.75,1}
-resCpG.Genes[,EnsRegScore:=sapply(feature_type_name,function(x){
+resCpGF.Genes[,EnsRegScore:=sapply(feature_type_name,function(x){
   vecX<-strsplit(x,"/")[[1]]
   if(any(c("CTCF Binding Site","Promoter","Enhancer")%in%vecX)){
     score<-0.5
@@ -149,17 +149,17 @@ resCpG.Genes[,EnsRegScore:=sapply(feature_type_name,function(x){
   }
   return(score)
 })]
-plot(density(resCpG.Genes$EnsRegScore))
+plot(density(resCpGF.Genes$EnsRegScore))
 # Regulatory weight:
-resCpG.Genes[,RegWeight:=(0.4+1.6*((TypeScore+EnsRegScore)/2))]
+resCpGF.Genes[,RegWeight:=(0.4+1.6*((TypeScore+EnsRegScore)/2))]
 
-plot(density(resCpG.Genes[!duplicated(locisID)]$RegWeight))
+plot(density(resCpGF.Genes[!duplicated(locisID)]$RegWeight))
 
 
 
 # > 3) Links Weight[0.5-1] = 0.5+0.5*max(LinkScore [0-1])
 #   - for CpG associated to a gene based on TSS proximity  
-resCpG.Genes[in.eQTR==FALSE,LinkScore:=sapply(abs(tss_dist),function(x){
+resCpGF.Genes[in.eQTR==FALSE,LinkScore:=sapply(abs(tss_dist),function(x){
   if(x<1000){
     score<-1
   }else if(x<20000){
@@ -172,16 +172,16 @@ resCpG.Genes[in.eQTR==FALSE,LinkScore:=sapply(abs(tss_dist),function(x){
   }
   return(score)
 })]
-plot(density(resCpG.Genes[in.eQTR==FALSE]$LinkScore))
+plot(density(resCpGF.Genes[in.eQTR==FALSE]$LinkScore))
 
 # - for CpG associated to a gene based on eQTL studies: 
 #de base, linksscore =1
 
-resCpG.Genes[in.eQTR==TRUE,LinkScore:=1] 
+resCpGF.Genes[in.eQTR==TRUE,LinkScore:=1] 
 
 #but, filter for low signif asso, and add bonus if highly signif eQTR and close to best eQTL
-plot(density(na.omit(resCpG.Genes$eQTL_dist)))
-resCpG.Genes[in.eQTR==TRUE,distScore:=sapply(abs(eQTL_dist),function(x){
+plot(density(na.omit(resCpGF.Genes$eQTL_dist)))
+resCpGF.Genes[in.eQTR==TRUE,distScore:=sapply(abs(eQTL_dist),function(x){
   if(x<500){
     distScore<-1 
   }else {
@@ -190,68 +190,68 @@ resCpG.Genes[in.eQTR==TRUE,distScore:=sapply(abs(eQTL_dist),function(x){
   
   return(distScore)
 })]
-plot(density(na.omit(resCpG.Genes$avg.mlog10.pv.eQTLs)))
+plot(density(na.omit(resCpGF.Genes$avg.mlog10.pv.eQTLs)))
 
-plot(density(na.omit(resCpG.Genes$avg.mlog10.pv.eQTLs)))
-resCpG.Genes[in.eQTR==TRUE,RegScore:=avg.mlog10.pv.eQTLs*distScore] #integrate with RegScore : mean of pval of eQTL in the region
+plot(density(na.omit(resCpGF.Genes$avg.mlog10.pv.eQTLs)))
+resCpGF.Genes[in.eQTR==TRUE,RegScore:=avg.mlog10.pv.eQTLs*distScore] #integrate with RegScore : mean of pval of eQTL in the region
 
-plot(density(na.omit(resCpG.Genes$RegScore))) 
+plot(density(na.omit(resCpGF.Genes$RegScore))) 
 #remove low signif links (<4) and add bonus if 
 abline(v=4)
-summary(na.omit(resCpG.Genes$RegScore))
-resCpG.Genes<-resCpG.Genes[RegScore>4|in.eQTR==F]
+summary(na.omit(resCpGF.Genes$RegScore))
+resCpGF.Genes<-resCpGF.Genes[RegScore>4|in.eQTR==F]
 #and add bonus ; +1*regScore/220
 
-resCpG.Genes[in.eQTR==TRUE,LinkScore:=LinkScore+1*RegScore/max(RegScore)]
-plot(density(resCpG.Genes$LinkScore))
-resCpG.Genes[LinkScore>1.5]
+resCpGF.Genes[in.eQTR==TRUE,LinkScore:=LinkScore+1*RegScore/max(RegScore)]
+plot(density(resCpGF.Genes$LinkScore))
+resCpGF.Genes[LinkScore>1.5]
 # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 #0.001   5.056   7.971  12.019  13.895 221.354 
 
 #because of some tss_distance dismatch between eQTRlinked and not, there is different linkScore
-resCpG.Genes[,nEQTR.CpgGeneLink:=.N,by=c("locisID","gene")]
-plot(density(resCpG.Genes$nEQTR.CpgGeneLink))
-resCpG.Genes[nEQTR.CpgGeneLink>1]
+resCpGF.Genes[,nEQTR.CpgGeneLink:=.N,by=c("locisID","gene")]
+plot(density(resCpGF.Genes$nEQTR.CpgGeneLink))
+resCpGF.Genes[nEQTR.CpgGeneLink>1]
 #...we select the best linkScore by cpg-gene pair
-resCpG.Genes<-resCpG.Genes[,isBestLinks:=LinkScore==max(LinkScore),by=c("locisID","gene")][isBestLinks==TRUE]
-resCpG.Genes<-unique(resCpG.Genes[,-c("isClosest","isBestLinks")])
+resCpGF.Genes<-resCpGF.Genes[,isBestLinks:=LinkScore==max(LinkScore),by=c("locisID","gene")][isBestLinks==TRUE]
+resCpGF.Genes<-unique(resCpGF.Genes[,-c("isClosest","isBestLinks")])
 #for same linksWeught
-resCpG.Genes<-unique(resCpG.Genes,by=c("locisID","gene"))
+resCpGF.Genes<-unique(resCpGF.Genes,by=c("locisID","gene"))
 #and finally calculate the linksWeight
-resCpG.Genes[,LinksWeight:=0.3+1.2*(LinkScore/2)]
-plot(density(resCpG.Genes$LinksWeight))
+resCpGF.Genes[,LinksWeight:=0.3+1.2*(LinkScore/2)]
+plot(density(resCpGF.Genes$LinksWeight))
 
 
 
 
 
 # > finally :
-resCpG.Genes[,CpGScore:=DMCScore*RegWeight*LinksWeight]
+resCpGF.Genes[,CpGScore:=DMCScore*RegWeight*LinksWeight]
 
-plot(density(resCpG.Genes$CpGScore))
+plot(density(resCpGF.Genes$CpGScore))
 
 
 
 # VALIDATION : 
-lines(density(resCpG.Genes[pval<0.001]$CpGScore),col=2) #majority of significant CpG have a good score
-lines(density(resCpG.Genes[meth.change>20]$CpGScore),col=3) #high meth.Change CpG are pull down 
-lines(density(resCpG.Genes[pval<0.001& meth.change>20]$CpGScore),col=4) # but keep a good score if significant
+lines(density(resCpGF.Genes[pval<0.001]$CpGScore),col=2) #majority of significant CpG have a good score
+lines(density(resCpGF.Genes[meth.change>20]$CpGScore),col=3) #high meth.Change CpG are pull down 
+lines(density(resCpGF.Genes[pval<0.001& meth.change>20]$CpGScore),col=4) # but keep a good score if significant
 
-nrow(resCpG.Genes[pval>0.01 & CpGScore>40]) # 29 CpG have a high CpGScore wereas pvalue >1%
-resCpG.Genes[pval>0.01 & CpGScore>40][order(-CpGScore)] #because 1) in highly signif eQTR, high meth.change, pval close to 1%, in promoter, and close to gene
+nrow(resCpGF.Genes[pval>0.01 & CpGScore>40]) # 29 CpG have a high CpGScore wereas pvalue >1%
+resCpGF.Genes[pval>0.01 & CpGScore>40][order(-CpGScore)] #because 1) in highly signif eQTR, high meth.change, pval close to 1%, in promoter, and close to gene
 
-plot(density(resCpG.Genes[pval>0.01 ]$CpGScore)) 
-abline(v=quantile(resCpG.Genes[pval>0.01 ]$CpGScore,0.999)) #99,9% non significant CpG have a CpG score < 103
+plot(density(resCpGF.Genes[pval>0.01 ]$CpGScore)) 
+abline(v=quantile(resCpGF.Genes[pval>0.01 ]$CpGScore,0.999)) #99,9% non significant CpG have a CpG score < 103
 
-nrow(resCpG.Genes[meth.change<20 & CpGScore>40]) # no CpG with small meth.change have a CpGScore >40
-plot(density(resCpG.Genes[abs(meth.change)<20 ]$CpGScore)) 
-abline(v=quantile(resCpG.Genes[abs(meth.change)<20 ]$CpGScore,0.999))#99,9% of small meth.change CpG have a CpG score < 55
+nrow(resCpGF.Genes[meth.change<20 & CpGScore>40]) # no CpG with small meth.change have a CpGScore >40
+plot(density(resCpGF.Genes[abs(meth.change)<20 ]$CpGScore)) 
+abline(v=quantile(resCpGF.Genes[abs(meth.change)<20 ]$CpGScore,0.999))#99,9% of small meth.change CpG have a CpG score < 55
 
 # some validation plots : 
 # my score highlight mostly CpG with high pvalue and meth.change : 
 library(ggplot2)
 library(patchwork)
-m <- ggplot(resCpG.Genes, aes( y = CpGScore))
+m <- ggplot(resCpGF.Genes, aes( y = CpGScore))
 
 m1<-m +geom_point(aes(x=-log10(pval)))
 md1<-m1 + stat_density_2d(aes(x=-log10(pval),fill = after_stat(level)), geom = "polygon")
@@ -285,13 +285,19 @@ md5
 
 # problem : genes are linked to several CpG...
 library(ggplot2)
-resCpG.Genes[,nCpG.Gene:=.N,by=.(gene)]
-resCpG.Genes[pval<10^-3,nCpGSig.Gene:=.N,by=.(gene)]
-
-ggplot(resCpG.Genes)+
+resCpGF.Genes[,nCpG.Gene:=.N,by=.(gene)]
+#resCpGF.Genes[pval<10^-3,nCpGSig.Gene:=.N,by=.(gene)]
+#[corrected]
+resCpGF.Genes[,nCpGSig.Gene:=sum(pval<10^-3),by=.(gene)]
+resCpGF.Genes[gene=="FOXO3"][order(-CpGScore)]
+plot(density(resCpGF.Genes$CpGScore))
+abline(v=10)
+resCpGF.Genes[,nHiCpGScore.Gene:=sum(CpGScore>10),gene]
+#[end correction]
+ggplot(resCpGF.Genes)+
   geom_bar(aes(x=nCpG.Gene))
 
-ggplot(resCpG.Genes)+
+ggplot(resCpGF.Genes)+
   geom_bar(aes(x=nCpGSig.Gene))
 
 # ...How to summarize the CpG score to a Gene score ??
@@ -309,14 +315,14 @@ ggplot(resCpG.Genes)+
 # for a gene with a lot of CpG, the CpG score distribution is more important => c=0.5, the maximum and the median have the same weight
 # for a gene with 2 CpG => c ~= 1, the max(CpGScore) is more important
 #  c= 0.5+0.5*sqrt(1/nCpG)
-resCpG.Genes[,coef:=0.5+0.5*sqrt(1/nCpG.Gene)]
-plot(unique(resCpG.Genes$coef),unique(resCpG.Genes$nCpG.Gene))
+resCpGF.Genes[,coef:=0.5+0.5*sqrt(1/nCpG.Gene)]
+plot(unique(resCpGF.Genes$coef),unique(resCpGF.Genes$nCpG.Gene))
 
-resCpG.Genes[,GeneScore:=coef*CpGScore[which.max(abs(CpGScore))]+(1-coef)*median(CpGScore),by="gene"]
+resCpGF.Genes[,GeneScore:=coef*CpGScore[which.max(abs(CpGScore))]+(1-coef)*median(CpGScore),by="gene"]
 
-fwrite(resCpG.Genes,"analyses/withoutIUGR/2020-06-02_CF.LF_CpG_Gene_scorev2.csv",sep=";")
+fwrite(resCpGF.Genes,"analyses/withoutIUGR/2020-06-02_CF.LF_CpG_Gene_scorev2.csv",sep=";")
 
-resGenes<-unique(resCpG.Genes[order(pval)],by="gene")[order(-GeneScore)]
+resGenes<-unique(resCpGF.Genes[order(pval)],by="gene")[order(-GeneScore)]
 
 plot(density(resGenes$GeneScore))
 abline(v=40)
@@ -333,8 +339,8 @@ plot(resGenes$DMC,resGenes$GeneScore)
 #We see for some gene opposite score :  meth.change negative  but a GeneScore positive, and inversely
 #Possible if 2 signif CpG with opposite methylation change in a gene 
 resGenes[meth.change>20&GeneScore<(-5)]
-resCpG.Genes[gene=="L2HGDH"] #1CpG avec score = 8 et un aute avec score =-8
-median(resCpG.Genes[gene=="L2HGDH"]$CpGScore)
+resCpGF.Genes[gene=="L2HGDH"] #1CpG avec score = 8 et un aute avec score =-8
+median(resCpGF.Genes[gene=="L2HGDH"]$CpGScore)
 #QU2 : any idea to better integrate Opposite methylation change ?
 
 #IMPROV4 :  take into account the length of the gene to normalize the gene-score
@@ -404,8 +410,8 @@ pathw <- pathview(gene.data  = geneList.Entrez,
 
 # COMPARISON WITH A PVALUE-BASED GENE SELECTION
 #with 1726 genes
-resCpG.GenesF<-resCpG.Genes[meth.change>0][order(pval)]
-genesPval<-unique(resCpG.GenesF$gene)[1:1697]
+resCpGF.GenesF<-resCpGF.Genes[meth.change>0][order(pval)]
+genesPval<-unique(resCpGF.GenesF$gene)[1:1697]
 
 intersect(genesPval,genesGS) #1164 common genes
 setdiff(genesGS,genesPval) #533 genes diff
@@ -453,12 +459,12 @@ emapplot(res.compa,pie="count",showCategory =11 )
 
 #NEW GENESCORE pour VALORISER GENE AVEC ++ High CpGScore
 #new geneSCORE
-resCpG.Genes[,ismaxCpGScore:=CpGScore==max(CpGScore),by=.(locisID,gene)]
-resCpG.Genes<-resCpG.Genes[ismaxCpGScore==T][order(gene,-CpGScore)]
-resCpG.Genes
-resCpG.Genes[,GeneScore2:=CpGScore[which.max(abs(CpGScore))],by="gene"]
-resCpG.Genes[nCpG.Gene>1,GeneScore2:=GeneScore2+mean(CpGScore[2:.N]),by="gene"]
-resGenes2<-unique(resCpG.Genes,by="gene")[order(-GeneScore2)]
+resCpGF.Genes[,ismaxCpGScore:=CpGScore==max(CpGScore),by=.(locisID,gene)]
+resCpGF.Genes<-resCpGF.Genes[ismaxCpGScore==T][order(gene,-CpGScore)]
+resCpGF.Genes
+resCpGF.Genes[,GeneScore2:=CpGScore[which.max(abs(CpGScore))],by="gene"]
+resCpGF.Genes[nCpG.Gene>1,GeneScore2:=GeneScore2+mean(CpGScore[2:.N]),by="gene"]
+resGenes2<-unique(resCpGF.Genes,by="gene")[order(-GeneScore2)]
 
 resGenes2
 resGenes2$gene[1:100]
@@ -524,35 +530,43 @@ emapplot(rkGS)
 
 #geneSCORE3 : the sum
 
-resCpG.Genes[,GeneScore3:=sum(CpGScore),by="gene"]
-plot(density(na.omit(log10(resCpG.Genes$CpGScore))))
-resCpG.Genes[CpGScore==0]
+resCpGF.Genes[,GeneScore3:=sum(CpGScore),by="gene"]
+plot(density(na.omit(log10(resCpGF.Genes$CpGScore))))
+resCpGF.Genes[CpGScore==0]
 
-resCpG.Genes[,GeneScore.inv:=sum(1/(abs(CpGScore)+1)),by="gene"]
-resCpG.Genes[,sqrt.inv.geneScore:=sum(sqrt(1/(abs(CpGScore)+1))),by="gene"]
-resCpG.Genes[,nCpGWeight:=1/log1p(GeneScore.inv)]
+resCpGF.Genes[,GeneScore.inv:=sum(1/(abs(CpGScore)+1)),by="gene"]
+resCpGF.Genes[,sqrt.inv.geneScore:=sum(sqrt(1/(abs(CpGScore)+1))),by="gene"]
+resCpGF.Genes[,nCpGWeight:=1/log1p(GeneScore.inv)]
 
-resCpG.Genes[,nCpGWeight2:=1+(1/sqrt.inv.geneScore)]
+resCpGF.Genes[,nCpGWeight2:=1+(1/sqrt.inv.geneScore)]
 
-resCpG.Genes[,nCpGWeight3:=1/GeneScore.inv]
+resCpGF.Genes[,nCpGWeight3:=1/GeneScore.inv]
 
-resCpG.Genes[nCpGWeight>10 & nCpG.Gene>1]
+resCpGF.Genes[nCpGWeight>10 & nCpG.Gene>1]
+resGenes2<-unique(resCpGF.Genes[order(-CpGScore)],by="gene")
+
 plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight)
 
 plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight)
 plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight2)
+
+summary(resGenes2$nCpG.Gene)
+summary(resGenes2$nCpGWeight3)
 plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight3)
-resCpG.Genes[,nCpGWeight.norm:=sqrt(log1p(nCpGWeight)),by="gene"]
+
+resCpGF.Genes[,nCpGWeight.norm:=sqrt(log1p(nCpGWeight)),by="gene"]
 
 
-resCpG.Genes[,nCpGWeight.norm2:=sqrt(log1p(GeneScore.inv)),by="gene"]
+resCpGF.Genes[,nCpGWeight.norm2:=sqrt(log1p(GeneScore.inv)),by="gene"]
 
-resCpG.Genes[,nCpGWeight.norm3:=sqrt(log1p(nCpGWeight3)),by="gene"]
+resCpGF.Genes[,nCpGWeight.norm3:=sqrt(log1p(nCpGWeight3)),by="gene"]
 plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight.norm3)
-resCpG.Genes[,nCpGWeight.norm3.2:=sqrt(nCpGWeight3)]
+resCpGF.Genes[,nCpGWeight.norm3.2:=sqrt(nCpGWeight3)]
+
 abline(v=20) #need def opti ncpg.sig pour avoir confiance dans le gene
 plot(resGenes2$nCpG.Gene,resGenes2$nCpGSig.Gene)
 plot(resGenes2[nCpG.Gene<0]$nCpG.Gene,resGenes2[nCpG.Gene<50]$nCpGSig.Gene)
+
 #=> 7 CpG link to a gene is optimal to have confidence of the meth.change impact
 plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight.norm3)
 abline(v=7)
@@ -561,7 +575,8 @@ summary(resGenes2[nCpG.Gene==7]$nCpGWeight.norm3)
 # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 # 0.3746  0.4519  0.5021  0.5213  0.5711  0.8583 
 
-plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight.norm3.2)
+plot(resGenes2[nCpG.Gene<50]$nCpG.Gene,resGenes2[nCpG.Gene<50]$nCpGWeight.norm3.2)
+summary(resGenes2$nCpGWeight.norm3.2)
 abline(v=7) #need def opti ncpg.sig pour avoir confiance dans le gene
 
 resGenes2[nCpGWeight.norm3.2>5][order(-nCpGWeight.norm3)]
@@ -569,15 +584,27 @@ summary(resGenes2[nCpG.Gene==7]$nCpGWeight.norm3.2)
 # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 # 0.3881  0.4760  0.5354  0.5634  0.6210  1.0435 
 
-resCpG.Genes[,GeneScore4:=sum(CpGScore)*nCpGWeight.norm,by="gene"]
-resCpG.Genes[,GeneScore5:=sum(CpGScore)*nCpGWeight.norm2,by="gene"]
+resCpGF.Genes[,GeneScore4:=sum(CpGScore)*nCpGWeight.norm,by="gene"]
+resCpGF.Genes[,GeneScore5:=sum(CpGScore)*nCpGWeight.norm2,by="gene"]
 
-resCpG.Genes[,GeneScore6:=sum(CpGScore)*nCpGWeight2,by="gene"]
-resCpG.Genes[,GeneScore7:=sum(CpGScore)*nCpGWeight.norm3,by="gene"]
-resCpG.Genes[,GeneScore8:=sum(CpGScore)*(0.2+nCpGWeight.norm3),by="gene"]
-resCpG.Genes[,GeneScore9:=sum(CpGScore)*(0.4+nCpGWeight.norm3.2),by="gene"]
+resCpGF.Genes[,GeneScore6:=sum(CpGScore)*nCpGWeight2,by="gene"]
+resCpGF.Genes[,GeneScore7:=sum(CpGScore)*nCpGWeight.norm3,by="gene"]
+resCpGF.Genes[,GeneScore8:=sum(CpGScore)*(0.2+nCpGWeight.norm3),by="gene"]
+resCpGF.Genes[,GeneScore9:=sum(CpGScore)*(0.4+nCpGWeight.norm3.2),by="gene"]
 
-resGenes2<-unique(resCpG.Genes,by="gene")
+#determine fix coef  (0.1,0.2, 0.3, 0.4 ?); 
+resGenes2<-unique(resCpGF.Genes[order(-CpGScore)],by="gene")
+plot(resGenes2$nHiCpGScore.Gene,resGenes2$GeneScore9)
+plot(resGenes2$nCpGWeight.norm3.2,resGenes2$GeneScore9)
+resGenes2[GeneScore9>380&nHiCpGScore.Gene<5]
+summary(resGenes2$nCpG.Gene)
+plot(density(resGenes2$CpGScore))
+abline(v=10)
+#a good normal gene : 16 cpg, with 5 high cpgscore
+resGenes2
+resGenes2[nCpG.Gene==16&nHiCpGScore.Gene==5]
+
+
 plot(density(resGenes2$GeneScore3))
 plot(density(resGenes2$GeneScore4))
 plot(density(resGenes2$GeneScore5))
@@ -585,7 +612,11 @@ plot(density(resGenes2$GeneScore6))
 plot(density(resGenes2$GeneScore7))
 plot(density(resGenes2$GeneScore8))
 plot(density(resGenes2$GeneScore9))
+#♦cutoff : 
+abline(v=100)
+length(resGenes2[GeneScore9>100]$gene) #1706
 
+resGenes2[,cpg.sig.ratio:=nCpGSig.Gene/nCpG.Gene]
 plot(resGenes2$nCpG.Gene,resGenes2$nCpGWeight.norm)
 plot(resGenes2$nCpG.Gene,resGenes2$GeneScore3)
 plot(resGenes2$nCpG.Gene,resGenes2$GeneScore4)
@@ -594,6 +625,7 @@ plot(resGenes2$nCpG.Gene,resGenes2$GeneScore6)
 plot(resGenes2$nCpG.Gene,resGenes2$GeneScore7)
 plot(resGenes2$nCpG.Gene,resGenes2$GeneScore8)
 plot(resGenes2$nCpG.Gene,resGenes2$GeneScore9)
+plot(resGenes2$nCpG.Gene,resGenes2$GeneScore9,col=(as.numeric(resGenes2$nCpGSig.Gene>3)+1))
 
 
 plot(resGenes2$nCpG.Gene,resGenes2$GeneScore8,col=as.numeric(resGenes2$locisID==1072294))
@@ -605,6 +637,9 @@ plot(resGenes2[nCpG.Gene<100]$nCpG.Gene,resGenes2[nCpG.Gene<100]$GeneScore6)
 plot(resGenes2[nCpG.Gene<100]$nCpG.Gene,resGenes2[nCpG.Gene<100]$GeneScore7)
 plot(resGenes2[nCpG.Gene<100]$nCpG.Gene,resGenes2[nCpG.Gene<100]$GeneScore8)
 plot(resGenes2[nCpG.Gene<100]$nCpG.Gene,resGenes2[nCpG.Gene<100]$GeneScore9)
+
+plot(as.factor(resGenes2[nCpG.Gene<25]$nCpG.Gene),resGenes2[nCpG.Gene<25]$GeneScore9)
+plot(as.factor(resGenes2[nCpG.Gene<25]$nCpG.Gene),resGenes2[nCpG.Gene<25]$GeneScore9)
 
 abline(h=300)
 abline(v=20)
@@ -702,12 +737,18 @@ pathw <- pathview(gene.data  = geneList.Entrez,
                   kegg.dir ="analyses/withoutIUGR/pathwaysMap" 
 )
   #for Male
-cpgs.genes.score<-resCpG.Genes[,-c("pval","meth.change","DMCScore","PvalWeight","GeneScore","GeneScore2","GeneScore3")]
+#[CORRECTED] 03/06/20
+cpgs.genes.score<-resCpGF.Genes[,-c("pval","meth.change","DMCScore",
+                                    "PvalWeight","GeneScore","GeneScore2","GeneScore9","nCpGSig.Gene","nHiCpGScore.Gene")]
 
 resCpGM<-fread("analyses/withoutIUGR/2020-04-16_res_locis_in_MC.ML_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",dec = ",")
 resCpGM<-resCpGM[,locisID:=V1][,pos:=start-1][,meth.change:=FC][,-c("V1","start")][,.(locisID,chr,pos,pval,meth.change)]
 resCpGM
 resCpGM.Genes<-merge(resCpGM,cpgs.genes.score,by=c("locisID","chr","pos"))
+resCpGM.Genes
+resCpGM.Genes[,nCpGSig.Gene:=sum(pval<10^-3),gene]
+resCpGM.Genes[,nHiCpGScore.Gene:=sum(CpGScore>10),gene]
+#[end Correction] 03/06/20
 # > 1) DMCScore = meth.change * PvalWeight[0,1]
 plot(density(resCpGM.Genes$meth.change))
 #PvalWeight[0-1]
@@ -961,13 +1002,13 @@ dotplot(res.compa,showCategory =30,size='count')
 
 emapplot(res.compa,pie="count",showCategory =30 )
 #save dts
-fwrite(resCpG.Genes[,GeneScore.v1:=GeneScore]
+fwrite(resCpGF.Genes[,GeneScore.v1:=GeneScore]
        [,GeneScore.v2:=GeneScore3]
        [,GeneScore.v3:=GeneScore9]
-       [,.(locisID,chr,pos,pval,PvalWeight,meth.change,DMCScore,
+       [,.(locisID,chr,pos,pval,PvalWeight,meth.change,DMCScore,nGene.CpG,
                 gene,tss_dist,in.eQTR,avg.mlog10.pv.eQTLs,eQTL_dist,LinkScore,LinksWeight,
                 type,TypeScore,feature_type_name,EnsRegScore,RegWeight,CpGScore,
-                nGene.CpG,nCpGSig.Gene,GeneScore.v1,GeneScore.v2,GeneScore.v3)],
+                nCpG.Gene,nCpGSig.Gene,nHiCpGScore.Gene,GeneScore.v1,GeneScore.v2,GeneScore.v3)],
        file = "analyses/withoutIUGR/2020-06-02_CF.LF_CpG_Gene_scorev3.csv",
        sep = ";")
 
@@ -981,10 +1022,111 @@ resCpGM.Genes[,GeneScore3:=sum(CpGScore),by="gene"]
 fwrite(resCpGM.Genes[,GeneScore.v1:=GeneScore]
        [,GeneScore.v2:=GeneScore3]
        [,GeneScore.v3:=GeneScore9]
-       [,.(locisID,chr,pos,pval,PvalWeight,meth.change,DMCScore,
+       [,.(locisID,chr,pos,pval,PvalWeight,meth.change,DMCScore,nGene.CpG,
            gene,tss_dist,in.eQTR,avg.mlog10.pv.eQTLs,eQTL_dist,LinkScore,LinksWeight,
            type,TypeScore,feature_type_name,EnsRegScore,RegWeight,CpGScore,
-           nGene.CpG,nCpGSig.Gene,GeneScore.v1,GeneScore.v2,GeneScore.v3)],
+           ncpg.gene,nCpGSig.Gene,,nHiCpGScore.Gene,GeneScore.v1,GeneScore.v2,GeneScore.v3)],
        file = "analyses/withoutIUGR/2020-06-02_CM.LM_CpG_Gene_scorev3.csv",
        sep = ";")
 
+#2020-06-02 : search pathways of interest
+library(data.table)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+source("scripts/utils.R")
+
+resCpG.Genes<-fread("analyses/withoutIUGR/2020-06-02_CF.LF_CpG_Gene_scorev3.csv")
+resCpGM.Genes<-fread("analyses/withoutIUGR/2020-06-02_CM.LM_CpG_Gene_scorev3.csv")
+resCpG.Genes[,ncpg.gene:=.N,by="gene"]
+resCpGM.Genes[,ncpg.gene:=.N,by="gene"]
+fwrite(resCpG.Genes,"analyses/withoutIUGR/2020-06-02_CF.LF_CpG_Gene_scorev3.csv",sep=";")
+fwrite(resCpGM.Genes,"analyses/withoutIUGR/2020-06-02_CF.LF_CpG_Gene_scorev3.csv",sep=";")
+#see hippo and wnt pathway in female/male
+#female
+resGenesF<-unique(resCpG.Genes[order(pval)],by="gene")
+genesGSF<-resGenesF[GeneScore.v3>170]$gene
+length(genesGSF) #1592
+plot(density(resGenesM$GeneScore.v3))
+rkGSF <- enrichKEGG(gene         = bitr(genesGSF,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
+                    pAdjustMethod = "BH",
+                    pvalueCutoff  = 0.05)
+dfkGSF<-as.data.frame(rkGSF)
+
+nrow(dfkGSF) #25
+dfkGSF
+dotplot(rkGSF,showCategory=30)
+
+dfkGSF<-data.table(dfkGSF)
+dfkGSF[,GeneScore.avg:=mean(resGenesF$GeneScore.v3[resGenesF$gene %in% tr(geneID,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
+dfkGSF
+dotplot(rkGSF,x=dfkGSF$GeneScore.avg,showCategory=25)
+emapplot(rkGSF)
+
+enrichplot::upsetplot(rkGS,n=25)
+
+resGenesF[gene%in%c("SIRT1","TP53","FOXO3","SIRT3", "SOD2", "IDH1","ACACA","ACACB","MTOR",
+                    "RPTOR","MLST8","PRAS40","DEPTOR",
+                    "PRKAA1", "PRKAA2", "PRKAB1", "PRKAB2", "PRKAG1", "PRKAG2", "PRKAG3")][order(-GeneScore.v3)]
+
+#male
+resGenesM<-unique(resCpGM.Genes[order(pval)],by="gene")
+genesGSM<-resGenesM[GeneScore.v3>170]$gene
+length(genesGS) #214
+plot(density(resGenesM$GeneScore.v3))
+abline(v=resGenesM[order(-GeneScore9)]$GeneScore9[1592])#88
+rkGSM <- enrichKEGG(gene         = bitr(genesGSM,"SYMBOL","ENTREZID",org.Hs.eg.db)$ENTREZID,
+                    pAdjustMethod = "BH",
+                    pvalueCutoff  = 0.05)
+
+
+#SEE GENE
+library(stringr)
+library(clusterProfiler)
+library(pathview)
+#numeric vector
+geneList<-resGenes2$GeneScore9
+#named vector
+names(geneList)<-resGenes2$gene
+#sorted vector
+geneList<-sort(geneList,decreasing = T)
+genes.df<-bitr(names(geneList),
+               fromType = 'SYMBOL',
+               toType = 'ENTREZID',
+               OrgDb = org.Hs.eg.db)
+genes.df$GeneScore<-geneList[genes.df$SYMBOL]
+geneList.Entrez<-genes.df$GeneScore
+names(geneList.Entrez)<-genes.df$ENTREZID
+
+pathw <- pathview(gene.data  = geneList.Entrez,
+                  pathway.id = "hsa04930", 
+                  species    = "hsa",
+                  limit      = list(gene=max(abs(geneList.Entrez)), cpd=1),
+                  kegg.dir ="analyses/withoutIUGR/pathwaysMap" 
+)
+
+#2020-06-02 : 1) correct some details, 2) sea if i can improve the ncpgweight
+library(data.table)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+source("scripts/utils.R")
+#☻1) correct some details
+#cpgsig count :
+resCpGF.Genes<-fread("analyses/withoutIUGR/2020-06-02_CF.LF_CpG_Gene_scorev3.csv")
+resCpGF.Genes
+resCpGF.Genes[,nCpGSig.Gene:=sum(pval<10^-3),gene]
+resCpGF.Genes[,nHiCpGScore.Gene:=sum(CpGScore>10),gene]
+resCpGF.Genes[gene=="MTOR"]
+resCpGF.Genes[gene=="FOXO3"][order(pval)]
+#add true cpgsig count for male
+resCpGM.Genes<-fread("analyses/withoutIUGR/2020-06-02_CM.LM_CpG_Gene_scorev3.csv")
+resCpGM.Genes[,nCpGSig.Gene:=sum(pval<10^-3),gene]
+resCpGM.Genes[gene=="MTOR"]
+resCpGM.Genes[gene=="FOXO3"][order(pval)]
+resCpGM.Genes[,nHiCpGScore.Gene:=sum(CpGScore>10),gene]
+
+
+#i correct in the script plus haut ([corrected])
+#save :
+fwrite(resCpGF.Genes,"analyses/withoutIUGR/2020-06-02_CF.LF_CpG_Gene_scorev3.csv",sep=";")
+
+fwrite(resCpGM.Genes,"analyses/withoutIUGR/2020-06-02_CM.LM_CpG_Gene_scorev3.csv",sep=";")
