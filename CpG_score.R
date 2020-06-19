@@ -493,7 +493,7 @@ enrichplot::upsetplot(rkGS_F,n=25)
 
 #pathview :
 geneList<-resGenesF$GeneScore
-names(geneList)<-resGenes2$gene
+names(geneList)<-resGenesF$gene
 geneList<-sort(geneList,decreasing = T)
 genes.df<-bitr(names(geneList),
                fromType = 'SYMBOL',
