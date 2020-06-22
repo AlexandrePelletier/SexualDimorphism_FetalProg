@@ -108,31 +108,7 @@ library(stringr)
 abbrev_compas<-str_remove_all(compas,"Group_Sex")
 cpg.regs_ref<-fread("../../ref/2020-06-03_All_CpG-Gene_links.csv")
 
-MethAnalysisExec<-function(methyl_df,batch_F,formule,compas,abbrev_compas,cpg.regs_ref){
-  library(limma)
-  design<-model.matrix(formule,data = batch_F)
- 
-  fit <- lmFit(methyl_df[,batch_F$sample], design)  
-  
-  cont.matrix <- makeContrasts(contrasts = compas,
-                               levels=design)
-  colnames(cont.matrix)<-abbrev_compas
-  
-  fit2  <- contrasts.fit(fit, cont.matrix)
-  fit2  <- eBayes(fit2) 
-  res_list<-lapply(abbrev_compas,function(compa){
-    res<-topTable(fit2,coef=compa,n =Inf)
-    res<-CalcGeneScore(res,cpg.regs_ref,sumToGene=T)
-    res<-res[order(gene)]
-    genescore<-res$GeneScore
-    names(genescore)<-res$gene
-    return(genescore)
-  })
-  
-  names(res_list)<-abbrev_compas
-   return(res_list)
-  
-}
+
 
 CalcGeneScore<-function(res,cpg.regs_ref,sumToGene=F){
   res<-data.table(locisID=as.numeric(rownames(res)),
@@ -180,7 +156,31 @@ res[nCpGWeight>2]
 res[gene=="NUP85"&pval<0.01]
 res[locisID==1824925]
 
-
+MethAnalysisExec<-function(methyl_df,batch_F,formule,compas,abbrev_compas,cpg.regs_ref){
+  library(limma)
+  design<-model.matrix(formule,data = batch_F)
+  
+  fit <- lmFit(methyl_df[,batch_F$sample], design)  
+  
+  cont.matrix <- makeContrasts(contrasts = compas,
+                               levels=design)
+  colnames(cont.matrix)<-abbrev_compas
+  
+  fit2  <- contrasts.fit(fit, cont.matrix)
+  fit2  <- eBayes(fit2) 
+  res_list<-lapply(abbrev_compas,function(compa){
+    res<-topTable(fit2,coef=compa,n =Inf)
+    res<-CalcGeneScore(res,cpg.regs_ref,sumToGene=T)
+    res<-res[order(gene)]
+    genescore<-res$GeneScore
+    names(genescore)<-res$gene
+    return(genescore)
+  })
+  
+  names(res_list)<-abbrev_compas
+  return(res_list)
+  
+}
 #test limma exec 
 res_list<-MethAnalysisExec(methyl_df, batch,formule, compas,abbrev_compas,cpg.regs_ref )
 
