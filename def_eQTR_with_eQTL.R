@@ -634,7 +634,7 @@ fwrite(meta_eQTL_HSPG,"../../ref/2020-06-23_meta.eQTL_with_eQTR.csv",sep=";")
 
 #3) add eQTRweight based on nb of CpG and pval
 meta_eQTL_HSPG[,RegScore:=mean(-log10(PVALUE_FE+10^-50)),by=.(gene,eQTR)]
-# [stop here : eviter inf dans regScore ]
+
 
 max(meta_eQTL_HSPG$RegScore)#Inf
 
@@ -662,7 +662,7 @@ meta_eQTR[n.eQTL==1,end.eQTR:=end.eQTR+500]
 fwrite(meta_eQTR,"../../ref/2020-06-23_meta.eQTR.csv",sep=";")
 
 
-#5) add locis
+#5) add cpgs
 cpgs_reg<-fread("../../ref/2020-06-03_All_CpG-Gene_links.csv")
 cpgs<-cpgs_reg[,.(locisID,chr,pos)]
 cpgs
@@ -719,43 +719,57 @@ for(file in list.files("analyses/eQTL_integration/",pattern = "temp")){
 
 
 sRegs
+
 sRegs[duplicated(sRegs)]
-sRegs[locisID==2190609]
+sRegs[locisID==2037942]
+
 sRegs<-unique(sRegs)
-sRegs[locisID==2190609]
-
+sRegs[locisID==2037942]
+sRegs[duplicated(locisID)]
 # add  eQTR info : 
+
 #to avoid conflict, "pos" column of eQTR > "pos.eQTL"
-meta_eQTRl<-fread("../../ref/2020-05-31_Whole_Blood.eQTR_light.csv")
 
-
+meta_eQTR<-fread("../../ref/2020-06-23_meta.eQTR.csv")
+meta_eQTRl<-meta_eQTR[,.(chr,gene,pos,PVALUE_FE,start.eQTR,end.eQTR,n.eQTL,length.eQTR,RegScore)]
+meta_eQTRl
 meta_eQTRl<-meta_eQTRl[,pos.eQTL:=pos][,-"pos"]
-#same for tss_distance
-meta_eQTRl<-meta_eQTRl[,tss_dist.eQTL:=tss_distance][,-"tss_distance"]
+meta_eQTRl
 meta_eQTRl<-unique(meta_eQTRl)
-sRegs
-CpG.regs<-merge(sRegs,meta_eQTRl,by=c('chr','start.eQTR','end.eQTR','gene'),all.x = T,allow.cartesian = T)
+meta_eQTRl[chr=="chr1"&start.eQTR==758267]
+sRegs[chr=="chr1"&start.eQTR==758267]
+CpG.regs<-merge(sRegs,meta_eQTRl,all.x = T,allow.cartesian = T)
+CpG.regs[chr=="chr1"&start.eQTR==758267]
 
-CpG.regs[locisID==2190609] #ok
-CpG.regs
+CpG.regs[locisID==2037554]
 
-#add distTSS CpG
-#1) dist from eQTL
+
+#add dist from eQTL most signif
 CpG.regs[,eQTL_dist:=pos-pos.eQTL]
 summary(CpG.regs$eQTL_dist)
 plot(density(CpG.regs$eQTL_dist))
 CpG.regs[eQTL_dist>50000] #il y a des cpg tres loins de l'eqtl, 
 #on enleve CpGlinks si a > 5kb du most signif
 CpG.regs<-CpG.regs[abs(eQTL_dist)<5000] 
-CpG.regs #492262 cpg-gene links
-plot(density(CpG.regs$eQTL_dist))
-#2) dist from tss
-CpG.regs[,tss_dist:=tss_dist.eQTL+eQTL_dist]
-CpG.regs
-summary(CpG.regs$tss_dist)
-plot(density(CpG.regs$tss_dist))
-#eQTL-CpG_Score = -log10(pval)* distScore [1 if +/-500, 0.9 if +/- 1000, 0.8 +/-1500, 0.7 +/-2k,0.6+/-2500]
 
+
+#add distTSS CpG
+#1) add pos TSS
+annot<-fread("../../ref/2020-06-03_All_CpG-Gene_links.csv")
+annot<-unique(annot[,.(gene,pos,tss_dist)],by="gene")
+annot
+annot[,pos.tss:=pos+tss_dist]
+annot<-annot[,.(gene,pos.tss)]
+annot
+CpG.regs<-merge(CpG.regs,annot,by="gene",all.x = T)
+length(unique(CpG.regs[is.na(pos.tss)]$gene)) #104 gene sans pos.tss. Tant pis
+length(unique(CpG.regs$gene)) #/3556
+
+#2) dist
+CpG.regs[,tss_dist:=pos-pos.tss]
+CpG.regs
+
+#calc dist Score
 
 CpG.regs[,distScore:=sapply(abs(eQTL_dist),function(x){
   if(x<500){
@@ -767,10 +781,69 @@ CpG.regs[,distScore:=sapply(abs(eQTL_dist),function(x){
   return(distScore)
 })]
 
-plot(density(CpG.regs$eQTL.CpGLinks)) 
+plot(density(CpG.regs$distScore)) 
 #GeneLinks-CpG_Score = log10((RegScore*distScore))
 CpG.regs[,Gene.CpGLinks:=log10(RegScore*distScore)] #integrate with RegScore : mean of pval of eQTL in the region
 plot(density(CpG.regs$Gene.CpGLinks)) 
 
+#refine th dataframe before save
+CpG.regs<-CpG.regs[,avg.mlog10.pv.eQTLs:=RegScore][,-"RegScore"]
+length(unique(CpG.regs$gene)) #3555 genes regul across tissues
+
 #save this new CpG-Gene links
-fwrite(CpG.regs,"../../ref/2020-06-01_CpG_Gene_links_based_on_whole_blood_eQTL.csv",sep=";")
+CpG.regs
+fwrite(CpG.regs,"../../ref/2020-06-23_CpG_Gene_links_based_on_meta_eQTL.csv",sep=";")
+
+#integr with wb_eqtl and tss based cpg-gene links : 
+CpG.regs
+CpG.regs[,]
+
+#add col meta
+CpG.regs[,in_meta_eQTR:=T]
+CpG.regs[,in.eQTR:=T]
+CpG.regs
+#add col wb
+annot<-fread("../../ref/2020-06-03_All_CpG-Gene_links.csv")
+annot[,in_wb_eQTR:=in.eQTR]
+annot<-annot[,-c("TypeScore","EnsRegScore","RegWeight","LinksWeight","nCpG.gene.bef.filtr.")]
+annot
+#merge
+all_CpG.regs<-merge(annot,CpG.regs[,-c("start.eQTR","end.eQTR","PVALUE_FE","n.eQTL","length.eQTR","pos.eQTL","distScore","pos.tss","Gene.CpGLinks")],
+                    by=c("chr","gene","locisID","pos","tss_dist","in.eQTR","eQTL_dist","avg.mlog10.pv.eQTLs"),all = T)
+all_CpG.regs
+all_CpG.regs[in_meta_eQTR==T]
+#fill type, feature, 
+all_CpG.regs[,type:=type[!is.na(type)][1],by=c("locisID")]
+all_CpG.regs[,feature_type_name:=feature_type_name[!is.na(feature_type_name)][1],by=c("locisID")]
+all_CpG.regs
+all_CpG.regs[in.eQTR==T]
+#filtrer links 
+#on disteQTL
+all_CpG.regsF<-all_CpG.regs[in.eQTR==F|abs(eQTL_dist)<2500]
+#on avg.mlog10.pv.eQTLs
+plot(density(all_CpG.regsF[in.eQTR==T]$avg.mlog10.pv.eQTLs)) #min 4 
+summary(all_CpG.regsF[in.eQTR==T]$avg.mlog10.pv.eQTLs)
+all_CpG.regsF[in_wb_eQTR==T&avg.mlog10.pv.eQTLs>10] # let's say min 10
+
+plot(density(all_CpG.regsF[in.eQTR==T&avg.mlog10.pv.eQTLs>10]$avg.mlog10.pv.eQTLs))
+
+all_CpG.regsF<-all_CpG.regsF[in.eQTR==F|avg.mlog10.pv.eQTLs>10]
+all_CpG.regsF
+all_CpG.regsF[in.eQTR==T] #223k eQTL-links / 1 757k
+length(unique(all_CpG.regsF[in.eQTR==T]$gene)) #across 6034 gene
+library(ggplot2)
+ggplot(all_CpG.regsF[in.eQTR==T])+geom_histogram(aes(x=log10(tss_dist))) #++ a 100kb
+all_CpG.regsF[in_wb_eQTR==T] #158k on wb_eqtl
+
+
+all_CpG.regsF[,nCpG.Gene:=length(unique(locisID)),by="gene"]
+all_CpG.regsF[,nGene.CpG:=length(unique(gene)),by="locisID"]
+all_CpG.regsF
+library(ggplot2)
+ggplot(unique(all_CpG.regsF,by="gene"))+geom_histogram(aes(x=nCpG.Gene))
+ggplot(unique(all_CpG.regsF,by="locisID"))+geom_histogram(aes(x=nGene.CpG),bins = 5)
+all_CpG.regsF[nGene.CpG>5]
+all_CpG.regsF[locisID==1824982]
+fwrite(all_CpG.regsF,"../../ref/2020-06-23_All_CpG-Gene_links.csv")
+
+
