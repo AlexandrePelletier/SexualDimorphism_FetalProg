@@ -156,7 +156,7 @@ res[nCpGWeight>2]
 res[gene=="NUP85"&pval<0.01]
 res[locisID==1824925]
 
-MethAnalysisExec<-function(methyl_df,batch_F,formule,compas,abbrev_compas,cpg.regs_ref){
+MethAnalysisExec<-function(methyl_df,batch_F,formule,compas,abbrev_compas,cpg.regs_ref,analysis="obs"){
   library(limma)
   design<-model.matrix(formule,data = batch_F)
   
@@ -171,21 +171,39 @@ MethAnalysisExec<-function(methyl_df,batch_F,formule,compas,abbrev_compas,cpg.re
   res_list<-lapply(abbrev_compas,function(compa){
     res<-topTable(fit2,coef=compa,n =Inf)
     res<-CalcGeneScore(res,cpg.regs_ref,sumToGene=T)
-    res<-res[order(gene)]
-    genescore<-res$GeneScore
-    names(genescore)<-res$gene
-    return(genescore)
+    res<-res[order(gene)][,.(gene,GeneScore)]
+    col<-paste(compa,analysis,sep = ".")
+    return(res[,(col):=as.integer(GeneScore)][,-"GeneScore"])
   })
-  
-  names(res_list)<-abbrev_compas
-  return(res_list)
+  return(Reduce(merge,res_list))
   
 }
-#test limma exec 
-res_list<-MethAnalysisExec(methyl_df, batch,formule, compas,abbrev_compas,cpg.regs_ref )
 
-res_list
+#run methylAnalysis for obs :
+res<-MethAnalysisExec(methyl_df, batch,formule, compas,abbrev_compas,cpg.regs_ref )
 
+res_all<-res
+res_all
+batch1<-data.table(batch)
+set.seed(123)
+j<-1
+for(i in 1:1000){
+  print(paste(i,"/",1000))
+  
+  batch1[,Group_Sex:=sample(Group_Sex)]
+  
+  res_all<-merge(res_all,MethAnalysisExec(methyl_df, batch1,formule, compas,abbrev_compas,cpg.regs_ref,analysis = i))
+  if(ncol(res)>200){
+    print(paste("save",j))
+    fwrite(res_all,paste0("2020-06-23_temp",j))
+    res_all<-res
+    j<-j+1
+  }
+  
+}
+fwrite(res_all,paste0("2020-06-23_temp",j))
+res_all
+print("save  pct genescore permuts >= geneScore obs")
 
 
 MethAnalysisPermut<-function(batch_F,col_to_permut,n,sample_col="sample",cpg.regs_ref=NULL,formule=NULL,seed=123){
@@ -200,8 +218,7 @@ MethAnalysisPermut<-function(batch_F,col_to_permut,n,sample_col="sample",cpg.reg
   }
   
   if(is.null(formule)){
-    
-    
+    formule<- ~0 + Group_Sex  + batch  + latino + Mat.Age + Group_Complexity_Fac
     print("limma model selon cette formule :")
     print(formule)
   }
