@@ -633,50 +633,44 @@ head(meta_eQTL_HSPG,100) #OK
 fwrite(meta_eQTL_HSPG,"../../ref/2020-06-23_meta.eQTL_with_eQTR.csv",sep=";")
 
 #3) add eQTRweight based on nb of CpG and pval
-meta_eQTL_HSPG[,RegScore:=mean(-log10(PVALUE_FE)),by=.(gene,eQTR)]
+meta_eQTL_HSPG[,RegScore:=mean(-log10(PVALUE_FE+10^-50)),by=.(gene,eQTR)]
 # [stop here : eviter inf dans regScore ]
 
 max(meta_eQTL_HSPG$RegScore)#Inf
 
-plot(density(log10(unique(meta_eQTL_HSPG$RegScore))))
-fwrite(meta_eQTL_HSPG,"../../ref/2020-05-31_Whole_Blood.eQTL_with_eQTR.csv",sep=";")
-
+plot(density(unique(meta_eQTL_HSPG$RegScore)))
+fwrite(meta_eQTL_HSPG,"../../ref/2020-06-23_meta.eQTL_with_eQTR.csv",sep=";")
 
 #4) make eQTR :
 
 
-meta_eQTL_HSPG<-meta_eQTL_HSPG[order(chr,gene_id,pos)]
+meta_eQTL_HSPG<-meta_eQTL_HSPG[order(chr,gene,pos)]
 head(meta_eQTL_HSPG,100)
 meta_eQTR<-meta_eQTL_HSPG[!is.na(eQTR)]
 
-meta_eQTR[,start.eQTR:=min(pos),by=.(gene_id,eQTR)]
-meta_eQTR[,end.eQTR:=max(pos),by=.(gene_id,eQTR)]
-meta_eQTR[,n.eQTL:=.N,by=.(gene_id,eQTR)]
+meta_eQTR[,start.eQTR:=min(pos),by=.(gene,eQTR)]
+meta_eQTR[,end.eQTR:=max(pos),by=.(gene,eQTR)]
+meta_eQTR[,n.eQTL:=.N,by=.(gene,eQTR)]
 meta_eQTR[,length.eQTR:=end.eQTR-start.eQTR]
 summary(meta_eQTR$length.eQTR)
 plot(density((meta_eQTR$length.eQTR)))
 meta_eQTR<-meta_eQTR[minLocal==T]
 meta_eQTR
-meta_eQTRl<-meta_eQTR[,.(chr,pos,eQTR,start.eQTR,end.eQTR,n.eQTL,RegScore,gene,tss_distance,pval_nominal)][!is.na(gene)&gene!=""]
-meta_eQTRl
 #add +/-500pb pour eQTR with only 1 cpg
-meta_eQTRl[n.eQTL==1,start.eQTR:=start.eQTR-500]
-meta_eQTRl[n.eQTL==1,end.eQTR:=end.eQTR+500]
-fwrite(meta_eQTRl,"../../ref/2020-05-31_Whole_Blood.eQTR_light.csv",sep=";")
+meta_eQTR[n.eQTL==1,start.eQTR:=start.eQTR-500]
+meta_eQTR[n.eQTL==1,end.eQTR:=end.eQTR+500]
+fwrite(meta_eQTR,"../../ref/2020-06-23_meta.eQTR.csv",sep=";")
 
 
 #5) add locis
-cpgs<-fread("../../ref/annotation_CpG_HELP_ALL_070420.csv")
-cpgs<-cpgs[,.(locisID,chr,pos)]
+cpgs_reg<-fread("../../ref/2020-06-03_All_CpG-Gene_links.csv")
+cpgs<-cpgs_reg[,.(locisID,chr,pos)]
 cpgs
-#remove empty annot
-cpgs<-cpgs[chr!=""]
-cpgs<-cpgs[pos!=""]
-cpgs<-cpgs[!is.na(pos)]
-cpgs
-eQTRll<-meta_eQTRl[,.(chr,start.eQTR,end.eQTR,gene)]
-rm(translator,meta_eQTL_HSPG,eQTR,meta_eQTRl)
-output<-"analyses/eQTL_integration/2020-05-31"
+
+eQTRll<-meta_eQTR[,.(chr,start.eQTR,end.eQTR,gene)]
+rm(meta_eQTL_HSPG,meta_eQTR)
+
+output<-"analyses/eQTL_integration/2020-06-23"
 options(future.globals.maxSize = 4000 * 1024^2)
 for(chrom in unique(cpgs$chr)){
   print(chrom)
@@ -713,6 +707,7 @@ for(chrom in unique(cpgs$chr)){
   
   
 }
+
 sRegs<-sRegs[1,]
 
 for(file in list.files("analyses/eQTL_integration/",pattern = "temp")){
