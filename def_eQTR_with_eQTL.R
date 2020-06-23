@@ -430,17 +430,6 @@ meta_eQTL_HSP[is.na(gene)] #200k/500k
 
 length(unique(meta_eQTL_HSP[is.na(gene)]$gene_id))#1170
 
-# 
-# library(stringr)
-# library(biomartr)
-# biomartr::getAttributes(mart = "ENSEMBL_MART_ENSEMBL",dataset = "hsapiens_gene_ensembl")
-# result_BM <- biomartr::biomart( genes      = unique(meta_eQTL_HSP$gene_id), # genes that we wanted info
-#                                 mart       = "ENSEMBL_MART_ENSEMBL", # marts were selected with biomartr::getMarts()
-#                                 dataset    = "hsapiens_gene_ensembl_version", # datasets were selected with biomartr::getDatasets()
-#                                 attributes = "hgnc_symbol", # attributes were selected with biomartr::getAttributes()
-#                                 filters    = "ensembl_gene_id")
-# 
-
 
 
 #stat :
@@ -477,10 +466,28 @@ meta_eQTL_HSP
 #save
 fwrite(meta_eQTL_HSP,"../../ref/eQTL/2020-06-19_meta_eQTL_filtered_and_annotated.csv",sep=";")
 
-#[STOP HERE ]
 
 
+#2020-06-23
+library(data.table)
+meta_eQTL_HSP<-fread("../../ref/eQTL/2020-06-19_meta_eQTL_filtered_and_annotated.csv")
+#get only pvalue
+meta_eQTL_HSP<-meta_eQTL_HSP[,.(PVALUE_FE,chr,pos,gene_id,gene)]
+unique(meta_eQTL_HSP,by="gene_id") #◘880
+sum(unique(meta_eQTL_HSP,by="gene_id")$gene!="") #4840
+meta_eQTL_HSP[gene==""] # a lot
+#so new translate 
+library(biomartr)
+biomartr::getAttributes(mart = "ENSEMBL_MART_ENSEMBL",dataset = "hsapiens_gene_ensembl")
+result_BM <- biomartr::biomart( genes      = unique(meta_eQTL_HSP$gene_id), # genes that we wanted info
+                                mart       = "ENSEMBL_MART_ENSEMBL", # marts were selected with biomartr::getMarts()
+                                dataset    = "hsapiens_gene_ensembl", # datasets were selected with biomartr::getDatasets()
+                                attributes = "hgnc_symbol", # attributes were selected with biomartr::getAttributes()
+                                filters    = "ensembl_gene_id_version")
 
+nrow(result_BM) #2707, pas mieux
+meta_eQTL_HSPG<-meta_eQTL_HSP[gene!=""]
+meta_eQTL_HSPG<-meta_eQTL_HSPG[,-"gene_id"]
 #3) def eQTR
 
 #regarder de cb les eQTL sont espacés en moyenne :
@@ -488,32 +495,32 @@ distSuivant<-function(positions){
   return(c(sapply(1:(length(positions)-1), function(i)abs(positions[i]-positions[i+1])),NA))
 }
 
-meta_eQTL_HSP[,distDuSuivant:=distSuivant(tss_distance),by="gene_id"]
+meta_eQTL_HSPG[,distDuSuivant:=distSuivant(pos),by="gene"]
 
-meta_eQTL_HSP
 
-plot(density(na.omit(meta_eQTL_HSP$distDuSuivant[meta_eQTL_HSP$distDuSuivant<2000]))) #pique à 30 pb
+
+plot(density(na.omit(meta_eQTL_HSPG$distDuSuivant[meta_eQTL_HSPG$distDuSuivant<2000]))) #pique à 30 pb
 
 #zoom
-plot(density(na.omit(meta_eQTL_HSP$distDuSuivant[meta_eQTL_HSP$distDuSuivant<200&meta_eQTL_HSP$distDuSuivant>0]))) #pas d'autre pique signif
+plot(density(na.omit(meta_eQTL_HSPG$distDuSuivant[meta_eQTL_HSPG$distDuSuivant<200&meta_eQTL_HSPG$distDuSuivant>0]))) #pas d'autre pique signif
 
-summary(meta_eQTL_HSP$distDuSuivant)
+summary(meta_eQTL_HSPG$distDuSuivant)
 # Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
 #       0     113     394    2679    1153 1852417   12360 
+meta_eQTL_HSPG[distDuSuivant==0]
 
+plot(density(log10(unique(meta_eQTL_HSPG$PVALUE_FE))))
+summary(unique(meta_eQTL_HSPG$PVALUE_FE))   
+Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+0.000e+00 0.000e+00 0.000e+00 1.836e-31 3.000e-36 9.992e-30
 
-plot(density(log10(unique(meta_eQTL_HSP$min_pval_nominal))))
-summary(unique(meta_eQTL_HSP$min_pval_nominal))  #++0 =>  
-# Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-# 0.000e+00 0.000e+00 3.000e-10 6.107e-06 2.023e-06 3.395e-04 
-
-head(meta_eQTL_HSP,100)
+head(meta_eQTL_HSPG,100)
 
 # def eQTR : a partir de most signif eQTL localement (a +/-5kb) : 
 #def region de eQTL a <1500 pb les uns des autres sans chute de pvalue < 10-3, length reg min =1000, max reg =5000.
 
 #i)def min local  : pval dans 1er quartile et  a plus de 5000pb d'un eqtl plus signif
-meta_eQTL_HSP[,minLocal.cand:=pval_nominal<quantile(pval_nominal,0.25),by=c("gene_id")]
+meta_eQTL_HSPG[,minLocal.cand:=PVALUE_FE<=quantile(PVALUE_FE,0.25),by=c("gene")]
 
 is.minLocal<-function(dists,pvals){
   isMins<-sapply(1:length(dists), function(i){
@@ -528,8 +535,8 @@ is.minLocal<-function(dists,pvals){
   
   return(isMins)
 }
-meta_eQTL_HSP[minLocal.cand==T,minLocal:=is.minLocal(tss_distance,pval_nominal),by=c("gene_id")]
-head(meta_eQTL_HSP,100)
+meta_eQTL_HSPG[minLocal.cand==T,minLocal:=is.minLocal(pos,PVALUE_FE),by=c("gene")]
+head(meta_eQTL_HSPG,100)
 #ii)
 findeQTR<-function(minLocal,pvals,dists,seed=750,log10.pval.dt.thr=3,length.max=5000,length.min=1000){
   reg<-0
@@ -612,33 +619,35 @@ findeQTR<-function(minLocal,pvals,dists,seed=750,log10.pval.dt.thr=3,length.max=
 }
 
 #test pour 1 
-meta_eQTL_HSP[gene=="WASH6P",eQTR:=findeQTR(minLocal,pval_nominal,tss_distance,seed = 1500,log10.pval.dt.thr = 3,length.max=5000,length.min = 1000)]
-
+meta_eQTL_HSPG[gene=="ABCC2"]
+meta_eQTL_HSPG[gene=="ABCC2",eQTR:=findeQTR(minLocal,PVALUE_FE,pos,seed = 1500,log10.pval.dt.thr = 3,length.max=5000,length.min = 1000)]
+head(meta_eQTL_HSPG[gene=="ABCC2"],100)
 
 #pour all
-meta_eQTL_HSP[,eQTR:=findeQTR(minLocal,pval_nominal,tss_distance,seed = 1500,log10.pval.dt.thr = 3,length.max=5000,length.min = 1000),by="gene_id"]
-meta_eQTL_HSP[!is.na(eQTR),is.start.eQTR:= tss_distance==min(tss_distance),by=.(gene_id,eQTR)]
-meta_eQTL_HSP[!is.na(eQTR),is.end.eQTR:= tss_distance==max(tss_distance),by=.(gene_id,eQTR)]
-meta_eQTL_HSP[!is.na(eQTR),start.eQTR:=]
-head(meta_eQTL_HSP,100) #OK
+meta_eQTL_HSPG[,eQTR:=findeQTR(minLocal,PVALUE_FE,pos,seed = 1500,log10.pval.dt.thr = 3,length.max=5000,length.min = 1000),by="gene"]
 
-plot(density(log10(unique(meta_eQTL_HSP$RegScore))))
+meta_eQTL_HSPG[!is.na(eQTR),is.start.eQTR:= pos==min(pos),by=.(gene,eQTR)]
+meta_eQTL_HSPG[!is.na(eQTR),is.end.eQTR:=pos==max(pos),by=.(gene,eQTR)]
+head(meta_eQTL_HSPG,100) #OK
 
-
-#2) save pos most signif eQTL => already done
-
+fwrite(meta_eQTL_HSPG,"../../ref/2020-06-23_meta.eQTL_with_eQTR.csv",sep=";")
 
 #3) add eQTRweight based on nb of CpG and pval
-meta_eQTL_HSP[,RegScore:=mean(-log10(pval_nominal)),by=.(gene_id,eQTR)]
+meta_eQTL_HSPG[,RegScore:=mean(-log10(PVALUE_FE)),by=.(gene,eQTR)]
+# [stop here : eviter inf dans regScore ]
 
-max(meta_eQTL_HSP$RegScore)#221
-fwrite(meta_eQTL_HSP,"../../ref/2020-05-31_Whole_Blood.eQTL_with_eQTR.csv",sep=";")
+max(meta_eQTL_HSPG$RegScore)#Inf
+
+plot(density(log10(unique(meta_eQTL_HSPG$RegScore))))
+fwrite(meta_eQTL_HSPG,"../../ref/2020-05-31_Whole_Blood.eQTL_with_eQTR.csv",sep=";")
+
 
 #4) make eQTR :
 
-meta_eQTL_HSP<-meta_eQTL_HSP[order(chr,gene_id,pos)]
-head(meta_eQTL_HSP,100)
-meta_eQTR<-meta_eQTL_HSP[!is.na(eQTR)]
+
+meta_eQTL_HSPG<-meta_eQTL_HSPG[order(chr,gene_id,pos)]
+head(meta_eQTL_HSPG,100)
+meta_eQTR<-meta_eQTL_HSPG[!is.na(eQTR)]
 
 meta_eQTR[,start.eQTR:=min(pos),by=.(gene_id,eQTR)]
 meta_eQTR[,end.eQTR:=max(pos),by=.(gene_id,eQTR)]
@@ -666,7 +675,7 @@ cpgs<-cpgs[pos!=""]
 cpgs<-cpgs[!is.na(pos)]
 cpgs
 eQTRll<-meta_eQTRl[,.(chr,start.eQTR,end.eQTR,gene)]
-rm(translator,meta_eQTL_HSP,eQTR,meta_eQTRl)
+rm(translator,meta_eQTL_HSPG,eQTR,meta_eQTRl)
 output<-"analyses/eQTL_integration/2020-05-31"
 options(future.globals.maxSize = 4000 * 1024^2)
 for(chrom in unique(cpgs$chr)){
