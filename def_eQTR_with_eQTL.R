@@ -708,8 +708,9 @@ for(chrom in unique(cpgs$chr)){
   
 }
 
-sRegs<-sRegs[1,]
 
+sRegs<-fread("analyses/eQTL_integration/2020-06-23tempchr101")
+sRegs<-sRegs[1,]
 for(file in list.files("analyses/eQTL_integration/",pattern = "temp")){
   print(strsplit(file,"chr")[[1]][2])
   sReg<-fread(paste0("analyses/eQTL_integration/",file))
@@ -737,6 +738,7 @@ meta_eQTRl<-meta_eQTRl[,pos.eQTL:=pos][,-"pos"]
 meta_eQTRl
 meta_eQTRl<-unique(meta_eQTRl)
 meta_eQTRl[chr=="chr1"&start.eQTR==758267]
+
 sRegs[chr=="chr1"&start.eQTR==758267]
 CpG.regs<-merge(sRegs,meta_eQTRl,all.x = T,allow.cartesian = T)
 CpG.regs[chr=="chr1"&start.eQTR==758267]
@@ -758,7 +760,7 @@ CpG.regs<-CpG.regs[abs(eQTL_dist)<5000]
 annot<-fread("../../ref/2020-06-03_All_CpG-Gene_links.csv")
 annot<-unique(annot[,.(gene,pos,tss_dist)],by="gene")
 annot
-annot[,pos.tss:=pos+tss_dist]
+annot[,pos.tss:=pos-tss_dist]
 annot<-annot[,.(gene,pos.tss)]
 annot
 CpG.regs<-merge(CpG.regs,annot,by="gene",all.x = T)
@@ -783,20 +785,26 @@ CpG.regs[,distScore:=sapply(abs(eQTL_dist),function(x){
 
 plot(density(CpG.regs$distScore)) 
 #GeneLinks-CpG_Score = log10((RegScore*distScore))
-CpG.regs[,Gene.CpGLinks:=log10(RegScore*distScore)] #integrate with RegScore : mean of pval of eQTL in the region
+CpG.regs<-CpG.regs[,avg.mlog10.pv.eQTLs:=RegScore][,-"RegScore"]
+plot(density(CpG.regs$avg.mlog10.pv.eQTLs)) 
+
+CpG.regs[,Gene.CpGLinks:=log10(avg.mlog10.pv.eQTLs*distScore)] #integrate with RegScore : mean of pval of eQTL in the region
 plot(density(CpG.regs$Gene.CpGLinks)) 
 
 #refine th dataframe before save
-CpG.regs<-CpG.regs[,avg.mlog10.pv.eQTLs:=RegScore][,-"RegScore"]
-length(unique(CpG.regs$gene)) #3555 genes regul across tissues
+
+length(unique(CpG.regs$gene)) #3556 genes regul across tissues
 
 #save this new CpG-Gene links
 CpG.regs
 fwrite(CpG.regs,"../../ref/2020-06-23_CpG_Gene_links_based_on_meta_eQTL.csv",sep=";")
 
 #integr with wb_eqtl and tss based cpg-gene links : 
-CpG.regs
-CpG.regs[,]
+CpG.regs<-fread("../../ref/2020-06-23_CpG_Gene_links_based_on_meta_eQTL.csv")
+#keep 1 line by links : the better 
+CpG.regs<-CpG.regs[order(locisID,gene,PVALUE_FE)]
+CpG.regs<-unique(CpG.regs,by=c("locisID","gene","start.eQTR"))
+
 
 #add col meta
 CpG.regs[,in_meta_eQTR:=T]
@@ -845,5 +853,112 @@ ggplot(unique(all_CpG.regsF,by="locisID"))+geom_histogram(aes(x=nGene.CpG),bins 
 all_CpG.regsF[nGene.CpG>5]
 all_CpG.regsF[locisID==1824982]
 fwrite(all_CpG.regsF,"../../ref/2020-06-23_All_CpG-Gene_links.csv")
+
+#2020-06-23 AM
+library(data.table)
+library(stringr)
+library(ggplot2)
+set.seed(1234)
+options(stringsAsFactors = F)
+cpgs.genes<-fread("../../ref/2020-06-23_All_CpG-Gene_links.csv")
+cpgs.genes
+#calc reg and linksweight
+#Calculate regulatory and links weight : 
+# > Regulatory weight [0.5-2] = 0.5 + 1.5 * (TypeScore{0,0.4,0.66,1} + EnsRegScore{0,0.25,0.5,0.75,1})/2 
+#     TypeScore{0,0.4,0.66,1} 
+cpgs.genes[,TypeScore:=sapply(type,function(x){
+  if(x%in%c(4,6)){
+    score<-1
+  }else if(x==5){
+    score<-0.75
+  }else if(x%in%1:3){
+    score<-0.5
+  }else{
+    score<-0
+  }
+  return(score)
+})]
+plot(density(cpgs.genes$TypeScore))
+
+#   EnsRegScore{0,0.25,0.5,0.75,1}
+cpgs.genes[,EnsRegScore:=sapply(feature_type_name,function(x){
+  vecX<-strsplit(x,"/")[[1]]
+  if(any(c("CTCF Binding Site","Promoter","Enhancer")%in%vecX)){
+    score<-0.5
+  }else if(any(c("Open chromatin","Promoter Flanking Region")%in%vecX)){
+    score<-0.25
+  }else{
+    score<-0
+  }
+  if("TF binding site"%in%vecX){
+    score<-score+0.5
+  }
+  return(score)
+})]
+plot(density(cpgs.genes$EnsRegScore))
+# Regulatory weight:
+cpgs.genes[,RegWeight:=(0.5+1.5*((TypeScore+EnsRegScore)/2))]
+
+plot(density(cpgs.genes[!duplicated(locisID)]$RegWeight))
+
+
+# > 3) Links Weight[0.1-1] = 0.1+0.9*max(LinkScore [0-1])
+#   - for CpG associated to a gene based on TSS proximity  
+cpgs.genes[in.eQTR==FALSE,LinkScore:=sapply(abs(tss_dist),function(x){
+  if(x<1000){
+    score<-1
+  }else if(x<20000){
+    score<-0.5+0.5*sqrt(1000/x)
+  }else{
+    score<-0.5*sqrt(20000/x)
+  
+  }
+  return(score)
+})]
+
+plot(density(cpgs.genes[in.eQTR==FALSE]$LinkScore))
+
+
+# - for CpG associated to a gene based on eQTL studies: 
+#de base, linksscore =1
+cpgs.genes[avg.mlog10.pv.eQTLs>50,avg.mlog10.pv.eQTLs:=50]
+cpgs.genes[in.eQTR==TRUE,LinkScore:=(0.5+(avg.mlog10.pv.eQTLs/50))/1.5] 
+cpgs.genes[LinkScore>1]
+plot(density(cpgs.genes$LinkScore))
+cpgs.genes[LinkScore>1.3]
+
+#there is duplicated rows ?:
+cpgs.genes[,n.cpg_gene.links:=.N,by=c("locisID","gene")]
+summary(cpgs.genes$n.cpg_gene.links) #max 2, ok
+cpgs.genes[n.cpg_gene.links==2]
+plot(density(na.omit(cpgs.genes$n.cpg_gene.links)))
+
+plot(density(na.omit(cpgs.genes$n.cpg_gene.links)))
+
+#and finally calculate the linksWeight : 
+#if in meta and wb : 1.5
+cpgs.genes[in_wb_eQTR==TRUE,in_meta_eQTR:=FALSE]
+cpgs.genes[in_meta_eQTR==TRUE,in_wb_eQTR:=FALSE]
+cpgs.genes[,inBoth_eQTL:=any(in_meta_eQTR==TRUE)&any(in_wb_eQTR==TRUE),by=c("locisID","gene")]
+
+cpgs.genes[inBoth_eQTL==TRUE]
+cpgs.genes[inBoth_eQTL==TRUE,LinksWeight:=1,by=c("locisID","gene")]
+
+cpgs.genes[inBoth_eQTL==FALSE,LinksWeight:=0.1+0.9*max(LinkScore),by=c("locisID","gene")]
+
+plot(density(cpgs.genes$LinksWeight))
+summary(cpgs.genes$LinksWeight)
+
+cpgs.genes[round(LinkScore,3)==0.405]
+
+#keep one links, the best
+cpgs.genes<-unique(cpgs.genes[order(-LinkScore)],by=c("locisID","gene"))
+
+#add utils infos :
+cpgs.genes<-cpgs.genes[,nCpG.Gene:=.N,by=.(gene)][order(locisID)]
+cpgs.genes
+#Save final cpg-gene links ref
+
+fwrite(cpgs.genes,"../../ref/2020-06-24_All_CpG-Gene_links.csv",sep=";")
 
 
