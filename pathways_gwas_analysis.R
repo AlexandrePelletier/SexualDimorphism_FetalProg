@@ -117,6 +117,7 @@ CalcGeneScore<-function(res,cpg.regs_ref,sumToGene=F){
   
   res<-merge(res,cpg.regs_ref,by="locisID")
   res[,CpGScore:=((-log10(pval)/4)*meth.change)*RegWeight*LinksWeight]
+  
   res[,nCpGWeight:=(1/sum(1/(abs(CpGScore)+1)))^(1/3),by="gene"]
   
   res[,GeneScore:=sum(CpGScore)*nCpGWeight,by="gene"]
