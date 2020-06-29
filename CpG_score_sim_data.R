@@ -1,5 +1,4 @@
 
-
 #see behaviour of my CpGScore/GeneScore with simulated
 options(stringsAsFactors=F)
 set.seed(12345)

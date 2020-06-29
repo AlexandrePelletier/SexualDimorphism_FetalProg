@@ -961,6 +961,12 @@ cpgs.genes
 
 fwrite(cpgs.genes,"../../ref/2020-06-24_All_CpG-Gene_links.csv",sep=";")
 
-#To change :
+#2020-06-29 : recalcule cpgWeight 
+cpgs.genes<-fread("../../ref/2020-06-24_All_CpG-Gene_links.csv",sep=";")
+cpgs.genes
+source("scripts/calculeGeneScore.R")
+cpgs.genes<-cpgs.genes[,in_eQTR:=in.eQTR][,-"in.eQTR"]
+cpgs.genes<-cpgs.genes[,inBoth_eQTR:=inBoth_eQTL][,-"inBoth_eQTL"]
 
-
+cpgs.genes<-CalcCpGWeights(cpgs.genes)
+fwrite(cpgs.genes,"../../ref/2020-06-29_All_CpG-Gene_links.csv",sep=";")
