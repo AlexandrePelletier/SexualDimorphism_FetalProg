@@ -73,11 +73,24 @@ resM$locisID<-rownames(resM)
 head(resM)
 resF<-read.csv2("analyses/withoutIUGR/2020-04-16_res_locis_in_FC.FL_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",row.names = 1)
 resF$locisID<-rownames(resF)
-res_list<-list("C_M-L_M"=resM,"C_F-L_F"=resF)
-names(res_list)
-res_list<-deterEpigenAffGene(res_list,var_to_permut="Group_Sex",permut=1000,pvalThr=0.01,)
+res_to_compas<-list("C_M-L_M"=resM,"C_F-L_F"=resF)
+names(res_to_compas)
+batch<-fread("../../ref/cleaned_batch_CD34_library_date_220620.csv")
+batch<-batch[Group_name%in%c("C","L")]
+methyl_df<-fread("../../ref/2020-05-25_methyl_data_before_limma.csv")
+methyl_df<-data.frame(methyl_df)
+rownames(methyl_df)<-methyl_df$locisID
 
+cpg.regs_ref<-fread("../../ref/2020-06-29_All_CpG-Gene_links.csv")
 
+res_to_compas<-deterEpigenAffGene(res_to_compas,
+                                  methyl_df,
+                                  cpg.regs_ref,
+                                  batch,
+                                  var_to_permut="Group_Sex",
+                                  n_perm=1000)
+res_to_compas
+saveRDS(res_to_compas,"analyses/2020-06-30_pathway_gwas_analysis.rds")
 #b) deter sex spé sig genes   : 
 #=> 100 permutation of all samples CTRL / LGA => LIMMA => pval and FC => gene score => genescore cutoff of x (for each save nb of genes > x)
 #=> setdiff(genesF, genesM) and inversely => save genes spéF and M => all genes obs dans <5 permut => sex spé sig genes

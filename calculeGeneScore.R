@@ -65,9 +65,12 @@ CalcCpGWeights<-function(cpgs_genes){
   return(cpgs_genes)
 }
 
-CalcCpGScore<-function(res,cpg_genes=NULL){
+CalcCpGScore<-function(res,cpg_genes=NULL,verbose=TRUE){
   if(!is.null(cpg_genes)){
-    print("merging limma res and cpgs annotations...")
+    if(verbose){
+      print("merging limma res and cpgs annotations...")
+    }
+    
     if(all(c("FC","pval")%in%colnames(res))){
       res$logFC<-res$FC
       res$P.Value<-res$pval
@@ -97,23 +100,34 @@ CalcCpGScore<-function(res,cpg_genes=NULL){
   
 }
 
-CalcGeneScore<-function(res,cpg.regs_ref=NULL,pvalSig=10^-3,sumToGene=FALSE,test=FALSE){
+CalcGeneScore<-function(res,cpg.regs_ref=NULL,pvalSig=10^-3,sumToGene=FALSE,test=FALSE,verbose=TRUE){
   
   if(!"CpGScore"%in%colnames(res)){
-    print("calculating CpGScore...")
-    res<-CalcCpGScore(res,cpg.regs_ref)
+    if(verbose){
+      print("calculating CpGScore...")
+    }
+    
+    res<-CalcCpGScore(res,cpg.regs_ref,verbose = verbose)
   }
   
-  print("calculating GeneScore...")
-  print("1) add column number of CpG by Gene")
+  if(verbose){
+    print("calculating GeneScore...")
+    print("1) add column number of CpG by Gene")
+  }
+  
+  
   res[,nCpG.Gene:=.N,by=.(gene)]
   
   res[,nCpGSig.Gene:=sum(pval<pvalSig),by=.(gene)]
+  if(verbose){
+    print("2) the nCpGWeight : (1/sum(1/(abs(CpGScore)+1)))^(1/4)")
+  }
   
-  print("2) the nCpGWeight : (1/sum(1/(abs(CpGScore)+1)))^(1/4)")
   res[,nCpGWeight:=(1/sum(1/(abs(CpGScore)+1)))^0.2,by="gene"]
   
-  print("3) the GeneScore : sum(CpGScore)*nCpGWeight")
+  if(verbose){
+    print("3) the GeneScore : sum(CpGScore)*nCpGWeight")
+  }
   res[,GeneScore:=sum(CpGScore)*nCpGWeight,by="gene"]
   
   if(test==TRUE){
