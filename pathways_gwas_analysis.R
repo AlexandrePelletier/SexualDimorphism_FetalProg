@@ -64,196 +64,20 @@ pathview(gene.data  = geneList.Entrez,
          kegg.dir ="analyses/withoutIUGR/pathwaysMap")
 
 
-#2020-06-22 ; trouver sex spe signif pathways /genes 
+#2020-06-30 ; trouver sex spe signif pathways /genes 
 #I) by path enrichment of sex spé sig epigen affected genes 
 #a) first, deter genescore cutoff x / deter EpigenAffGene (EAG) : 
-# 1000 permuts of all samples CTRL / LGA => LIMMA => pval and FC => df GeneScore => save pct genescore permuts >= geneScore obs
-#make a permutFunction
-batch<-fread("../../ref/batch_CD34_library_date_090420.csv",dec = ",")
-
-batch[,sample:=V1][,Group_Sex:=paste(Group_name,Gender,sep="_")]
-
-cols<-names(batch)[c(ncol(batch),3:(ncol(batch)-1))]
-batch<-batch[,..cols]
-batch<-batch[,-c("newComplexityScore","newComplexityScore2","newComplexityScore3","newComplexityScore4","SeqDepthHi")]
-fwrite(batch,"../../ref/cleaned_batch_CD34_library_date_220620.csv",sep = ";")
-
-batch<-batch[Group_name%in%c("C","L")]
-batch
-
-varNumToModel<-c("Mat.Age")
-varFacToModel<-c("Group_Sex",'batch',"latino","Group_Complexity_Fac")
-varToModel<-c(varNumToModel,varFacToModel)
-
-sample_F<-batch$sample[!(apply(is.na(batch[,..varToModel]),1,any))]
-length(sample_F) #70
-batch<-batch[sample%in%sample_F,c("sample",..varToModel),]
-batch[,Mat.Age:=as.numeric(Mat.Age)]
-
-batch[,Group_Sex:=as.factor(Group_Sex)]
-batch[,batch:=as.factor(batch)]
-batch[,latino:=as.factor(latino)]
-batch[,Group_Complexity_Fac:=as.factor(Group_Complexity_Fac)]
-str(batch)
-batch
-
-methyl_data<-fread("../../ref/2020-05-25_methyl_data_before_limma.csv")
-
-methyl_df<-data.frame(methyl_data)
-rownames(methyl_df)<-methyl_df$locisID
-head(methyl_df)
-formule<- ~0 + Group_Sex  + batch  + latino + Mat.Age + Group_Complexity_Fac
-compas<-c("Group_SexC_M-Group_SexL_M","Group_SexC_F-Group_SexL_F")
-library(stringr)
-abbrev_compas<-str_remove_all(compas,"Group_Sex")
-cpg.regs_ref<-fread("../../ref/2020-06-03_All_CpG-Gene_links.csv")
+source("scripts/2020-06-25_deterSexSpeMethGenes.R")
+resM<-read.csv2("analyses/withoutIUGR/2020-04-16_res_locis_in_MC.ML_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",row.names = 1)
+resM$locisID<-rownames(resM)
+head(resM)
+resF<-read.csv2("analyses/withoutIUGR/2020-04-16_res_locis_in_FC.FL_pval_1_locisF.msp1.NA.fullMethyl.confScore.nbMethylNonZeros_model_14_.csv",row.names = 1)
+resF$locisID<-rownames(resF)
+res_list<-list("C_M-L_M"=resM,"C_F-L_F"=resF)
+names(res_list)
+res_list<-deterEpigenAffGene(res_list,var_to_permut="Group_Sex",permut=1000,pvalThr=0.01,)
 
 
-
-CalcGeneScore<-function(res,cpg.regs_ref,sumToGene=F){
-  res<-data.table(locisID=as.numeric(rownames(res)),
-                  meth.change=res$logFC,
-                  pval=res$P.Value)[order(locisID)]
-  
-  res<-merge(res,cpg.regs_ref,by="locisID")
-  res[,CpGScore:=((-log10(pval)/4)*meth.change)*RegWeight*LinksWeight]
-  
-  res[,nCpGWeight:=(1/sum(1/(abs(CpGScore)+1)))^(1/3),by="gene"]
-  
-  res[,GeneScore:=sum(CpGScore)*nCpGWeight,by="gene"]
-  
-  #bonus annot
-  res[,nCpG.Gene:=.N,by=.(gene)]
-  res[,nCpGSig.Gene:=sum(pval<10^-3),by=.(gene)]
-  
-  if(sumToGene){
-    return(unique(res[order(-GeneScore,pval)],by="gene"))
-  }else{
-    return(res[order(-GeneScore,pval)])
-  }
-}
-
-#test CalcGeneScore
-design<-model.matrix(formule,data = batch)
-
-fit <- lmFit(methyl_df[,batch$sample], design)  
-
-cont.matrix <- makeContrasts(contrasts = compas,
-                             levels=design)
-colnames(cont.matrix)<-abbrev_compas
-
-fit2  <- contrasts.fit(fit, cont.matrix)
-fit2  <- eBayes(fit2) 
-
-res<-topTable(fit2,coef=abbrev_compas[2],n =Inf)
-res<-CalcGeneScore(res,cpg.regs_ref,sumToGene=T)
-
-res
-plot(res$nCpG.Gene,res$nCpGWeight)
-summary(res$nCpGWeight)
-plot(res$nCpG.Gene,res$GeneScore)
-plot(res[nCpG.Gene<20]$nCpG.Gene,res[nCpG.Gene<20]$GeneScore)
-res[nCpGWeight>2]
-res[gene=="NUP85"&pval<0.01]
-res[locisID==1824925]
-
-MethAnalysisExec<-function(methyl_df,batch_F,formule,compas,abbrev_compas,cpg.regs_ref,analysis="obs"){
-  library(limma)
-  design<-model.matrix(formule,data = batch_F)
-  
-  fit <- lmFit(methyl_df[,batch_F$sample], design)  
-  
-  cont.matrix <- makeContrasts(contrasts = compas,
-                               levels=design)
-  colnames(cont.matrix)<-abbrev_compas
-  
-  fit2  <- contrasts.fit(fit, cont.matrix)
-  fit2  <- eBayes(fit2) 
-  res_list<-lapply(abbrev_compas,function(compa){
-    res<-topTable(fit2,coef=compa,n =Inf)
-    res<-CalcGeneScore(res,cpg.regs_ref,sumToGene=T)
-    res<-res[order(gene)][,.(gene,GeneScore)]
-    col<-paste(compa,analysis,sep = ".")
-    return(res[,(col):=as.integer(GeneScore)][,-"GeneScore"])
-  })
-  return(Reduce(merge,res_list))
-  
-}
-
-#run methylAnalysis for obs :
-res<-MethAnalysisExec(methyl_df, batch,formule, compas,abbrev_compas,cpg.regs_ref )
-
-res_all<-res
-res_all
-batch1<-data.table(batch)
-set.seed(123)
-j<-1
-for(i in 1:1000){
-  print(paste(i,"/",1000))
-  
-  batch1[,Group_Sex:=sample(Group_Sex)]
-  
-  res_all<-merge(res_all,MethAnalysisExec(methyl_df, batch1,formule, compas,abbrev_compas,cpg.regs_ref,analysis = i))
-  if(ncol(res)>200){
-    print(paste("save",j))
-    fwrite(res_all,paste0("2020-06-23_temp",j))
-    res_all<-res
-    j<-j+1
-  }
-  
-}
-fwrite(res_all,paste0("2020-06-23_temp",j))
-res_all
-print("save  pct genescore permuts >= geneScore obs")
-
-
-MethAnalysisPermut<-function(batch_F,col_to_permut,n,sample_col="sample",cpg.regs_ref=NULL,formule=NULL,seed=123){
-  set.seed(seed)
-  library(data.table)
-  
-  
-  if(is.null(cpg.regs_ref)){
-    cpg.regs_ref_path<-"../../ref/2020-06-03_All_CpG-Gene_links.csv"
-    print(paste("recup cpg.gene regul annotation in ",cpg.regs_ref_path))
-    cpg.regs_ref<-fread("../../ref/2020-06-03_All_CpG-Gene_links.csv")
-  }
-  
-  if(is.null(formule)){
-    formule<- ~0 + Group_Sex  + batch  + latino + Mat.Age + Group_Complexity_Fac
-    print("limma model selon cette formule :")
-    print(formule)
-  }
-  
-  print("Limma execution of observed batch..")
-  res<-LimmaExec(methyl_data,batch_F,formule)
-  res<-CalcGeneScore(res,cpg.regs_ref)
-  resGenes<-unique(res[,.(gene,GeneScore)][order(gene,pval)],by="gene")
-  resGenes_all<-data.table(resGenes)
-  print(paste("PERMUTATION of",col_to_permut,n,"times..."))
-  
-  
-  batch1<-data.table(batch)
-  for(i in 1:n){
-    print(paste("permutation",i))
-    
-    batch1[,Group_Sex:=sample(Group_Sex)]
-    
-    print(" ==> limma execution")
-    res<-LimmaExec(methyl_data,batch_F,formule)
-    print(" ==> Gene Score calculation")
-    
-    
-  }
-  print("END PERMUTATION")
-  
-  print("save  pct genescore permuts >= geneScore obs")
-  
-  
-  return(batch[,])
-  
-}
-
-#=> gene score cutoff = Accept Gene in EAF if appeared < x%  => genesF and genesM spe
 #b) deter sex spé sig genes   : 
 #=> 100 permutation of all samples CTRL / LGA => LIMMA => pval and FC => gene score => genescore cutoff of x (for each save nb of genes > x)
 #=> setdiff(genesF, genesM) and inversely => save genes spéF and M => all genes obs dans <5 permut => sex spé sig genes

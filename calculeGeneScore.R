@@ -68,7 +68,17 @@ CalcCpGWeights<-function(cpgs_genes){
 CalcCpGScore<-function(res,cpg_genes=NULL){
   if(!is.null(cpg_genes)){
     print("merging limma res and cpgs annotations...")
-    res<-data.table(locisID=as.numeric(rownames(res)),
+    if(all(c("FC","pval")%in%colnames(res))){
+      res$logFC<-res$FC
+      res$P.Value<-res$pval
+    }else if("meth.change"%in%colnames(res)){
+      res$logFC<-res$meth.change
+      
+    }
+    if(!("locisID"%in%colnames(res))){
+      res$locisID<-rownames(res)
+    }
+    res<-data.table(locisID=as.numeric(res$locisID),
                     meth.change=res$logFC,
                     pval=res$P.Value)[order(locisID)]
     

@@ -495,5 +495,3 @@ CalcGeneScore<-function(res,cpg.regs_ref=NULL,pvalSig=10^-3,sumToGene=FALSE,test
     return(res[order(-GeneScore,pval)])
   }
 }
-
-#save in
