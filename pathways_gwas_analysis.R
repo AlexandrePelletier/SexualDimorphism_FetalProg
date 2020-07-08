@@ -54,6 +54,7 @@ genes.df<-bitr(names(geneList),
                fromType = 'SYMBOL',
                toType = 'ENTREZID',
                OrgDb = org.Hs.eg.db)
+
 genes.df$GeneScore<-geneList[genes.df$SYMBOL]
 geneList.Entrez<-genes.df$GeneScore
 names(geneList.Entrez)<-genes.df$ENTREZID
@@ -82,6 +83,15 @@ methyl_df<-data.frame(methyl_df)
 rownames(methyl_df)<-methyl_df$locisID
 
 cpg.regs_ref<-fread("../../ref/2020-06-29_All_CpG-Gene_links.csv")
+
+
+#1) calc genescore and save
+resF<-CalcGeneScore(resF,cpg.regs_ref)
+fwrite(resF,"analyses/withoutIUGR/2020-07-03_resCF_LF.csv",sep=";")
+
+resM<-CalcGeneScore(resM,cpg.regs_ref)
+fwrite(resM,"analyses/withoutIUGR/2020-07-03_resCF_LF.csv",sep=";")
+
 
 res_to_compas<-deterEpigenAffGene(res_to_compas,
                                   methyl_df,
