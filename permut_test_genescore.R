@@ -6,7 +6,7 @@
 #=> gene score cutoff = Accept Gene in EAF if appeared < x%  => genesF and genesM spe
 #make a permutFunction
 
-deterEpigenAffGene<-function(res_to_compas,methyl_df,cpg.regs_ref,batch,var_to_permut,n_perm=1000,seed=1234,
+permutGeneScore<-function(res_to_permut,methyl_df,cpg.regs_ref,batch,var_to_permut,n_perm=1000,seed=1234,
                              varNumToModel=c("Mat.Age"),varFacToModel=c("Group_Sex",'batch',"latino","Group_Complexity_Fac"),
                              formule= ~0 + Group_Sex  + batch  + latino + Mat.Age + Group_Complexity_Fac,
                              verbose=FALSE
@@ -15,6 +15,9 @@ deterEpigenAffGene<-function(res_to_compas,methyl_df,cpg.regs_ref,batch,var_to_p
   library(stringr)
   source("scripts/calculeGeneScore.R")
   
+  if(!is.list(res_to_permut)){
+    print("need results in a  list named by comparison")
+  }
   
   varToModel<-c(varNumToModel,varFacToModel)
   sample_F<-batch$sample[!(apply(is.na(batch[,..varToModel]),1,any))]
@@ -26,17 +29,13 @@ deterEpigenAffGene<-function(res_to_compas,methyl_df,cpg.regs_ref,batch,var_to_p
   batch[,(varNumToModel):=lapply(.SD,as.numeric),.SDcols=varNumToModel]
   batch[,(varFacToModel):=lapply(.SD,as.factor),.SDcols=varFacToModel]
   
-  compas_df<-data.frame(compa=unlist(lapply(strsplit(names(res_to_compas),"-"),function(x)paste(paste0("Group_Sex",x),collapse = "-"))),
-                        abbrev_compa=names(res_to_compas))
+  compas_df<-data.frame(compa=unlist(lapply(strsplit(names(res_to_permut),"-"),function(x)paste(paste0(var_to_permut,x),collapse = "-"))),
+                        abbrev_compa=names(res_to_permut))
   print(compas_df)
   
-  res_to_compas<-lapply(res_to_compas,
-                        CalcGeneScore,cpg.regs_ref,sumToGene=T)
-  if(is.list(res_to_compas)){
-    res_all<-data.table(gene=sort(res_to_compas[[1]]$gene))
-  }else{
-    res_all<-data.table(gene=sort(res_to_compas$gene))
-  }
+
+  res_all<-data.table(gene=sort(unique(res_to_permut[[1]]$gene)))
+ 
   
   batch_sim<-copy(batch)
   print(paste("set seed to",seed))
@@ -55,25 +54,31 @@ deterEpigenAffGene<-function(res_to_compas,methyl_df,cpg.regs_ref,batch,var_to_p
                               sumToGene = T,
                               verbose=verbose)
     
-    res_list<-lapply(names(res_list),function(compa){
-      res<-res_list[[compa]]
-      res<-res[order(gene)][,.(gene,GeneScore)]
-      col<-paste0(str_sub(compa,str_length(compa)),i)
-      return(res[,(col):=as.integer(GeneScore)][,-"GeneScore"])
-    })
-    res_list<-Reduce(merge,res_list)
-    res_all<-merge(res_all,res_list,by="gene")
+  
+      res_list<-lapply(names(res_list),function(compa){
+        res<-res_list[[compa]]
+        res<-res[order(gene)][,.(gene,GeneScore)]
+        col<-paste0(str_sub(compa,str_length(compa)),i)
+        return(res[,(col):=as.integer(GeneScore)][,-"GeneScore"])
+      })
+        
+      res_list<-Reduce(merge,res_list)
+      res_all<-merge(res_all,res_list,by="gene")
+      
   }
   
-  res_to_compas<-lapply(1:length(res_to_compas),function(i){
-    res<-res_to_compas[[i]]
-    compa<-names(res_to_compas)[i]
-    cols<-paste0(str_sub(compa,str_length(compa)),1:n_perm)
-    col<-paste0("pval",n_perm,"perm")
-    return(res[order(gene)][,(col):=rowSums(..res_all[order(gene)][,.SD,.SD=cols]>GeneScore)/(..n_perm)])
+  res_to_permut<-lapply(1:length(res_to_permut),function(i){
+
+      res<-unique(res_to_permut[[i]],by="gene")
+      compa<-names(res_to_permut)[i]
+      cols<-paste0(str_sub(compa,str_length(compa)),1:n_perm)
+      col<-paste0("pval",n_perm,"perm")
+      res<-res[order(gene)][,(col):=rowSums(..res_all[order(gene)][,.SD,.SD=cols]>GeneScore)/(..n_perm)]
+      cols<-c("gene",col)
+      return(merge(res_to_permut[[i]],res[,.SD,.SD=cols],by="gene"))
   })
-  names(res_to_compas)<-compas_df$abbrev_compa
-  return(res_to_compas)
+  names(res_to_permut)<-compas_df$abbrev_compa
+  return(res_to_permut)
 }
 
 RunMethAnalysis<-function(methyl_df,batch_F,formule,compas_df,cpg.regs_ref,sumToGene=FALSE,verbose=TRUE){

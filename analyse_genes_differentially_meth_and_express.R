@@ -63,6 +63,17 @@ ggplot(res_meth1[padj<0.2],aes(log2FoldChange,GeneScore))+
                    point.padding = 0.5,
                    segment.color = 'grey50')+theme_classic()
 
+#un gene a un methchange neg mais genescore pos : 
+res_meth1[meth.change<0&padj<0.2&GeneScore>0] #KLF4
+
+#KLF4
+resF<-fread("analyses/withoutIUGR/2020-07-03_resCF_LF.csv")
+resF[gene=="KLF4"&pval<0.01]
+
+resM<-fread("analyses/withoutIUGR/2020-07-03_resCM_LM.csv")
+resM[gene=="KLF4"&tss_dist>0&tss_dist<1000][order(tss_dist)] #hypermeth sex spé
+
+
 #3) pathway analysis on regul DEG epigen regulated
 
 lep_genes<-c("PLA2G4A",	"MAPK1",	"CRP",	"EDN1",	"EGR1",	"FOS",	 "GRB2",	"HIF1A",	"HRAS",	"JAK2",	"LEP",	"LEPR",
@@ -71,6 +82,10 @@ lep_genes<-c("PLA2G4A",	"MAPK1",	"CRP",	"EDN1",	"EGR1",	"FOS",	 "GRB2",	"HIF1A",
 
 res_meth1[,lep_gene:=gene%in%lep_genes]
 res_meth1[lep_gene==TRUE,]
+
+res_meth1[lep_gene==TRUE&pvalue<0.05]
+
+
 ggplot(res_meth1[!is.na(DEG)],aes(x=lep_gene,y=GeneScore))+
   geom_boxplot()+
   geom_point(aes(col=ifelse(lep_gene==TRUE,"red",element_blank())))+
