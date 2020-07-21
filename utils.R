@@ -420,3 +420,65 @@ extr<-function(x){
 }
 
 
+plotMeth<-function(cpgs,
+                   factor="Group_Sex",
+                   levels=c("C_F","C_M","L_F","L_M"),
+                   methyl_df=NULL,
+                   batch=NULL,
+                   plot="boxplot",
+                   color=NULL){
+  library(ggplot2)
+  if(is.null(methyl_df)){
+    methyl_df<-fread("../../ref/2020-05-25_methyl_data_before_limma.csv")
+  }
+  if(is.null(batch)){
+    batch<-fread("../../ref/cleaned_batch_CD34_library_date_220620.csv")
+    
+    keep<-batch[[factor]]%in%levels
+    batch<-batch[as.vector(keep)]
+  }
+
+  
+  if(is.numeric(cpgs)){
+    if(length(cpgs)>1){
+      library(patchwork)
+      ps<-list()
+      for(i in 1:length(cpgs)){
+        cpgID<-cpgs[i]
+        cpg_data<-t(methyl_df[locisID==cpgID,.SD,.SD=-"locisID"])
+        
+        cpg_data<-cpg_data[rownames(cpg_data)%in%batch$sample,]
+        cpg_data_batch<-data.table(sample=names(cpg_data),unmeth=cpg_data,batch[match(names(cpg_data),sample),..factor])
+        
+        if(plot=="boxplot"){
+          ps[[i]]<-ggplot(cpg_data_batch)+geom_boxplot(aes_string(factor,"unmeth"))+ggtitle(cpgID)
+        }else if(plot=="jitter"){
+          ps[[i]]<-ggplot(cpg_data_batch)+geom_jitter(aes_string(factor,"unmeth"),width = 0.25)+ggtitle(cpgID)
+        }
+      }
+      return(wrap_plots(ps))
+    }else{
+      cpgID<-cpgs
+      cpg_data<-t(methyl_df[locisID==cpgID,.SD,.SD=-"locisID"])
+      
+      cpg_data<-cpg_data[rownames(cpg_data)%in%batch$sample,]
+      cpg_data_batch<-data.table(sample=names(cpg_data),unmeth=cpg_data,batch[match(names(cpg_data),sample),..factor])
+      
+        if(plot=="boxplot"){
+          return(ggplot(cpg_data_batch)+geom_boxplot(aes_string(factor,"unmeth"))+ggtitle(cpgID))
+        }else if(plot=="jitter"){
+          return(ggplot(cpg_data_batch)+geom_jitter(aes_string(factor,"unmeth"),width = 0.25)+ggtitle(cpgID))
+        }
+        
+      }
+    }
+    
+    
+      
+    
+    
+    
+  }else{
+    print("enter numeric value")
+  }
+}
