@@ -426,7 +426,8 @@ plotMeth<-function(cpgs,
                    methyl_df=NULL,
                    batch=NULL,
                    plot="boxplot",
-                   color=NULL){
+                   group="locisID",
+                   wrap=FALSE){
   library(ggplot2)
   if(is.null(methyl_df)){
     methyl_df<-fread("../../ref/2020-05-25_methyl_data_before_limma.csv")
@@ -447,26 +448,30 @@ plotMeth<-function(cpgs,
         
         cpgs_data2<-data.table(expand.grid(sample=samples,
                                locisID=cpgs_data$locisID))
-        for(sampleID in samples){
-          temp_cpgs<-cpgs_data[,unmeth:=.SD,.SDcols=sampleID][,sample:=sampleID][,.(locisID,sample,unmeth)]
-          if("unmeth"%in%colnames(cpgs_data2)){
-            cpgs_data2<-merge(cpgs_data2,temp_cpgs,all=T,by=c("locisID","sample","unmeth"))
-          }else{
-            cpgs_data2<-merge(cpgs_data2,temp_cpgs,all=T,by=c("locisID","sample"))
-          }
+        cpgs_score<-Reduce(rbind,lapply(samples, function(sampleID){
           
-        }
-        cpgs_data2<-cpgs_data2[!is.na(unmeth)]
-        cpgs_data_batch<-merge(cpgs_data2,batch[match(cpgs_data2$sample,sample)][!is.na(sample)],by="sample")
+          return(cpgs_data[,unmeth:=.SD,.SDcols=sampleID][,sample:=sampleID][,.(locisID,sample,unmeth)])
+        }))
         
+        cpgs_data2<-merge(cpgs_data2,cpgs_score,by=c("locisID","sample"))
+        
+        cpgs_data2<-cpgs_data2[!is.na(unmeth)]
+        cpgs_data_batch<-merge(cpgs_data2,batch[match(cpgs_data2$sample,sample)][!is.na(sample)],by="sample",allow.cartesian=TRUE)
+        cpgs_data_batch[,locisID:=as.factor(locisID)]
         
         if(plot=="boxplot"){
-          
-          return(ggplot(cpgs_data_batch)+geom_boxplot(aes_string(factor,"unmeth",color=color))+facet_grid(.~locisID))
+          if(wrap){
+            return(ggplot(cpgs_data_batch)+geom_boxplot(aes_string(group,"unmeth"))+facet_wrap(factor))
+          }
+          return(ggplot(cpgs_data_batch)+geom_boxplot(aes_string(factor,"unmeth",fill=group)))
           
         }else if(plot=="jitter"){
+          if(wrap){
+            return(ggplot(cpgs_data_batch)+geom_jitter(aes_string(group,"unmeth"),width = 0.25)+facet_wrap(factor))
+          }else{
+            return(ggplot(cpgs_data_batch)+geom_jitter(aes_string(factor,"unmeth",color=group),width = 0.25))
+          }
           
-          return(ggplot(cpgs_data_batch)+geom_jitter(aes_string(factor,"unmeth",color=color),width = 0.25)+facet_grid(.~locisID))
           
           
         }
