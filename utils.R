@@ -440,45 +440,39 @@ plotMeth<-function(cpgs,
 
   
   if(is.numeric(cpgs)){
-    if(length(cpgs)>1){
-      library(patchwork)
-      ps<-list()
-      for(i in 1:length(cpgs)){
-        cpgID<-cpgs[i]
-        cpg_data<-t(methyl_df[locisID==cpgID,.SD,.SD=-"locisID"])
+
+        cpgs_data<-methyl_df[locisID%in%cpgs]
+        #need transformer methyl_df en df with sample,locisID,meth,group..
+        samples<-colnames(cpgs_data)[colnames(cpgs_data)!="locisID"]
         
-        cpg_data<-cpg_data[rownames(cpg_data)%in%batch$sample,]
-        cpg_data_batch<-data.table(sample=names(cpg_data),unmeth=cpg_data,batch[match(names(cpg_data),sample),..factor])
+        cpgs_data2<-data.table(expand.grid(sample=samples,
+                               locisID=cpgs_data$locisID))
+        for(sampleID in samples){
+          temp_cpgs<-cpgs_data[,unmeth:=.SD,.SDcols=sampleID][,sample:=sampleID][,.(locisID,sample,unmeth)]
+          if("unmeth"%in%colnames(cpgs_data2)){
+            cpgs_data2<-merge(cpgs_data2,temp_cpgs,all=T,by=c("locisID","sample","unmeth"))
+          }else{
+            cpgs_data2<-merge(cpgs_data2,temp_cpgs,all=T,by=c("locisID","sample"))
+          }
+          
+        }
+        cpgs_data2<-cpgs_data2[!is.na(unmeth)]
+        cpgs_data_batch<-merge(cpgs_data2,batch[match(cpgs_data2$sample,sample)][!is.na(sample)],by="sample")
+        
         
         if(plot=="boxplot"){
-          ps[[i]]<-ggplot(cpg_data_batch)+geom_boxplot(aes_string(factor,"unmeth"))+ggtitle(cpgID)
+          
+          return(ggplot(cpgs_data_batch)+geom_boxplot(aes_string(factor,"unmeth",color=color))+facet_grid(.~locisID))
+          
         }else if(plot=="jitter"){
-          ps[[i]]<-ggplot(cpg_data_batch)+geom_jitter(aes_string(factor,"unmeth"),width = 0.25)+ggtitle(cpgID)
+          
+          return(ggplot(cpgs_data_batch)+geom_jitter(aes_string(factor,"unmeth",color=color),width = 0.25)+facet_grid(.~locisID))
+          
+          
         }
-      }
-      return(wrap_plots(ps))
+      
+    
     }else{
-      cpgID<-cpgs
-      cpg_data<-t(methyl_df[locisID==cpgID,.SD,.SD=-"locisID"])
-      
-      cpg_data<-cpg_data[rownames(cpg_data)%in%batch$sample,]
-      cpg_data_batch<-data.table(sample=names(cpg_data),unmeth=cpg_data,batch[match(names(cpg_data),sample),..factor])
-      
-        if(plot=="boxplot"){
-          return(ggplot(cpg_data_batch)+geom_boxplot(aes_string(factor,"unmeth"))+ggtitle(cpgID))
-        }else if(plot=="jitter"){
-          return(ggplot(cpg_data_batch)+geom_jitter(aes_string(factor,"unmeth"),width = 0.25)+ggtitle(cpgID))
-        }
-        
-      }
-    }
-    
-    
-      
-    
-    
-    
-  }else{
     print("enter numeric value")
   }
 }
