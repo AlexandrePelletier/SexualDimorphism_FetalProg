@@ -113,48 +113,4 @@ ggplot(res_meth1[lep_gene==TRUE],aes(log2FoldChange,GeneScore))+
   geom_point()
 median(res_meth1$GeneScore,na.rm = T)
 
-#DISCOVER PATHWAY / BIOLOGICAL PROCESS AFFECTED IN FEMALE :
-#based on meth F only, what are the pathways/BP/msigdb/gwas ?
-resF<-fread("analyses/withoutIUGR/2020-07-03_resCF_LF.csv")
-resM<-fread("analyses/withoutIUGR/2020-07-03_resCM_LM.csv")
-
-library(patchwork)
-p1<-ggplot(unique(resF,by="gene"))+geom_point(aes(-log10(pval1000perm),GeneScore))+ggtitle("Female")
-p2<-ggplot(unique(resM,by="gene"))+geom_point(aes(-log10(pval1000perm),GeneScore))+ggtitle("Male")
-p1+p2
-plot(density(unique(resF,by="gene")$GeneScore))
-genesF<-unique(resF[GeneScore>100&pval1000perm<0.01]$gene)
-length(genesF)#1700
-genesM<-unique(resM[GeneScore>100&pval1000perm<0.01]$gene)
-length(genesM)#149
-
-library(clusterProfiler)
-library(org.Hs.eg.db)
-resF_KEGG <- enrichKEGG(gene         = bitr(genesF,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
-                       pAdjustMethod = "BH",
-                       pvalueCutoff  = 0.05)
-nrow(data.frame(resF_KEGG)) #55
-dotplot(resF_KEGG,showCategory=55)
-emapplot(resF_KEGG,showCategory=55)
-
-resM_KEGG <- enrichKEGG(gene         = bitr(genesM,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05)
-nrow(data.frame(resM_KEGG)) #16
-dotplot(resF_KEGG,showCategory=16)
-emapplot(resF_KEGG,showCategory=16)
-
-enrichplot::upsetplot(resF_KEGG)
-enrichplot::upsetplot(resM_KEGG)
-
-#then, on all this pathways, how many are female spe ?
-pathKEGG_Fo<-setdiff(data.frame(resF_KEGG)$Description,data.frame(resM_KEGG)$Description)
-pathKEGG_Fo
-pathKEGG_Fo[]
-
-#on this pathway could we see gene expression dysregulation in LGAF ?
-
-#=> pathways pertubed in LGAF, what are the hypothesis for this pertubance, and what are the possible biological consequences?
-
-#how validate this hypothesis ?
 
