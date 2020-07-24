@@ -222,6 +222,264 @@ hippoM_only<-tr(data.frame(resOM2_KEGG)$geneID[4],tradEntrezInSymbol = T)
 resM[gene%in%hippoM_only&CpGScore>30]
 plotMeth(resM[gene=="LLGL2"&CpGScore>20]$locisID)
 
+
+#2020-07-23 : LGAF vs LGAM
+options(stringsAsFactors = F)
+source("scripts/utils/methyl_utils.R")
+cpg.regs_ref<-fread("../../ref/2020-06-29_All_CpG-Gene_links.csv")
+batchF<-prepBatchDf(batch,
+                    varNumToModel = c("Mat.Age"),
+                    varFacToModel=c("Group_Sex",'batch',"latino","Group_Complexity_Fac"))
+
+
+
+res<-RunMethAnalysis(methyl_df = methyl_df,
+                     batch_filtered = batchF,
+                     formule = ~0 + Group_Sex  + batch  + latino + Mat.Age + Group_Complexity_Fac,
+                     compas_df = data.frame(compa=c("Group_SexL_F-Group_SexL_M","Group_SexC_F-Group_SexC_M"),
+                                            abbrev_compa=c("L_F-L_M","C_F-C_M")),
+                     cpg.regs_ref =cpg.regs_ref )
+
+resC<-res$`C_F-C_M`
+resL<-res$`L_F-L_M`
+rm(res)
+
+library(ggplot2)
+library(patchwork)
+
+p1<-ggplot(unique(resC,by="gene"))+geom_point(aes(x=GeneScore,y=-log10(pval)))
+p2<-ggplot(unique(resL,by="gene"))+geom_point(aes(x=GeneScore,y=-log10(pval)))
+p1+p2
+
+#KEGG
+
+# genescore pos = ?
+unique(resL,by="gene")[order(-GeneScore)] #NFIC
+plotMeth(resL[gene=="WASH7P"&abs(CpGScore)>20]$locisID)
+plotMeth(resL[gene=="KANSL1-AS1"&abs(CpGScore)>20]$locisID) #GeneScore pos = hypermeth chez M
+plotMeth(resL[gene=="PLEC"&abs(CpGScore)>20]$locisID) #GeneScore neg = hypermeth chez F
+plotMeth(resL[gene=="GNAS"&abs(CpGScore)>20]$locisID)
+
+plotMeth(resF[gene=="SOCS3"&abs(CpGScore)>20]$locisID)
+
+p1<-ggplot(unique(resL,by="gene"))+geom_point(aes(x=meth.change,y=-log10(pval)))+coord_cartesian(ylim = c(0,7))+ggtitle("LGAF vs LGAM")
+p2<-ggplot(unique(resC,by="gene"))+geom_point(aes(x=meth.change,y=-log10(pval)))+coord_cartesian(ylim = c(0,7))+ggtitle("ctrlF vs ctrlM")
+p1+p2
+# hypermet chez LGA femelle, 
+plot(density(unique(resL,by="gene")$GeneScore))
+abline(v=-60)
+genesLF<-unique(resL[GeneScore<(-60)]$gene)
+length(genesLF)#521
+resLF_KEGG <- enrichKEGG(gene         = bitr(genesLF,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+                        pAdjustMethod = "BH",
+                        pvalueCutoff  = 0.05)
+
+nrow(data.frame(resLF_KEGG)) #32
+dotplot(resLF_KEGG,showCategory=32)
+emapplot(resLF_KEGG,showCategory=32)
+
+# hypermet chez LGA male, 
+plot(density(unique(resL,by="gene")$GeneScore))
+abline(v=60)
+genesLM<-unique(resL[GeneScore>60]$gene)
+length(genesLM)#100
+resLM_KEGG <- enrichKEGG(gene         = bitr(genesLM,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+                        pAdjustMethod = "BH",
+                        pvalueCutoff  = 0.05)
+
+nrow(data.frame(resLM_KEGG)) #3
+dotplot(resLM_KEGG,showCategory=32)
+emapplot(resLM_KEGG,showCategory=32)
+
+#interesting : hippo signal and signalling pathway regulating pluripotency appear hyperMet chez femelle and Male, 
+#1) these pathways are not in ctrl ?
+ggplot(unique(resC,by="gene"))+geom_point(aes(x=meth.change,y=-log10(pval)))
+
+
+plot(density(unique(resC,by="gene")$GeneScore))
+abline(v=60)
+genesCM<-unique(resC[GeneScore>60]$gene)
+length(genesCM)#879
+
+resCM_KEGG <- enrichKEGG(gene         = bitr(genesCM,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+                        pAdjustMethod = "BH",
+                        pvalueCutoff  = 0.05)
+
+nrow(data.frame(resCM_KEGG)) #17
+dotplot(resCM_KEGG,showCategory=32)
+emapplot(resCM_KEGG,showCategory=32)
+
+#2) which gene in these pathway are hypermet chez femelle, chez male ?
+
+pathwayofInterest2<-c("Signaling pathways regulating pluripotency of stem cells",
+                     "Hippo signaling pathway")
+
+#pathview of interesting pathway
+library("pathview")
+
+#for LGA
+geneListL<-unique(resL,by="gene")$GeneScore
+names(geneListL)<-unique(resL,by="gene")$gene
+geneListL<-sort(geneListL,decreasing = T)
+head(geneListL,20)
+genes.df<-bitr(names(geneListL),
+               fromType = 'SYMBOL',
+               toType = 'ENTREZID',
+               OrgDb = org.Hs.eg.db)
+genes.df$GeneScore<-geneListL[genes.df$SYMBOL]
+geneListL.Entrez<-genes.df$GeneScore
+names(geneListL.Entrez)<-genes.df$ENTREZID
+head(geneListL.Entrez)
+
+
+
+#need pathway id
+pathIDofInterest2<-unique(data.table(Reduce(rbind,list(data.frame(resLF_KEGG),data.frame(resCM_KEGG))))[Description%in%pathwayofInterest2]$ID)
+
+pathL<-lapply(pathIDofInterest2, function(id)return(pathview(gene.data  = geneListL.Entrez,
+                                                            pathway.id = id, 
+                                                            species    = "hsa",
+                                                            limit      = list(gene=max(abs(geneListL)), cpd=1))))
+
+plotMeth(resL[gene=="FGFR1"&abs(CpGScore)>20]$locisID)
+plotMeth(resL[gene=="IGF1R"&abs(CpGScore)>20]$locisID)
+plotMeth(resL[gene=="SMAD3"&abs(CpGScore)>20]$locisID)
+plotMeth(resL[gene=="SMAD1"&abs(CpGScore)>20]$locisID)
+#make genelist
+#for ctrl
+geneListC<-unique(resC,by="gene")$GeneScore
+names(geneListC)<-unique(resC,by="gene")$gene
+geneListC<-sort(geneListC,decreasing = T)
+head(geneListC,20)
+genes.df<-bitr(names(geneListC),
+               fromType = 'SYMBOL',
+               toType = 'ENTREZID',
+               OrgDb = org.Hs.eg.db)
+genes.df$GeneScore<-geneListC[genes.df$SYMBOL]
+geneListC.Entrez<-genes.df$GeneScore
+names(geneListC.Entrez)<-genes.df$ENTREZID
+head(geneListC.Entrez)
+pathC<-lapply(pathIDofInterest2, function(id)return(pathview(gene.data  = geneListC.Entrez,
+                                                            pathway.id = id, 
+                                                            species    = "hsa",
+                                                            limit      = list(gene=max(abs(geneListL)), cpd=1))))
+
+
+#Validate longevity pathways /nutrient sensing pathways upregulate in LGAF comapred to ctrlF: 
+
+
+#1) create/find a gene list of genes involved nutrient sensing pathway :
+#a quoi ressemble une custom ?
+custom_exampl<-read.gmt("../../ref/msigdb/c2.cp.kegg.v7.1.symbols.gmt") 
+head(custom_exampl)
+custom_exampl[str_detect(custom_exampl$term,"LONGEVITY")] #no longevity in this db
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+BiocManager::install("KEGGREST")
+getGenesKEGGPathw<-function(pathID){
+  library(KEGGREST)
+  g<-keggGet(pathID)[[1]]$GENE
+  g<-g[1:length(g)%%2==0]
+  return(as.vector(sapply(g,function(x)strsplit(x,";")[[1]][1])))
+}
+
+longevity<-getGenesKEGGPathw("hsa04211")
+
+resA<-merge(resF[,compa:="ctrlFvslgaF"],resC[,compa:="ctrlFvsctrlM"],all=T)
+
+ggplot(resA[,longevityPathway:=gene%in%longevity])+geom_boxplot(aes(x=compa,y=GeneScore,fill=longevityPathway))
+
+
+length(longevity)
+
+insulin<-getGenesKEGGPathw("hsa04910")
+
+diabetesII<-getGenesKEGGPathw("hsa04930")
+
+cushing<-getGenesKEGGPathw("hsa04934")
+  
+insulinR<-getGenesKEGGPathw("hsa04931")
+
+nutrientSens<-fread("../List_geneofinterest_nutrient_070720.csv",header = F)$V1
+ggplot(resA[,nutrient_related:=gene%in%nutrientSens])+geom_boxplot(aes(x=compa,y=GeneScore,fill=nutrient_related))
+
+
+
+
+#but lack ctrlF vs LGAM
+resCFLM<-RunMethAnalysis(methyl_df = methyl_df,
+                     batch_filtered = batchF,
+                     formule = ~0 + Group_Sex  + batch  + latino + Mat.Age + Group_Complexity_Fac,
+                     compas_df = data.frame(compa="Group_SexC_F-Group_SexL_M",
+                                            abbrev_compa="C_F-L_M"),
+                     cpg.regs_ref =cpg.regs_ref )
+
+resA<-merge(resA,resCFLM[,compa:="ctrlFvslgaM"],all=T)
+resA[,longevityPathway:=gene%in%longevity]
+resA[,nutrient_related:=gene%in%nutrientSens]
+
+ggplot(resA)+geom_boxplot(aes(x=compa,y=GeneScore,fill=longevityPathway))
+
+ggplot(resA)+geom_boxplot(aes(x=compa,y=GeneScore,fill=nutrient_related))
+
+ggplot(resA[gene%in%insulin])+geom_boxplot(aes(x=compa,y=GeneScore))
+
+ggplot(resA[gene%in%diabetesII])+geom_boxplot(aes(x=compa,y=GeneScore))
+
+ggplot(resA[gene%in%cushing])+geom_boxplot(aes(x=compa,y=GeneScore))
+ggplot(resA[gene%in%insulinR])+geom_boxplot(aes(x=compa,y=GeneScore))
+
+
+#dtGeneScore : is there gene specifically meth in LGAF ?
+resG<-unique(resA,by=c('compa','gene'))[,dtGS_lgaF:=GeneScore[compa=="ctrlFvslgaF"]-GeneScore[compa=="ctrlFvslgaM"],by="gene"]
+resG
+plot(density(resG$dtGS_lgaF))
+resG[dtGS_lgaF>100]$gene
+
+
+#pathway spé femelle :
+rk_dtgsF<-enrichKEGG(gene         = bitr(resG[dtGS_lgaF>100]$gene,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+           pAdjustMethod = "BH",
+           pvalueCutoff  = 0.05)
+
+nrow(data.frame(rk_dtgsF)) #1
+dotplot(rk_dtgsF,showCategory=32)
+emapplot(rk_dtgsF,showCategory=32)
+library(pathview)
+
+
+path<-pathview(gene.data  = geneListF.Entrez,
+                             pathway.id ="hsa04928" , 
+                             species    = "hsa",
+                             limit      = list(gene=max(abs(geneListF)), cpd=1))
+path<-pathview(gene.data  = geneListM.Entrez,
+               pathway.id ="hsa04928" , 
+               species    = "hsa",
+               limit      = list(gene=max(abs(geneListF)), cpd=1))
+
+ggplot(resA[gene%in%getGenesKEGGPathw("hsa04060")])+geom_boxplot(aes(x=compa,y=GeneScore))
+
+ggplot(resA[gene%in%tr("1385/2778/9935/4929/860/6256",tradEntrezInSymbol = T)])+geom_boxplot(aes(x=compa,y=GeneScore))
+tr("1385/2778/9935/4929/860/6256",tradEntrezInSymbol = T)
+
+#STOP HRE
+#pathway spe male :
+
+rk_dtgsM<-enrichKEGG(gene         = bitr(resG[dtGS_lgaF>-100]$gene,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+                     pAdjustMethod = "BH",
+                     pvalueCutoff  = 0.05)
+nrow(data.frame(rk_dtgsM)) #1
+dotplot(rk_dtgsM,showCategory=32)
+emapplot(rk_dtgsM,showCategory=32)
+
+
+#TO DO +++ : is there change really significative ? permut pour enrichKEGG, ttest pour ggplot 
+
+#GSEA 
+
+
 #on this pathway could we see gene expression dysregulation in LGAF ?
 
 #=> pathways pertubed in LGAF, what are the hypothesis for this pertubance, and what are the possible biological consequences?
