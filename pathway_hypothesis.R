@@ -1,34 +1,136 @@
 
 #DISCOVER PATHWAY / BIOLOGICAL PROCESS AFFECTED IN FEMALE :
 #based on meth F only, what are the pathways/BP/msigdb/gwas ?
-resF<-fread("analyses/withoutIUGR/2020-07-03_resCF_LF.csv")
-resM<-fread("analyses/withoutIUGR/2020-07-03_resCM_LM.csv")
 
 library(clusterProfiler)
 library(org.Hs.eg.db)
 library(data.table)
+library(ggplot2)
 
-#Female : 
-#genes epigenetically impacted in LGA = queue de distrib GeneScore et pval1000perm<0.01
+
+resF<-fread("analyses/withoutIUGR/2020-07-03_resCF_LF.csv")
+resM<-fread("analyses/withoutIUGR/2020-07-03_resCM_LM.csv")
+
+resF[,compa:="ctrlF_vs_lgaF"]
+resM[,compa:="ctrlM_vs_lgaM"]
+resA<-rbind(resF,resM)
+resA[,sex:=ifelse(compa=="ctrlF_vs_lgaF","female","male")]
+# Methylome change in LGA (compared to Control) in female and in male
+
+p<-ggplot(unique(resA,by=c("locisID","compa")))+
+  geom_point(aes(x=meth.change,y=-log10(pval),col=abs(meth.change)>20&pval<10^-3))+
+  facet_wrap("compa")
+
+p + scale_color_manual(values = c("grey2","red")) + theme_minimal() +theme(legend.position = "none")
+
+unique(resF,by="locisID")[meth.change>20&pval<10^-3]
+unique(resM,by="locisID")[meth.change>20&pval<10^-3]
+
+# Pathway enriched in the closest Genes of these CpGs :
+genesF0<-resF[in_eQTR==F&abs(meth.change)>20&pval<10^-3]$gene
+genesM0<-resM[in_eQTR==F&abs(meth.change)>20&pval<10^-3]$gene
+
+length(genesF0) #2500
+length(genesM0) #603
+
+
+candidat_genes.list<-list(female=genesF0,male=genesM0)
+
+resFM0_KEGG <- compareCluster(gene         = lapply(candidat_genes.list,function(genes)bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID),
+                              fun = "enrichKEGG",
+                              organism="hsa",
+                              pvalueCutoff=0.05)
+
+nrow(data.frame(resFM0_KEGG)) #66
+dotplot(resFM0_KEGG,showCategory=15)
+
+emapplot(resFM0_KEGG,pie="count",showCategory = 15)
+
+source("scripts/utils/methyl_utils.R")
+tr(data.frame(resFM0_KEGG)[7,"geneID"],tradEntrezInSymbol = T)
+
+#Gene Score :
 plot(density(unique(resF,by="gene")$GeneScore))
-abline(v=115)
-genesF<-unique(resF[GeneScore>115&pval1000perm<0.01]$gene)
-length(genesF)#1117
+abline(v=90)
+
+
+p<-ggplot(unique(resA[order(pval)],by=c("gene","sex")),aes(x = GeneScore,y=-log10(pval)))+
+  geom_point(aes(col=pval1000perm<=0.005&GeneScore>90))+facet_wrap("sex")
+
+p + scale_color_manual(values = c("grey2","red")) + theme_minimal()
+unique(resF,by="gene")[pval1000perm<=0.005&GeneScore>90]
+unique(resM,by="gene")[pval1000perm<=0.005&GeneScore>90]
+
+#other plot :
+p<-ggplot(unique(resA,by=c("gene","sex")),aes(y=GeneScore,x = sex))+
+  geom_jitter(aes(col=pval1000perm<=0.005,alpha=pval1000perm<=0.005))+
+  geom_boxplot(aes(fill=sex),outlier.shape=NA)
+
+p<-p+ geom_label_repel(aes(label = ifelse(GeneScore>275,gene,"")),
+                       box.padding   = 0.35, 
+                       point.padding = 0.5,
+                       segment.color = 'grey50')
+p+scale_color_manual(values = c("grey","red"))+scale_alpha_manual(values=c(0.3,1))+theme_minimal()
 
 
 
+unique(resA[order(pval)],by="gene")[GeneScore>275]
+resA[gene=="SLC35E2B"&sex=="female"&CpGScore>20]
+resA[gene=="SAMD11"&sex=="female"&CpGScore>20]
 
-#try with metascape : 
-fwrite(resF[GeneScore>115&pval1000perm<0.01,.(gene,GeneScore)],"analyses/withoutIUGR/genesLGAF_GeneScore115_pvalPerm0.01.csv",sep = ",")
+#genes epigenetically impacted in LGA = queue de distrib GeneScore et pval1000perm<0.01
 
-#KEGG 
+genesF<-unique(resF,by="gene")[GeneScore>90&pval1000perm<0.01]$gene
+length(genesF)#2194
+
+plot(density(unique(resM,by="gene")$GeneScore))
+
+genesM<-unique(resM,by="gene")[GeneScore>90&pval1000perm<0.01]$gene
+length(genesM)#226
+
+genesF2<-unique(resF,by="gene")[order(-GeneScore)][pval1000perm<0.01]$gene[1:500]
+genesM2<-unique(resM,by="gene")[order(-GeneScore)][pval1000perm<0.01]$gene[1:500]
+length(genesM2)
+#KEGG  1
+candidat_genes.list<-list(female_GS60=genesF,male_GS60=genesM)
+
+resFM_KEGG <- compareCluster(gene         = lapply(candidat_genes.list,function(genes)bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID),
+                              fun = "enrichKEGG",
+                              organism="hsa",
+                              pvalueCutoff=0.05)
+
+nrow(data.frame(resFM_KEGG)) #74
+dotplot(resFM_KEGG,showCategory=15)
+
+emapplot(resFM_KEGG,pie="count",showCategory = 60)
+resF_KEGG <- enrichKEGG(gene         = bitr(genesF,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+                        pAdjustMethod = "BH",
+                        pvalueCutoff  = 0.05)
+nrow(data.frame(resF_KEGG)) #33
+dotplot(resF_KEGG,showCategory=15)
+emapplot(resF_KEGG,showCategory=26)
+
+#KEGG  2
+candidat_genes.list<-list(female_GS60=genesF,female_top500=genesF2,male_GS60=genesM,male_top500=genesM2[!is.na(genesM2)])
+
+resFM_KEGG <- compareCluster(gene         = lapply(candidat_genes.list,function(genes)bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID),
+                             fun = "enrichKEGG",
+                             organism="hsa",
+                             pvalueCutoff=0.05)
+
+nrow(data.frame(resFM_KEGG)) #96
+dotplot(resFM_KEGG,showCategory=15)
+
+emapplot(resFM_KEGG,pie="count",showCategory = 30)
+
+
 
 resF_KEGG <- enrichKEGG(gene         = bitr(genesF,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
                         pAdjustMethod = "BH",
                         pvalueCutoff  = 0.05)
-nrow(data.frame(resF_KEGG)) #26
-dotplot(resF_KEGG,showCategory=26)
-emapplot(resF_KEGG,showCategory=26)
+nrow(data.frame(resF_KEGG)) #33
+dotplot(resF_KEGG,showCategory=15)
+emapplot(resF_KEGG,showCategory=15)
 
 pathwayofInterest<-c("Maturity onset diabetes of the young",
                      "Type II diabetes mellitus",
@@ -37,6 +139,13 @@ pathwayofInterest<-c("Maturity onset diabetes of the young",
                      "TGF-beta signaling pathway",
                      "Transcriptional misregulation in cancer",
                      "MAPK signaling pathway")
+
+
+
+#try with metascape : 
+fwrite(resF[GeneScore>115&pval1000perm<0.01,.(gene,GeneScore)],"analyses/withoutIUGR/genesLGAF_GeneScore115_pvalPerm0.01.csv",sep = ",")
+
+
 
 
 #in male, same filter
