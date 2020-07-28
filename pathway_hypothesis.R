@@ -44,7 +44,40 @@ resFM0_KEGG <- compareCluster(gene         = lapply(candidat_genes.list,function
 nrow(data.frame(resFM0_KEGG)) #66
 dotplot(resFM0_KEGG,showCategory=15)
 
-emapplot(resFM0_KEGG,pie="count",showCategory = 15)
+emapplot(resFM0_KEGG,pie="count",showCategory = 30)
+
+#3 group of pathways of interest : nutrient sensing, hormonal disturbance, stemness
+# i want get the noyau of genes for each cluster
+unique(resFM0_KEGG@compareClusterResult$Description)
+nutSens<-c("MAPK signaling pathway","PI3K-Akt signaling pathway",
+           "Ras signaling pathway","Rap1 signaling pathway")
+
+hormonal<-c("Cushing syndrome","Cortisol synthesis and secretion",
+            "Aldosterone synthesis and secretion","Cholinergic synapse",
+            "Growth hormone synthesis, secretion and action","Insulin secretion")
+
+stemness<-c("Signaling pathways regulating pluripotency of stem cells",
+            "Wnt signaling pathway","Hippo signaling pathway",
+            "Longevity regulating pathway","Melanogenesis")
+paths<-c(nutSens,hormonal,stemness)
+pathsIDs<-rownames(resFM0_KEGG@compareClusterResult)[sapply(paths, function(p)which(p==resFM0_KEGG@compareClusterResult$Description)[1])]
+paths_genes<-lapply(resFM0_KEGG@compareClusterResult[pathsIDs,"geneID"],tr,tradEntrezInSymbol = T)
+names(paths_genes)<-paths
+library(UpSetR)
+
+upset(fromList(paths_genes[hormonal]),nsets = 6,order.by = "freq")
+
+#15 genes in common across the 4 pathways + 3 genes in ras mapk, et pi3k to collect :
+genesNutSens<-c(Reduce(intersect,paths_genes[nutSens]))
+genesNutSens<-union(genesNutSens,Reduce(intersect,paths_genes[nutSens[nutSens!="Rap1 signaling pathway"]]))
+
+
+upset(fromList(paths_genes[nutSens]),nsets = 4,order.by = "freq")
+#15 genes in common across the 4 pathways + 3 genes in ras mapk, et pi3k to collect :
+genesNutSens<-c(Reduce(intersect,paths_genes[nutSens]))
+genesNutSens<-union(genesNutSens,Reduce(intersect,paths_genes[nutSens[nutSens!="Rap1 signaling pathway"]]))
+#[A continuer]
+
 
 source("scripts/utils/methyl_utils.R")
 tr(data.frame(resFM0_KEGG)[7,"geneID"],tradEntrezInSymbol = T)
@@ -61,48 +94,59 @@ p + scale_color_manual(values = c("grey2","red")) + theme_minimal()
 unique(resF,by="gene")[pval1000perm<=0.005&GeneScore>90]
 unique(resM,by="gene")[pval1000perm<=0.005&GeneScore>90]
 
-#other plot :
-p<-ggplot(unique(resA,by=c("gene","sex")),aes(y=GeneScore,x = sex))+
-  geom_jitter(aes(col=pval1000perm<=0.005,alpha=pval1000perm<=0.005))+
-  geom_boxplot(aes(fill=sex),outlier.shape=NA)
+#make genelist
+#for female
+geneListF<-unique(resF,by="gene")$GeneScore
+names(geneListF)<-unique(resF,by="gene")$gene
+geneListF<-sort(geneListF,decreasing = T)
+head(geneListF,20)
+genes.df<-bitr(names(geneListF),
+               fromType = 'SYMBOL',
+               toType = 'ENTREZID',
+               OrgDb = org.Hs.eg.db)
+genes.df$GeneScore<-geneListF[genes.df$SYMBOL]
+geneListF.Entrez<-genes.df$GeneScore
+names(geneListF.Entrez)<-genes.df$ENTREZID
+head(geneListF.Entrez)
 
-p<-p+ geom_label_repel(aes(label = ifelse(GeneScore>275,gene,"")),
-                       box.padding   = 0.35, 
-                       point.padding = 0.5,
-                       segment.color = 'grey50')
-p+scale_color_manual(values = c("grey","red"))+scale_alpha_manual(values=c(0.3,1))+theme_minimal()
+#for male
+geneListM<-unique(resM,by="gene")$GeneScore
+names(geneListM)<-unique(resM,by="gene")$gene
+geneListM<-sort(geneListM,decreasing = T)
+head(geneListM,20)
+genes.df<-bitr(names(geneListM),
+               fromType = 'SYMBOL',
+               toType = 'ENTREZID',
+               OrgDb = org.Hs.eg.db)
+genes.df$GeneScore<-geneListM[genes.df$SYMBOL]
+geneListM.Entrez<-genes.df$GeneScore
+names(geneListM.Entrez)<-genes.df$ENTREZID
+head(geneListM.Entrez)
 
-
-
-unique(resA[order(pval)],by="gene")[GeneScore>275]
-resA[gene=="SLC35E2B"&sex=="female"&CpGScore>20]
-resA[gene=="SAMD11"&sex=="female"&CpGScore>20]
 
 #genes epigenetically impacted in LGA = queue de distrib GeneScore et pval1000perm<0.01
 
-genesF<-unique(resF,by="gene")[GeneScore>90&pval1000perm<0.01]$gene
-length(genesF)#2194
+genesF<-unique(resF,by="gene")[GeneScore>90&pval1000perm<=0.005]$gene
+length(genesF)#1968
 
-plot(density(unique(resM,by="gene")$GeneScore))
+genesM<-unique(resM,by="gene")[GeneScore>90&pval1000perm<=0.005]$gene
+length(genesM)#163
 
-genesM<-unique(resM,by="gene")[GeneScore>90&pval1000perm<0.01]$gene
-length(genesM)#226
-
-genesF2<-unique(resF,by="gene")[order(-GeneScore)][pval1000perm<0.01]$gene[1:500]
-genesM2<-unique(resM,by="gene")[order(-GeneScore)][pval1000perm<0.01]$gene[1:500]
+genesF2<-unique(resF,by="gene")[order(-GeneScore)][pval1000perm<=0.005]$gene[1:500]
+genesM2<-unique(resM,by="gene")[order(-GeneScore)][pval1000perm<=0.005]$gene[1:500]
 length(genesM2)
 #KEGG  1
-candidat_genes.list<-list(female_GS60=genesF,male_GS60=genesM)
+candidat_genes.list<-list(female=genesF,male=genesM)
 
 resFM_KEGG <- compareCluster(gene         = lapply(candidat_genes.list,function(genes)bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID),
                               fun = "enrichKEGG",
                               organism="hsa",
-                              pvalueCutoff=0.05)
+                              pvalueCutoff=0.1)
 
-nrow(data.frame(resFM_KEGG)) #74
+nrow(data.frame(resFM_KEGG)) #70
 dotplot(resFM_KEGG,showCategory=15)
 
-emapplot(resFM_KEGG,pie="count",showCategory = 60)
+emapplot(resFM_KEGG,pie="count",showCategory = 30)
 resF_KEGG <- enrichKEGG(gene         = bitr(genesF,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
                         pAdjustMethod = "BH",
                         pvalueCutoff  = 0.05)
@@ -144,85 +188,21 @@ pathwayofInterest<-c("Maturity onset diabetes of the young",
 
 #try with metascape : 
 fwrite(resF[GeneScore>115&pval1000perm<0.01,.(gene,GeneScore)],"analyses/withoutIUGR/genesLGAF_GeneScore115_pvalPerm0.01.csv",sep = ",")
-
-
-
-
-#in male, same filter
-
-genesM<-unique(resM[GeneScore>115&pval1000perm<0.01]$gene)
-length(genesM)#73
-#try with metascape : 
 fwrite(resM[GeneScore>115&pval1000perm<0.01,.(gene,GeneScore)],"analyses/withoutIUGR/genesLGAM_GeneScore115_pvalPerm0.01.csv",sep = ",")
-
-resM_KEGG <- enrichKEGG(gene         = bitr(genesM,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.2)
-nrow(data.frame(resM_KEGG)) #2
-dotplot(resM_KEGG,showCategory=26)
-emapplot(resM_KEGG,showCategory=26)
-
-
-pathwayofInterest<-c(pathwayofInterest,
-                     "HIF-1 signaling pathway")
 #in male, all genes in the queues
-
 plot(density(unique(resM,by="gene")$GeneScore))
 abline(v=50)
 genesM2<-unique(resM[GeneScore>50&pval1000perm<0.01]$gene)
 length(genesM2)#863
-
-#try with metascape : 
 fwrite(resM[GeneScore>50&pval1000perm<0.01,.(gene,GeneScore)],"analyses/withoutIUGR/genesLGAM_GeneScore50_pvalPerm0.01.csv",sep = ",")
 
-
-resM2_KEGG <- enrichKEGG(gene         = bitr(genesM2,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
-                        pAdjustMethod = "BH",
-                        pvalueCutoff  = 0.05)
-nrow(data.frame(resM2_KEGG)) #14
-dotplot(resM2_KEGG,showCategory=26)
-emapplot(resM2_KEGG,showCategory=26)
-
-
+pathwayofInterest<-c(pathwayofInterest,
+                     "HIF-1 signaling pathway")
 pathwayofInterest<-c(pathwayofInterest,
                      "Hepatocellular carcinoma",
                      "Insulin signaling pathway")
-
-#pathview of interesting pathway
 library("pathview")
-
-
-#make genelist
-#for female
-geneListF<-unique(resF,by="gene")$GeneScore
-names(geneListF)<-unique(resF,by="gene")$gene
-geneListF<-sort(geneListF,decreasing = T)
-head(geneListF,20)
-genes.df<-bitr(names(geneListF),
-               fromType = 'SYMBOL',
-               toType = 'ENTREZID',
-               OrgDb = org.Hs.eg.db)
-genes.df$GeneScore<-geneListF[genes.df$SYMBOL]
-geneListF.Entrez<-genes.df$GeneScore
-names(geneListF.Entrez)<-genes.df$ENTREZID
-head(geneListF.Entrez)
-
-
-
-#for male
-geneListM<-unique(resM,by="gene")$GeneScore
-names(geneListM)<-unique(resM,by="gene")$gene
-geneListM<-sort(geneListM,decreasing = T)
-head(geneListM,20)
-genes.df<-bitr(names(geneListM),
-               fromType = 'SYMBOL',
-               toType = 'ENTREZID',
-               OrgDb = org.Hs.eg.db)
-genes.df$GeneScore<-geneListM[genes.df$SYMBOL]
-geneListM.Entrez<-genes.df$GeneScore
-names(geneListM.Entrez)<-genes.df$ENTREZID
-head(geneListM.Entrez)
-
+#pathview of interesting pathway
 #need pathway id
 pathIDofInterest<-data.table(Reduce(rbind,list(data.frame(resF_KEGG),data.frame(resM_KEGG),data.frame(resM2_KEGG))))[Description%in%pathwayofInterest]$ID
 
@@ -237,6 +217,57 @@ pathM<-lapply(pathIDofInterest, function(id)return(pathview(gene.data  = geneLis
                                                             limit      = list(gene=max(abs(geneListF)), cpd=1))))
 
 
+
+#GSEA 
+resF_KEGG.GSEA<- gseKEGG(geneList     = rank(geneListF.Entrez),
+                        organism     = 'hsa', 
+                        minGSSize    = 50,
+                        pvalueCutoff = 0.001,
+                        verbose = FALSE)
+nrow(as.data.frame(resF_KEGG.GSEA))#83
+
+dotplot(resF_KEGG.GSEA,showCategory=20)
+resF_KEGG.GSEA
+
+
+dotplot(resF_KEGG.GSEA,showCategory=84,x="avg.GeneScore")
+emapplot(resF_KEGG.GSEA,showCategory=84)
+
+resM_KEGG.GSEA<- gseKEGG(geneList     = rank(geneListM.Entrez),
+                         organism     = 'hsa', 
+                         minGSSize    = 50,
+                         pvalueCutoff = 0.001,
+                         verbose = FALSE)
+
+nrow(as.data.frame(resM_KEGG.GSEA)) #46
+dotplot(resM_KEGG.GSEA,showCategory=20)
+
+emapplot(resM_KEGG.GSEA,showCategory=46)
+
+resF_KEGG.GSEA@result[which(resF_KEGG.GSEA@result$Description=="Alzheimer disease"),]
+
+resM_KEGG.GSEA@result[which(resM_KEGG.GSEA@result$Description=="Alzheimer disease"),]
+resF_KEGG.GSEA@result
+#Pathway colored with GeneScore:
+library(pathview)
+resF_KEGG.GSEA@result$Description
+paths<-c("PI3K-Akt signaling pathway","",)
+pathsIDs<-rownames(resF_KEGG.GSEA@result)[sapply(paths, function(p)which(p==resF_KEGG.GSEA@result$Description)[1])]
+pathF<-lapply(pathsIDs, function(id)return(pathview(gene.data  = geneListF.Entrez,
+                                                            pathway.id = id, 
+                                                            species    = "hsa",
+                                                            limit      = list(gene=max(abs(geneListF)), cpd=1))))
+
+pathM<-lapply(pathsIDs, function(id)return(pathview(gene.data  = geneListM.Entrez,
+                                                            pathway.id = id, 
+                                                            species    = "hsa",
+                                                            limit      = list(gene=max(abs(geneListF)), cpd=1))))
+
+
+source("scripts/utils/methyl_utils.R")
+getGenesKEGGPathw("hsa04211")
+
+#ANNEXE /Test  [a trier]
 #but a lot of genes in LGAF > more stringeant to detect Highly affected pathway
 plot(density(unique(resF,by="gene")$GeneScore))
 abline(v=150)
