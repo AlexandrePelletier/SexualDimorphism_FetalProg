@@ -227,10 +227,7 @@ resF_KEGG.GSEA<- gseKEGG(geneList     = rank(geneListF.Entrez),
 nrow(as.data.frame(resF_KEGG.GSEA))#83
 
 dotplot(resF_KEGG.GSEA,showCategory=20)
-resF_KEGG.GSEA
 
-
-dotplot(resF_KEGG.GSEA,showCategory=84,x="avg.GeneScore")
 emapplot(resF_KEGG.GSEA,showCategory=84)
 
 resM_KEGG.GSEA<- gseKEGG(geneList     = rank(geneListM.Entrez),
@@ -264,8 +261,85 @@ pathM<-lapply(pathsIDs, function(id)return(pathview(gene.data  = geneListM.Entre
                                                             limit      = list(gene=max(abs(geneListF)), cpd=1))))
 
 
-source("scripts/utils/methyl_utils.R")
-getGenesKEGGPathw("hsa04211")
+#compared with classical analysis (without genescore)
+
+#for female
+#i choose here to rank gene based on the Fold change of the most significant CpG in the gene
+resF[,is.min:=pval==min(pval),by=gene]
+resF.genes<-unique(resF[is.min==TRUE],by='gene')
+#numeric vector
+geneListF0<-resF.genes$meth.change
+#named vector
+names(geneListF0)<-resF.genes$gene
+#sorted vector
+geneListF0<-sort(geneListF0,decreasing = T)
+
+head(geneListF0,20)
+
+
+genes.df<-bitr(names(geneListF0),
+               fromType = 'SYMBOL',
+               toType = 'ENTREZID',
+               OrgDb = org.Hs.eg.db)
+genes.df$FC<-geneListF0[genes.df$SYMBOL]
+geneListF0.Entrez<-genes.df$FC
+names(geneListF0.Entrez)<-genes.df$ENTREZID
+head(geneListF0.Entrez)
+
+
+resF0_KEGG.GSEA<- gseKEGG(geneList     = rank(geneListF0.Entrez),
+                        organism     = 'hsa', 
+                        minGSSize    = 50,
+                        pvalueCutoff = 0.001,
+                        verbose = FALSE)
+nrow(as.data.frame(resF0_KEGG.GSEA)) #6
+dotplot(resF_KEGG.GSEA,showCategory=83)
+dotplot(resF0_KEGG.GSEA,showCategory=20)
+
+emapplot(resF0_KEGG.GSEA,showCategory=11)
+
+
+#for male
+resM[,is.min:=pval==min(pval),by=gene]
+resM.genes<-unique(resM[is.min==TRUE],by='gene')
+#numeric vector
+geneListM0<-resM.genes$meth.change
+#named vector
+names(geneListM0)<-resM.genes$gene
+#sorted vector
+geneListM0<-sort(geneListM0,decreasing = T)
+
+head(geneListM0,20)
+
+
+genes.df<-bitr(names(geneListM0),
+               fromType = 'SYMBOL',
+               toType = 'ENTREZID',
+               OrgDb = org.Hs.eg.db)
+genes.df$FC<-geneListM0[genes.df$SYMBOL]
+geneListM0.Entrez<-genes.df$FC
+names(geneListM0.Entrez)<-genes.df$ENTREZID
+head(geneListM0.Entrez)
+
+
+resM0_KEGG.GSEA<- gseKEGG(geneList     = rank(geneListM0.Entrez),
+                          organism     = 'hsa', 
+                          minGSSize    = 50,
+                          pvalueCutoff = 0.001,
+                          verbose = FALSE)
+nrow(as.data.frame(resM0_KEGG.GSEA)) #38
+dotplot(resM0_KEGG.GSEA,showCategory=38)
+pM0<-resM0_KEGG.GSEA@result$Description
+pM1<-resM_KEGG.GSEA@result$Description
+length(intersect(pM0,pM1))
+length(pM1)
+emapplot(resM0_KEGG.GSEA,showCategory=11)
+
+data.frame(nP)
+
+
+
+
 
 #ANNEXE /Test  [a trier]
 #but a lot of genes in LGAF > more stringeant to detect Highly affected pathway
