@@ -11,6 +11,23 @@ library(ggplot2)
 resF<-fread("analyses/withoutIUGR/2020-07-03_resCF_LF.csv")
 resM<-fread("analyses/withoutIUGR/2020-07-03_resCM_LM.csv")
 
+#check gene score ok
+head(unique(resF[order(-GeneScore,pval)],by="gene")$gene,20)
+#pb :
+resF[order(-GeneScore,pval)][gene=="SLC35E2B"]#plein de eqtl inflate score
+
+head(unique(resF[order(-GeneScore,pval)],by="gene")[in_eQTR==F]$gene,20)
+
+#too much cpg need to be punit
+ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_density(aes(nCpG.Gene))
+
+ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_point(aes(nCpG.Gene,GeneScore))
+
+
+
+
+
+
 resF[,compa:="ctrlF_vs_lgaF"]
 resM[,compa:="ctrlM_vs_lgaM"]
 resA<-rbind(resF,resM)
