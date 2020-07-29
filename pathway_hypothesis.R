@@ -21,12 +21,29 @@ head(unique(resF[order(-GeneScore,pval)],by="gene")[in_eQTR==F]$gene,20)
 #too much cpg need to be punit
 ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_density(aes(nCpG.Gene))
 
+ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_point(aes(nCpG.Gene,nCpGWeight))
 ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_point(aes(nCpG.Gene,GeneScore))
 
 
+source("scripts/utils/methyl_utils.R")
+
+resF<-CalcGeneScore(resF,calcCpGScore = T)
+head(unique(resF[order(-GeneScore,pval)],by="gene")$gene,100)
+ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_point(aes(nCpG.Gene,nCpGWeight))
+
+
+ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_point(aes(nCpG.Gene,GeneScore))
+
+#ok but other pb : 
+resF[gene=="LOC100289511"]
+resF[gene=="SOCS3"]#pval pas assez signif et pourtant cpgscore élevé
+#ok , on continue
+
+resM<-CalcGeneScore(resM,calcCpGScore = T)
 
 
 
+#=> pval <0.1 need to be ~*0
 
 resF[,compa:="ctrlF_vs_lgaF"]
 resM[,compa:="ctrlM_vs_lgaM"]
@@ -101,11 +118,11 @@ tr(data.frame(resFM0_KEGG)[7,"geneID"],tradEntrezInSymbol = T)
 
 #Gene Score :
 plot(density(unique(resF,by="gene")$GeneScore))
-abline(v=90)
+abline(v=40)
 
 
 p<-ggplot(unique(resA[order(pval)],by=c("gene","sex")),aes(x = GeneScore,y=-log10(pval)))+
-  geom_point(aes(col=pval1000perm<=0.005&GeneScore>90))+facet_wrap("sex")
+  geom_point(aes(col=pval1000perm<=0.005&GeneScore>40))+facet_wrap("sex")
 
 p + scale_color_manual(values = c("grey2","red")) + theme_minimal()
 unique(resF,by="gene")[pval1000perm<=0.005&GeneScore>90]
@@ -238,25 +255,28 @@ pathM<-lapply(pathIDofInterest, function(id)return(pathview(gene.data  = geneLis
 #GSEA 
 resF_KEGG.GSEA<- gseKEGG(geneList     = rank(geneListF.Entrez),
                         organism     = 'hsa', 
-                        minGSSize    = 50,
-                        pvalueCutoff = 0.001,
+                        minGSSize    = 50, 
+                        maxGSSize    = 200,
+                        pvalueCutoff = 0.005,
                         verbose = FALSE)
-nrow(as.data.frame(resF_KEGG.GSEA))#83
+nrow(as.data.frame(resF_KEGG.GSEA))#75
 
 dotplot(resF_KEGG.GSEA,showCategory=20)
-
-emapplot(resF_KEGG.GSEA,showCategory=84)
+resF_KEGG.GSEA
+resF_KEGG.GSEA@result$Description
+resF_KEGG.GSEA@result[resF_KEGG.GSEA@result$Description=="Longevity regulating pathway",]
+emapplot(resF_KEGG.GSEA,showCategory=75)
 
 resM_KEGG.GSEA<- gseKEGG(geneList     = rank(geneListM.Entrez),
                          organism     = 'hsa', 
-                         minGSSize    = 50,
-                         pvalueCutoff = 0.001,
+                         minGSSize    = 50, 
+                         maxGSSize    = 200,
+                         pvalueCutoff = 0.005,
                          verbose = FALSE)
-
-nrow(as.data.frame(resM_KEGG.GSEA)) #46
+nrow(as.data.frame(resM_KEGG.GSEA))#50
 dotplot(resM_KEGG.GSEA,showCategory=20)
 
-emapplot(resM_KEGG.GSEA,showCategory=46)
+emapplot(resM_KEGG.GSEA,showCategory=50)
 
 resF_KEGG.GSEA@result[which(resF_KEGG.GSEA@result$Description=="Alzheimer disease"),]
 
