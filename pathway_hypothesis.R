@@ -6,47 +6,25 @@ library(clusterProfiler)
 library(org.Hs.eg.db)
 library(data.table)
 library(ggplot2)
+library(ggrepel)
+source("scripts/utils/methyl_utils.R")
 set.seed(1234)
 
 
 resF<-fread("analyses/withoutIUGR/2020-07-03_resCF_LF.csv")
 resM<-fread("analyses/withoutIUGR/2020-07-03_resCM_LM.csv")
 
-#check gene score ok
-head(unique(resF[order(-GeneScore,pval)],by="gene")$gene,20)
-#pb :
-resF[order(-GeneScore,pval)][gene=="SLC35E2B"]#plein de eqtl inflate score
-
-head(unique(resF[order(-GeneScore,pval)],by="gene")[in_eQTR==F]$gene,20)
-
-#too much cpg need to be punit
-ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_density(aes(nCpG.Gene))
-
-ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_point(aes(nCpG.Gene,nCpGWeight))
-ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_point(aes(nCpG.Gene,GeneScore))
-
-
-source("scripts/utils/methyl_utils.R")
 
 resF<-CalcGeneScore(resF,calcCpGScore = T)
-head(unique(resF[order(-GeneScore,pval)],by="gene")$gene,100)
-ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_point(aes(nCpG.Gene,nCpGWeight))
-
 
 ggplot(unique(resF[order(-GeneScore,pval)],by="gene"))+geom_point(aes(nCpG.Gene,GeneScore))
-ggplot(unique(resF[order(-GeneScore,pval)][nCpG.Gene<100],by="gene"))+geom_point(aes(nCpG.Gene,GeneScore))
-resF[order(-GeneScore,pval)][nCpG.Gene>20&GeneScore>130]
-
-#ok but other pb : 
-resF[gene=="NR2F2"][order(pval)]
-resF[gene=="SOCS3"]#pval pas assez signif et pourtant cpgscore élevé
-#ok , on continue
 
 resM<-CalcGeneScore(resM,calcCpGScore = T)
 ggplot(unique(resM[order(-GeneScore,pval)],by="gene"))+geom_point(aes(nCpG.Gene,GeneScore))
-ggplot(unique(resM[order(-GeneScore,pval)][nCpG.Gene<100],by="gene"))+geom_point(aes(nCpG.Gene,GeneScore))
-resM[order(-GeneScore,pval)][GeneScore>100]
 
+
+fwrite(resF,"analyses/withoutIUGR/2020-07-30_resCF_LF.csv")
+fwrite(resM,"analyses/withoutIUGR/2020-07-30_resCM_LM.csv")
 
 resF[,compa:="ctrlF_vs_lgaF"]
 resM[,compa:="ctrlM_vs_lgaM"]
@@ -56,80 +34,26 @@ resA[,sex:=ifelse(compa=="ctrlF_vs_lgaF","female","male")]
 
 p<-ggplot(unique(resA,by=c("locisID","compa")))+
   geom_point(aes(x=meth.change,y=-log10(pval),col=abs(meth.change)>20&pval<10^-3))+
-  facet_wrap("compa")
+  facet_wrap("compa")+
+  theme_classic()
 
 p + scale_color_manual(values = c("grey2","red")) + theme_minimal() +theme(legend.position = "none")
 
-unique(resF,by="locisID")[meth.change>20&pval<10^-3]
-unique(resM,by="locisID")[meth.change>20&pval<10^-3]
-
-# Pathway enriched in the closest Genes of these CpGs :
-genesF0<-resF[in_eQTR==F&abs(meth.change)>20&pval<10^-3]$gene
-genesM0<-resM[in_eQTR==F&abs(meth.change)>20&pval<10^-3]$gene
-
-length(genesF0) #2500
-length(genesM0) #603
-
-
-candidat_genes.list<-list(female=genesF0,male=genesM0)
-
-resFM0_KEGG <- compareCluster(gene         = lapply(candidat_genes.list,function(genes)bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID),
-                              fun = "enrichKEGG",
-                              organism="hsa",
-                              pvalueCutoff=0.05)
-
-nrow(data.frame(resFM0_KEGG)) #66
-dotplot(resFM0_KEGG,showCategory=15)
-
-emapplot(resFM0_KEGG,pie="count",showCategory = 30)
-
-#3 group of pathways of interest : nutrient sensing, hormonal disturbance, stemness
-# i want get the noyau of genes for each cluster
-unique(resFM0_KEGG@compareClusterResult$Description)
-nutSens<-c("MAPK signaling pathway","PI3K-Akt signaling pathway",
-           "Ras signaling pathway","Rap1 signaling pathway")
-
-hormonal<-c("Cushing syndrome","Cortisol synthesis and secretion",
-            "Aldosterone synthesis and secretion","Cholinergic synapse",
-            "Growth hormone synthesis, secretion and action","Insulin secretion")
-
-stemness<-c("Signaling pathways regulating pluripotency of stem cells",
-            "Wnt signaling pathway","Hippo signaling pathway",
-            "Longevity regulating pathway","Melanogenesis")
-paths<-c(nutSens,hormonal,stemness)
-pathsIDs<-rownames(resFM0_KEGG@compareClusterResult)[sapply(paths, function(p)which(p==resFM0_KEGG@compareClusterResult$Description)[1])]
-paths_genes<-lapply(resFM0_KEGG@compareClusterResult[pathsIDs,"geneID"],tr,tradEntrezInSymbol = T)
-names(paths_genes)<-paths
-library(UpSetR)
-
-upset(fromList(paths_genes[hormonal]),nsets = 6,order.by = "freq")
-
-#15 genes in common across the 4 pathways + 3 genes in ras mapk, et pi3k to collect :
-genesNutSens<-c(Reduce(intersect,paths_genes[nutSens]))
-genesNutSens<-union(genesNutSens,Reduce(intersect,paths_genes[nutSens[nutSens!="Rap1 signaling pathway"]]))
-
-
-upset(fromList(paths_genes[nutSens]),nsets = 4,order.by = "freq")
-#15 genes in common across the 4 pathways + 3 genes in ras mapk, et pi3k to collect :
-genesNutSens<-c(Reduce(intersect,paths_genes[nutSens]))
-genesNutSens<-union(genesNutSens,Reduce(intersect,paths_genes[nutSens[nutSens!="Rap1 signaling pathway"]]))
-#[A continuer]
-
-
-source("scripts/utils/methyl_utils.R")
-tr(data.frame(resFM0_KEGG)[7,"geneID"],tradEntrezInSymbol = T)
-
 #Gene Score :
 plot(density(unique(resF,by="gene")$GeneScore))
-abline(v=30)
-
-
+abline(v=40)
 p<-ggplot(unique(resA[order(pval)],by=c("gene","sex")),aes(x = GeneScore,y=-log10(pval)))+
-  geom_point(aes(col=pval1000perm<=0.005&GeneScore>40))+facet_wrap("sex")
+  geom_point(aes(col=pval<10^-3&GeneScore>40))+facet_wrap("sex")
 
-p + scale_color_manual(values = c("grey2","red")) + theme_minimal()
-unique(resF,by="gene")[pval1000perm<=0.005&GeneScore>90]
-unique(resM,by="gene")[pval1000perm<=0.005&GeneScore>90]
+ # p<-p+ geom_label_repel(aes(label = ifelse(GeneScore>100&pval<10^-5,gene,"")),
+ #                   box.padding   = 0.35, 
+ #                   point.padding = 0.5,
+ #                   segment.color = 'grey50')
+
+p + scale_color_manual(values = c("grey","red")) + theme_minimal()
+
+unique(resF,by="gene")[pval<=10^-3&GeneScore>40]
+nrow(unique(resM,by="gene")[pval<=10^-3&GeneScore>40])
 
 #make genelist
 #for female
@@ -421,7 +345,32 @@ pathM<-lapply(longevityPathsID, function(id)return(pathview(gene.data  = geneLis
                                                     limit      = list(gene=max(abs(geneListF)), cpd=1))))
 
 
+#2020-07-30 figure pour pres
+library(data.table)
+library(ggplot2)
+set.seed(1234)
+options(stringsAsFactors = F)
+source("scripts/utils/methyl_utils.R")
 
+resF<-fread("analyses/withoutIUGR/2020-07-30_resCF_LF.csv")
+resF<-CalcGeneScore(resF,calcCpGScore = T)
+
+
+res_DEG_meth<-fread("../../../Alexandre_SC/analyses/04-DEG_in_LGA/2020-07-08_pseudo_bulk_DEseq2_LgaVsCtrl_CBP1andcbp558_559_samples_excluded_regr_on_batch_and_sex_all_genes.csv")
+
+res_DEG_meth<-res_DEG_meth[,.SD,.SDcols=-"GeneScore"]
+
+res_DEG_meth<-merge(res_DEG_meth[,1:7],resF,by=c("gene"),all.x=T)
+res_DEG_meth[is.na(padj),padj:=1]
+
+ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"))+geom_boxplot(aes(x = padj<0.01,y=meth.change))
+
+ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"))+geom_boxplot(aes(x = padj<0.01,y=-log10(pval)))
+
+ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"))+geom_boxplot(aes(x = padj<0.01,y=GeneScore),outlier.shape = NA)+coord_cartesian(ylim = c(-20,150))
+
+
+t.test(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj<0.01]$GeneScore,)
 
 
 
