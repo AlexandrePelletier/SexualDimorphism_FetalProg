@@ -41,9 +41,11 @@ p + scale_color_manual(values = c("grey2","red")) + theme_minimal() +theme(legen
 
 #Gene Score :
 plot(density(unique(resF,by="gene")$GeneScore))
-abline(v=40)
-p<-ggplot(unique(resA[order(pval)],by=c("gene","sex")),aes(x = GeneScore,y=-log10(pval)))+
-  geom_point(aes(col=pval<10^-3&GeneScore>40))+facet_wrap("sex")
+plot(density(unique(resM,by="gene")$GeneScore))
+
+abline(v=90)
+ggplot(unique(resA[order(pval)],by=c("gene","sex")),aes(x = sex,y=GeneScore,col=sex))+
+  geom_boxplot()+ theme_minimal() +theme(legend.position = "none")
 
  # p<-p+ geom_label_repel(aes(label = ifelse(GeneScore>100&pval<10^-5,gene,"")),
  #                   box.padding   = 0.35, 
@@ -52,8 +54,8 @@ p<-ggplot(unique(resA[order(pval)],by=c("gene","sex")),aes(x = GeneScore,y=-log1
 
 p + scale_color_manual(values = c("grey","red")) + theme_minimal()
 
-unique(resF,by="gene")[pval<=10^-3&GeneScore>40]
-nrow(unique(resM,by="gene")[pval<=10^-3&GeneScore>40])
+unique(resF,by="gene")[GeneScore>90&pval1000perm<0.01] #1554
+unique(resM,by="gene")[GeneScore>90&pval1000perm<0.01] #120
 
 #make genelist
 #for female
@@ -87,11 +89,11 @@ head(geneListM.Entrez)
 
 #genes epigenetically impacted in LGA = queue de distrib GeneScore et pval1000perm<0.01
 
-genesF<-unique(resF,by="gene")[GeneScore>40&pval1000perm<=0.01]$gene
-length(genesF)#1529
+genesF<-unique(resF,by="gene")[GeneScore>95&pval1000perm<=0.01]$gene
+length(genesF)#1336
 
-genesM<-unique(resM,by="gene")[GeneScore>40&pval1000perm<=0.01]$gene
-length(genesM)#118
+genesM<-unique(resM,by="gene")[GeneScore>95&pval1000perm<=0.01]$gene
+length(genesM)#93
 
 genesF2<-unique(resF,by="gene")[order(-GeneScore)][pval1000perm<=0.005]$gene[1:500]
 genesM2<-unique(resM,by="gene")[order(-GeneScore)][pval1000perm<=0.005]$gene[1:500]
@@ -104,12 +106,12 @@ resFM_KEGG <- compareCluster(gene         = lapply(candidat_genes.list,function(
                               organism="hsa",
                              minGSSize    = 50,
                              maxGSSize    = 400,
-                              pvalueCutoff=0.15)
+                              pvalueCutoff=0.1)
 
-nrow(data.frame(resFM_KEGG)) #35
-dotplot(resFM_KEGG,showCategory=42)
+nrow(data.frame(resFM_KEGG)) #54
+dotplot(resFM_KEGG,showCategory=58)
 
-emapplot(resFM_KEGG,pie="count",showCategory = 42)
+emapplot(resFM_KEGG,pie="count",showCategory = 58)
 resF_KEGG <- enrichKEGG(gene         = bitr(genesF,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
                         pAdjustMethod = "BH",
                         pvalueCutoff  = 0.05)
@@ -193,33 +195,33 @@ pathM<-lapply(pathIDofInterest, function(id)return(pathview(gene.data  = geneLis
 resF_KEGG.GSEA<- gseKEGG(geneList     = rank(geneListF.Entrez),
                         organism     = 'hsa', 
                         minGSSize    = 50,
-                        pvalueCutoff = 0.002,
+                        pvalueCutoff = 0.001,
                         verbose = FALSE)
-nrow(as.data.frame(resF_KEGG.GSEA))#73
+nrow(as.data.frame(resF_KEGG.GSEA))#77
 
-dotplot(resF_KEGG.GSEA,showCategory=73)
+dotplot(resF_KEGG.GSEA,showCategory=77)
 dkF<-as.data.frame(resF_KEGG.GSEA)
 nrow(dkF) #13
 dkF
 dkF<-data.table(dkF)
 dkF[,GeneScore.avg:=mean(unique(resF,by="gene")$GeneScore[unique(resF,by="gene")$gene %in% tr(core_enrichment,tradEntrezInSymbol = T)],na.rm=T),.(ID)]
 dkF
-dotplot(resF_KEGG.GSEA,x=dkF$GeneScore,showCategory=73)
+dotplot(resF_KEGG.GSEA,x=dkF$GeneScore,showCategory=77)
 
 resF_KEGG.GSEA
 resF_KEGG.GSEA@result$Description
 resF_KEGG.GSEA@result[resF_KEGG.GSEA@result$Description=="Longevity regulating pathway",]
-emapplot(resF_KEGG.GSEA,showCategory=73,layout = "kk")
+emapplot(resF_KEGG.GSEA,showCategory=77,layout = "kk")
 
 resM_KEGG.GSEA<- gseKEGG(geneList     = rank(geneListM.Entrez),
                          organism     = 'hsa', 
                          minGSSize    = 50,
-                         pvalueCutoff = 0.002,
+                         pvalueCutoff = 0.001,
                          verbose = FALSE)
-nrow(as.data.frame(resM_KEGG.GSEA))#44
-dotplot(resM_KEGG.GSEA,showCategory=20)
+nrow(as.data.frame(resM_KEGG.GSEA))#42
+dotplot(resM_KEGG.GSEA,showCategory=42)
 
-emapplot(resM_KEGG.GSEA,showCategory=44)
+emapplot(resM_KEGG.GSEA,showCategory=42)
 
 resF_KEGG.GSEA@result[which(resF_KEGG.GSEA@result$Description=="Alzheimer disease"),]
 
@@ -306,9 +308,11 @@ data.frame(nP)
 
 #genes longevity
 longevityPaths<-c("AMPK signaling pathway","mTOR signaling pathway","Longevity regulating pathway",
-                  "PI3K-Akt signaling pathway","Wnt signaling pathway","FoxO signaling pathway")
+                  "PI3K-Akt signaling pathway","Wnt signaling pathway","FoxO signaling pathway","Insulin signaling pathway",
+                  "Ras signaling pathway","Rap1 signaling pathway","Regulation of lipolysis in adipocytes")
 longevityPathsID<-unique(data.table(Reduce(rbind,list(data.table(as.data.frame(resF_KEGG.GSEA))[,.(ID,Description)],
                                                       data.table(as.data.frame(resFM_KEGG))[,.(ID,Description)])))[Description%in%longevityPaths]$ID)
+
 longevityGenes_list<-lapply(longevityPathsID,getGenesKEGGPathw)
 
 names(longevityGenes_list)<-longevityPaths
@@ -328,7 +332,17 @@ resA[gene%in%sample(unique(gene),length(longevityGenes)),GeneSet:="random5"]
 ggplot(unique(resA[!is.na(GeneSet)],by=c("sex","gene")))+geom_boxplot(aes(x=sex,y=GeneScore,fill=GeneSet))
 
 #or
-ggplot(unique(resA,by=c("sex","gene")))+geom_boxplot(aes(x=sex,y=GeneScore,fill=gene%in%longevityGenes),outlier.shape = NA)+ylim(c(-20,65))
+ggplot(unique(resA,by=c("sex","gene")))+
+  geom_boxplot(aes(x=sex,y=GeneScore,fill=gene%in%longevityGenes),outlier.shape = NA)+
+  coord_cartesian(ylim = c(-100,200))+
+  theme_minimal()
+length(longevityGenes)
+
+unique(resF,by="gene")[!(gene%in%longevityGenes)]
+
+t.test(unique(resF,by="gene")[gene%in%longevityGenes]$GeneScore,unique(resF,by="gene")[!(gene%in%longevityGenes)]$GeneScore)
+
+t.test(unique(resM,by="gene")[gene%in%longevityGenes]$GeneScore,unique(resM,by="gene")[!(gene%in%longevityGenes)]$GeneScore)
 
 
 #Pathway colored with GeneScore:
@@ -346,8 +360,10 @@ pathM<-lapply(longevityPathsID, function(id)return(pathview(gene.data  = geneLis
 
 
 #2020-07-30 figure pour pres
+#DEG ARE ENRICHED IN GENESCORE
 library(data.table)
 library(ggplot2)
+library(patchwork)
 set.seed(1234)
 options(stringsAsFactors = F)
 source("scripts/utils/methyl_utils.R")
@@ -363,14 +379,103 @@ res_DEG_meth<-res_DEG_meth[,.SD,.SDcols=-"GeneScore"]
 res_DEG_meth<-merge(res_DEG_meth[,1:7],resF,by=c("gene"),all.x=T)
 res_DEG_meth[is.na(padj),padj:=1]
 
-ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"))+geom_boxplot(aes(x = padj<0.01,y=meth.change))
 
-ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"))+geom_boxplot(aes(x = padj<0.01,y=-log10(pval)))
+p1<-ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"))+
+  geom_boxplot(aes(x = padj<0.05,y=meth.change,col = padj<0.05),outlier.shape = NA)+
+  scale_color_manual(values = c("grey2","red"))+
+  coord_cartesian(ylim = c(-10,75))+theme_minimal()+theme(legend.position = "none")
 
-ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"))+geom_boxplot(aes(x = padj<0.01,y=GeneScore),outlier.shape = NA)+coord_cartesian(ylim = c(-20,150))
+p2<-ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"))+
+  geom_boxplot(aes(x = padj<0.05,y=-log10(pval),col = padj<0.05),outlier.shape = NA)+
+  scale_color_manual(values = c("grey2","red"))+
+  coord_cartesian(ylim = c(0,5))+theme_minimal()+theme(legend.position = "none")
+
+p3<-ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"))+
+  geom_boxplot(aes(x = padj<0.05,y=GeneScore,col = padj<0.05),outlier.shape = NA)+
+  scale_color_manual(values = c("grey2","red"))+
+  coord_cartesian(ylim = c(-40,175))+theme_minimal()+theme(legend.position = "none")
+
+p_all<-p1+p2+p3
+
+p_all
+t.test(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj<0.05]$GeneScore,unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj>0.05]$GeneScore)
+
+t.test(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj<0.05]$meth.change,unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj>0.05]$meth.change)
+
+t.test(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj<0.05]$pval,unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj>0.05]$pval)
+
+#DEG are related to longevity pathways
+stem_DEG<-c("FOSB","JUN","ID2","KLF2","EGR1","KLF4","FOS","HES1","JUNB","ZFP36","HES4","IER2")
 
 
-t.test(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj<0.01]$GeneScore,)
+ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"),aes(x = log2FoldChange,y=-log10(pvalue),col=padj<0.05))+
+  geom_point()+
+  geom_label_repel(aes(label = ifelse(padj<=0.05&gene%in%stem_DEG,gene,"")),col="deepskyblue2",
+                   box.padding   = 0.35,
+                   point.padding = 0.5,
+                   segment.color = 'grey50')+
+  scale_color_manual(values = c("grey","red"))+
+  theme_minimal()
+
+#longevity/nutr sens
+ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"),aes(x = log2FoldChange,y=-log10(pvalue),col=padj<0.05))+
+  geom_point()+
+  geom_label_repel(aes(label = ifelse(padj<=0.05&gene%in%longevityGenes,gene,"")),col="darkorange1",
+                   box.padding   = 0.35,
+                   point.padding = 0.5,
+                   segment.color = 'grey50')+
+  scale_color_manual(values = c("grey","red"))+
+  theme_minimal()
+
+#hormonal
+resF_KEGG.GSEA@result$Description
+hormonalPaths<-c("GnRH secretion","Morphine addiction","Adrenergic signaling in cardiomyocytes","Oxytocin signaling pathway",
+                  "Prolactin signaling pathway","Aldosterone synthesis and secretion","Cholinergic synapse","Parathyroid hormone synthesis, secretion and action",
+                  "Endocrine resistance","Growth hormone synthesis, secretion and action","Insulin secretion","Cortisol synthesis and secretion")
+hormonalPathsID<-unique(data.table(Reduce(rbind,list(data.table(as.data.frame(resF_KEGG.GSEA))[,.(ID,Description)],
+                                                      data.table(as.data.frame(resFM_KEGG))[,.(ID,Description)])))[Description%in%hormonalPaths]$ID)
+#add Estrogen signaling pathway", 
+hormonalPathsID<-c(hormonalPathsID,"hsa04915")
+hormonalPaths<-c(hormonalPaths,"Estrogen signaling pathway")
+
+hormonalGenes_list<-lapply(hormonalPathsID,getGenesKEGGPathw)
+names(hormonalGenes_list)<-hormonalPathsID
+hormonalGenes<-unique(unlist(hormonalGenes_list))
+
+ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene"),aes(x = log2FoldChange,y=-log10(pvalue),col=padj<0.05))+
+  geom_point()+
+  geom_label_repel(aes(label = ifelse(padj<=0.05&gene%in%hormonalGenes,gene,"")),col="chartreuse4",
+                   box.padding   = 0.35,
+                   point.padding = 0.5,
+                   segment.color = 'grey50')+
+  scale_color_manual(values = c("grey","red"))+
+  theme_minimal()
+
+
+#DEG - GeneScore
+plot(density(unique(resF,by="gene")$GeneScore))
+unique(resF,by="gene")[GeneScore>50&pval1000perm<0.05]
+ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj<0.05],aes(x = log2FoldChange,y=GeneScore))+
+  geom_point(aes(col=GeneScore>50&pval1000perm<0.05))+
+  geom_label_repel(aes(label = ifelse(GeneScore>50&pval1000perm<0.05&gene%in%c(longevityGenes,stem_DEG,hormonalGenes),gene,"")),col="black",
+                   box.padding   = 0.35,
+                   point.padding = 0.5,
+                   segment.color = 'grey50')+
+  scale_color_manual(values = c("grey","red"))+
+  theme_minimal()
+
+
+
+#KEGG on this DEG
+DEG<-unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj<=0.05]$gene
+resDEG_KEGG <- enrichKEGG(gene         = bitr(DEG,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+                         pAdjustMethod = "BH",
+                         pvalueCutoff  = 0.05,minGSSize = 30
+                         )
+
+nrow(data.frame(resDEG_KEGG)) #17
+dotplot(resDEG_KEGG,showCategory=32)
+emapplot(resDEG_KEGG,showCategory=32)
 
 
 
