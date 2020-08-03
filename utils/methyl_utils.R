@@ -447,19 +447,34 @@ plotMeth<-function(cpgs,
         
         if(plot=="boxplot"){
           if(wrap){
-            return(ggplot(cpgs_data_batch)+geom_boxplot(aes_string(group,"unmeth"))+facet_wrap(factor))
+            return(ggplot(cpgs_data_batch)+
+                     geom_boxplot(aes_string(group,"unmeth",fill=factor),width=0.5)+
+                     facet_wrap(factor)+
+              scale_x_discrete(limits=ord)+
+              theme_minimal())
           }
           return(ggplot(cpgs_data_batch)+geom_boxplot(aes_string(factor,"unmeth",fill=group))+scale_color_manual(breaks=as.character(ord)))
           
         }else if(plot=="jitter"){
           if(wrap){
-            return(ggplot(cpgs_data_batch)+geom_jitter(aes_string(group,"unmeth"),width = 0.25)+facet_wrap(factor))
+            return(ggplot(cpgs_data_batch,aes_string(group,"unmeth",col=factor))+
+                     geom_jitter(width = 0.25)+facet_wrap(factor)+ 
+                     stat_summary(fun.y=median, geom="point", size=2, color="red")+
+                     theme_minimal())
           }else{
-            return(ggplot(cpgs_data_batch)+geom_jitter(aes_string(factor,"unmeth",color=group),width = 0.25))
+            return(ggplot(cpgs_data_batch,aes_string(factor,"unmeth",color=group))+
+                     geom_jitter(width = 0.25)+
+                     stat_summary(fun.y=median, geom="point", size=2, color="red")+
+                     scale_color_discrete(limits=as.character(ord))+
+                     theme_minimal())
           }
           
           
-          
+        }else if(plot=="violin"){
+          return(ggplot(cpgs_data_batch,aes_string(factor,"unmeth",fill=group))+
+                   geom_violin()+
+                   scale_fill_discrete(limits=as.character(ord))+
+                   theme_minimal())
         }
       
     

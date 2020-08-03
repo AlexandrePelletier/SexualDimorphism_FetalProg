@@ -468,6 +468,8 @@ ggplot(unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj<0.05],aes(x =
 
 #KEGG on this DEG
 DEG<-unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj<=0.05]$gene
+length(DEG)
+unique(res_DEG_meth[order(-GeneScore,pval)],by="gene")[padj>0.05]
 resDEG_KEGG <- enrichKEGG(gene         = bitr(DEG,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
                          pAdjustMethod = "BH",
                          pvalueCutoff  = 0.05,minGSSize = 30
