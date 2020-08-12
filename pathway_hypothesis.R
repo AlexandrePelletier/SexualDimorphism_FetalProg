@@ -481,6 +481,8 @@ emapplot(resDEG_KEGG,showCategory=32)
 
 
 
+
+
 #ANNEXE /Test  [a trier]
 #but a lot of genes in LGAF > more stringeant to detect Highly affected pathway
 plot(density(unique(resF,by="gene")$GeneScore))
