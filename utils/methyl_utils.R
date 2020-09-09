@@ -10,6 +10,90 @@ pctPC<-function(pca,rngPCs="all"){
   return( pct.varPCs)
 }
 
+plotPCVarExplain<-function(pca,rngPCs,lineSeuilPct=1,returnPCSeuils=T){
+  
+  pct.varPCs<-pctPC(pca,rngPCs)
+  barplot(pct.varPCs[rngPCs],names.arg = rngPCs,ylab = "Percent of variance explained")
+  abline(h=lineSeuilPct)
+  return(as.numeric(names(pct.varPCs)[pct.varPCs>lineSeuilPct]))
+  
+}
+
+plotCovarPCs<-function(pca,rngPCs,batch,var_num,var_fac,exclude=NULL,res="pval",seuilP=0.1){
+  library(pheatmap)
+  pc<-data.frame(pca$x)
+  if(is.data.table(batch)){
+    batch<-data.frame(batch,row.names = "sample")
+  }
+  batch_num=batch[rownames(pc),var_num]
+  
+  batch_fac=batch[rownames(pc),var_fac]
+  batch_fac<-batch_fac[,sapply(batch_fac, function(x)length(unique(x))>1)]
+  batch_num=t(batch_num)
+  batch_fac=t(batch_fac)
+  split_num=split(batch_num,rownames(batch_num))
+  split_fac=split(batch_fac,rownames(batch_fac))
+  res_num=lapply(split_num,function(x,ret=res){
+    FAC1.p<-rep(0,length(rngPCs))
+    FAC1.r2<-rep(0,length(rngPCs))
+    for (i in rngPCs){
+      FAC1<-as.numeric(x)
+      FAC1<-lm(pc[,i]~FAC1)
+      FAC1.p[i]<-anova(FAC1)$Pr[1]
+      FAC1.r2[i]<-summary(FAC1)$adj.r.squared
+    }
+    if(ret=="pval"){
+      return(FAC1.p)
+    }else if(ret=="r2"){
+      return(FAC1.r2)
+    }
+  })
+  
+  res_fac=lapply(split_fac,function(x,ret=res){
+    FAC1.p<-rep(0,length(rngPCs))
+    FAC1.r2<-rep(0,length(rngPCs))
+    for (i in rngPCs){
+      FAC1<-as.factor(x)
+      FAC1<-lm(pc[,i]~FAC1)
+      FAC1.p[i]<- anova(FAC1)$Pr[1]
+      FAC1.r2[i]<-summary(FAC1)$adj.r.squared
+    }
+    if(ret=="pval"){
+      return(FAC1.p)
+    }else if(ret=="r2"){
+      return(FAC1.r2)
+    }})
+  
+  
+  res.num<-do.call(rbind,res_num)
+  res.fac<-do.call(rbind,res_fac)
+  final_res<-rbind(res.num,res.fac)
+  res2<-data.matrix(final_res)
+  if(res=="pval"){
+    res2[which(res2>seuilP)]<-1 ####here I basicaly put them to 1 if less than 0.1
+    resToPlot<--log10(res2)
+    breakRes<-c(40,20,10:1, 0.5,0.1)
+  }else{
+    res2[res2<0]<-0
+    resToPlot<-res2
+    breakRes<-NA
+    
+  }
+  
+  pct.varPCs<-pctPC(pca,rngPCs)
+  vars<-rownames(resToPlot)[!(rownames(resToPlot)%in%exclude)]
+  
+  pheatmap(resToPlot[vars,rngPCs],cluster_rows = F,cluster_cols = F,
+           labels_col= paste0("PC",rngPCs,"(",round(pct.varPCs[as.character(rngPCs)],0),"%)"),
+           display_numbers = T,
+           color = colorRampPalette(c("white", "red"))(13), breaks = breakRes)
+  
+  return(res2)
+  
+  
+}
+
+
 correl<-function(x,y,ret="all",verbose=T){
   if(is.numeric(x)){
     if(verbose){
@@ -640,7 +724,7 @@ CalcCpGScore<-function(res,cpg_genes=NULL,verbose=TRUE){
   
 }
 
-CalcGeneScore<-function(res,cpg.regs_ref=NULL,pvalSig=10^-3,sumToGene=FALSE,test=FALSE,calcCpGScore=FALSE,verbose=TRUE){
+CalcGeneScore<-function(res,cpg.regs_ref=NULL,pvalSig=0.001,sumToGene=FALSE,test=FALSE,calcCpGScore=FALSE,verbose=TRUE){
   
   if((!"CpGScore"%in%colnames(res))|calcCpGScore==TRUE){
     if(verbose){

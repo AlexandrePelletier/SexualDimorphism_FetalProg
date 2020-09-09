@@ -81,11 +81,35 @@ res[hypoMetDownReg==T]
 
 #♦diffmet et diffreg
 res[abs(GeneScore)>50&(sign(meth.change)!=sign(GeneScore))&abs(meth.change)>20&abs(log2FoldChange)>0.6&padj<0.2&pval<0.05]
-res[abs(GeneScore)>50&(sign(meth.change)!=sign(GeneScore))&abs(meth.change)>20&abs(log2FoldChange)>0.6&padj<0.2&pval<0.05,hyper_and_hypoMet_DEG:=T]
-res[hyper_and_hypoMet_DEG==T,changeSexSpe:=length(unique(compa))==1,by="gene"]
-res[hyper_and_hypoMet_DEG==T,gene_of_interest:=T]
+res[abs(GeneScore)>50&(sign(meth.change)!=sign(GeneScore))&abs(meth.change)>20&abs(log2FoldChange)>0.6&padj<0.2&pval<0.05,hyper_and_hypoMet:=T]
+res[hyper_and_hypoMet==T,changeSexSpe:=length(unique(compa))==1,by="gene"]
+res[hyper_and_hypoMet==T,gene_of_interest:=T]
 res[gene_of_interest==T]$gene
+
 fwrite(res[gene_of_interest==T],"analyses/withoutIUGR/genes_of_interest/cpg_genes_of_interest.csv",sep=";")
+
+res[gene_of_interest==T,nCpGCandidat:=.N,by="gene"]
+cols<-c("changeSexSpe","hypoMetDownReg","hyperMetUpReg","hypoMetUpReg","hyperMetDownReg","hyper_and_hypoMet")
+
+res[gene_of_interest==T,regulation:=paste(..cols[which(sapply(.SD,function(x)return(any(x==TRUE))))],collapse = "/"),by="gene",.SDcols=cols]
+
+
+#genes in which KEGG pathways ? stemness, longevity, nutrient sensing pathway ?
+source("../../../Alexandre_SC/scripts/utils/FindInfosGenes.R")
+resg<-unique(res[gene_of_interest==T,
+                 .(gene,baseMean,log2FoldChange,padj,compa,GeneScore,pval1000perm,nCpGCandidat,regulation)],
+             by=c("gene","compa"))[order(-GeneScore)]
+
+resg[,fonction:=sapply(gene,function(x)return(find_fonction(x,pathFromRoot = T)$Fonction))]
+resg
+
+resg[,pathway:=sapply(gene,function(x)return(find_KEGGPathway(x,pathFromRoot = T,searchInLocal = F)$Pathway))]
+resg
+
+fwrite(resg,
+       "analyses/withoutIUGR/genes_of_interest/genes_of_interest.csv",sep=";")
+
+#plot meth and expr in cells
 
 for(gen in unique(res[gene_of_interest==T]$gene)){
   print(gen)
@@ -97,5 +121,55 @@ for(gen in unique(res[gene_of_interest==T]$gene)){
   
 }
 
+library(Seurat)
+cbps<-readRDS("../../../Alexandre_SC/analyses/2020-07-08_all_cbps.rds")
+head(cbps@meta.data)
+Idents(cbps)<-"seurat_clusters"
+new.cluster.ids <- c("LMPP",
+                     "HSC-SOCS3",
+                     "MPP-RP",
+                     "HSC-Er",
+                     "HSC-EGR4",
+                     "HSC-AVP",
+                     "MEP",
+                     "Ly P",
+                     "HSC-CD164",
+                     "GMP",
+                     "EMP",
+                     "proB",
+                     "MPP-DC",
+                     "ErP",
+                     "HSC-HSPA5",  
+                     "B cell",
+                     "pDC-Cycle",
+                     "div_cells",
+                     "Ba/Eo/Mas",
+                     "LT-HSC",
+                     "T cell",
+                     "Ba",
+                     "Mo",
+                     "NK")
+names(new.cluster.ids)<-levels(cbps)
+cbps<-RenameIdents(cbps,new.cluster.ids)
+cbps[['diff_lvl']]<-cbps[['cell_type']]
+cbps[['cell_type']]<-Idents(cbps)
+DimPlot(cbps,label = T)
+DefaultAssay(cbps)<-"RNA"
+for(gen in unique(res[gene_of_interest==T]$gene)){
+  print(gen)
+  u<-FeaturePlot(cbps,gen,label = T,label.size = 2,repel = T,max.cutoff = "q75")
+  v<-VlnPlot(cbps,gen,log = T)
+  u/v
+  ggsave(paste0("analyses/withoutIUGR/genes_of_interest/",gen,"_expr_plots.png"))
+  
+}
+
+
+#genes longevity
+longevityPaths<-c("AMPK signaling pathway","mTOR signaling pathway","Longevity regulating pathway",
+                  "PI3K-Akt signaling pathway","Wnt signaling pathway","FoxO signaling pathway","Insulin signaling pathway",
+                  "Ras signaling pathway","Rap1 signaling pathway","Regulation of lipolysis in adipocytes")
+longevityPathsID<-unique(data.table(Reduce(rbind,list(data.table(as.data.frame(resF_KEGG.GSEA))[,.(ID,Description)],
+                                                      data.table(as.data.frame(resFM_KEGG))[,.(ID,Description)])))[Description%in%longevityPaths]$ID)
 
 
