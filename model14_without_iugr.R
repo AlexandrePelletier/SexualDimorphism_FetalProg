@@ -97,8 +97,8 @@ correl(meta$Mat.Age,meta$pct0ApresF) #sig donc on inclut aussi
 
 #MODEL => DMC between Ctrl and LGA, and within and between sex
 varToModel<-c("Group_Sex","Mat.Age","latino","Group_Complexity_Fac")
-metaF<-meta[rowSums(is.na(meta[,.SD,.SDcols=varToModel]))==0]
 
+metaF<-meta[rowSums(is.na(meta[,.SD,.SDcols=varToModel]))==0]
 formule<- ~0 + Group_Sex  + latino + Mat.Age + Group_Complexity_Fac +batch
 
 design<-model.matrix(formule,data = metaF)
