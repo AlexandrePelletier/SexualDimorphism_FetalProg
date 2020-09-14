@@ -139,6 +139,8 @@ for(compa in compas){
   
   
 }
+
+
 r<-topTable(fit2,coef = "C.L",n = Inf)
 ggplot(r)+
   geom_point(aes(x=logFC,y=-log10(P.Value),col=P.Value<0.001&abs(logFC)>20))+scale_color_manual(values = c("grey","red"))+
@@ -165,10 +167,190 @@ for(compa in compas){
 lapply(names(res_list),function(comp)res_list[[comp]][,compa:=..comp])
 res<-Reduce(function(x, y) merge(x, y, all = T),res_list)
 
-#epigeni dimorphsim with functional cq ? => see GeneScore
-ggplot(unique(res,by=c("gene","compa")))+geom_boxplot(aes(compa,GeneScore))
+#2020-09-11 venn diagr
+library(data.table)
+library(VennDiagram)
+library(ggplot2)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+source("scripts/utils/FonctionsUtiles.R")
+#all CF
+res<-list(
+"cfcm"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CF.CM.csv"),
+"cflm"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CF.LM.csv"),
+"cflf"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CF.LF.csv"),
+"cmlf"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CM.LF.csv"),
+"cmlm"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CM.LM.csv"),
+"lmlf"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_LM.LF.csv")
+)
+lapply(names(res),function(comp)res[[comp]][,compa:=..comp])
+res<-Reduce(function(x, y) merge(x, y, all = T),res)
+#cpg with hi FC and pval
+venn.diagram(list("CF.CM"=unique(res[compa=="cfcm"&pval<0.001&abs(meth.change)>20]$locisID),
+                  "CF.LM"=unique(res[compa=="cflm"&pval<0.001&abs(meth.change)>20]$locisID),
+                  "CF.LF"=unique(res[compa=="cflf"&pval<0.001&abs(meth.change)>20]$locisID)),
+             filename = "analyses/model14_without_iugr/venn/venn_locis_CFvsOthers.tiff"
+)
 
-#Pathway diff ? => functional impact different between female and male
+
+#genes with hi FC and pval
+genes.list<-list("CF.CM"=unique(res[compa=="cfcm"&pval<0.001&abs(meth.change)>20]$gene),
+                 "CF.LM"=unique(res[compa=="cflm"&pval<0.001&abs(meth.change)>20]$gene),
+                 "CF.LF"=unique(res[compa=="cflf"&pval<0.001&abs(meth.change)>20]$gene))
+venn.diagram(genes.list,
+             filename = "analyses/model14_without_iugr/venn/venn_genes_CFvsOthers.tiff"
+)   
+
+for(comparison in names(genes.list) ){
+  print(comparison)
+  genes.list[[comparison]]<-bitr(genes.list[[comparison]],
+                                 fromType = "SYMBOL",
+                                 toType = "ENTREZID",
+                                 OrgDb = org.Hs.eg.db)$ENTREZID #put in ENTREZID because KEGG Pathways is in ENTREZID in this package
+}
+res.compa<-compareCluster(genes.list,
+                          fun = "enrichKEGG",
+                          organism="hsa",
+                          pvalueCutoff=0.05) 
+emapplot(res.compa,showCategory = nrow(as.data.frame(res.compa)))
+
+#ggenes with hi Genescore
+
+p<-ggplot(unique(res,by=c("gene","compa")))+
+  geom_jitter(aes(compa,GeneScore,col=abs(GeneScore)>60))+
+  scale_color_manual(values = c("grey","red"))
+
+p+geom_boxplot(aes(compa,GeneScore),alpha=0.5,outlier.shape = NA)
+  
+genes.list<-list("CF.LM"=unique(res[compa=="cflm"&abs(GeneScore)>60]$gene),
+                 "CF.LF"=unique(res[compa=="cflf"&abs(GeneScore)>60]$gene),
+                 "CF.CM"=unique(res[compa=="cfcm"&abs(GeneScore)>60]$gene))
+venn.diagram(genes.list,
+             filename = "analyses/model14_without_iugr/venn/venn_genescore_CFvsOthers.tiff") 
+for(comparison in names(genes.list) ){
+  print(comparison)
+  genes.list[[comparison]]<-bitr(genes.list[[comparison]],
+                                 fromType = "SYMBOL",
+                                 toType = "ENTREZID",
+                                 OrgDb = org.Hs.eg.db)$ENTREZID #put in ENTREZID because KEGG Pathways is in ENTREZID in this package
+}
+res.compa<-compareCluster(genes.list,
+                          fun = "enrichKEGG",
+                          organism="hsa",
+                          pvalueCutoff=0.05) 
+emapplot(res.compa,showCategory = nrow(as.data.frame(res.compa)),pie="count")
+
+#pval/FC vs genescore
+# in cfcm
+genes.list<-list("genescoreCF.CM"=unique(res[compa=="cfcm"&abs(GeneScore)>60]$gene),
+                 "genesCF.CM"=unique(res[compa=="cfcm"&pval<0.001&abs(meth.change)>20]$gene))
+venn.diagram(genes.list,
+             filename = "analyses/model14_without_iugr/venn/venn_genescore_vs_genes_cfcm.tiff" )
+
+
+genes.list
+for(comparison in names(genes.list) ){
+  print(comparison)
+  genes.list[[comparison]]<-bitr(genes.list[[comparison]],
+                                          fromType = "SYMBOL",
+                                          toType = "ENTREZID",
+                                          OrgDb = org.Hs.eg.db)$ENTREZID #put in ENTREZID because KEGG Pathways is in ENTREZID in this package
+}
+genes.list
+
+res.compa<-compareCluster(genes.list,
+                          fun = "enrichKEGG",
+                          organism="hsa",
+                          pvalueCutoff=0.05) 
+emapplot(res.compa,showCategory = nrow(as.data.frame(res.compa)))
+
+resK<-enrichKEGG(setdiff(genes.list$genescoreCF.CM,genes.list$genesCF.CM),organism = "hsa",pvalueCutoff = 0.05)
+as.data.frame(resK)#no
+
+# in cflf
+genes.list<-list("genescoreCF.LF"=unique(res[compa=="cflf"&abs(GeneScore)>60]$gene),
+                 "genesCF.LF"=unique(res[compa=="cflf"&pval<0.001&abs(meth.change)>20]$gene))
+venn.diagram(genes.list,
+             filename = "analyses/model14_without_iugr/venn/venn_genescore_vs_genes_cflf.tiff" )
+
+
+for(comparison in names(genes.list) ){
+  print(comparison)
+  genes.list[[comparison]]<-bitr(genes.list[[comparison]],
+                                 fromType = "SYMBOL",
+                                 toType = "ENTREZID",
+                                 OrgDb = org.Hs.eg.db)$ENTREZID #put in ENTREZID because KEGG Pathways is in ENTREZID in this package
+}
+res.compa<-compareCluster(genes.list,
+                          fun = "enrichKEGG",
+                          organism="hsa",
+                          pvalueCutoff=0.05) 
+emapplot(res.compa,showCategory = nrow(as.data.frame(res.compa)),pie="count")
+
+resK<-enrichKEGG(setdiff(genes.list$genescoreCF.LF,genes.list$genesCF.LF),organism = "hsa",pvalueCutoff = 0.05)
+as.data.frame(resK)#no
+
+# in cflf=m
+genes.list<-list("genescoreCF.LM"=unique(res[compa=="cflm"&abs(GeneScore)>60]$gene),
+                 "genesCF.LM"=unique(res[compa=="cflm"&pval<0.001&abs(meth.change)>20]$gene))
+venn.diagram(genes.list,
+             filename = "analyses/model14_without_iugr/venn/venn_genescore_vs_genes_cflm.tiff" )
+
+
+for(comparison in names(genes.list) ){
+  print(comparison)
+  genes.list[[comparison]]<-bitr(genes.list[[comparison]],
+                                 fromType = "SYMBOL",
+                                 toType = "ENTREZID",
+                                 OrgDb = org.Hs.eg.db)$ENTREZID #put in ENTREZID because KEGG Pathways is in ENTREZID in this package
+}
+res.compa<-compareCluster(genes.list,
+                          fun = "enrichKEGG",
+                          organism="hsa",
+                          pvalueCutoff=0.05) 
+emapplot(res.compa,showCategory = nrow(as.data.frame(res.compa)),pie="count")
+
+resK<-enrichKEGG(setdiff(genes.list$genescoreCF.LF,genes.list$genesCF.LF),organism = "hsa",pvalueCutoff = 0.05)
+as.data.frame(resK)#no
+
+
+#Common Stress response
+#=> Intersection with intersection(CM.LM CM.LF) & Setdiff with LM.LF
+
+p<-ggplot(unique(res,by=c("gene","compa")))+
+  geom_jitter(aes(compa,GeneScore,col=abs(GeneScore)>60))+
+  scale_color_manual(values = c("grey","red"))
+
+p+geom_boxplot(aes(compa,GeneScore),alpha=0.5,outlier.shape = NA)
+
+genes.list<-list("CM.LM"=unique(res[compa=="cmlm"&abs(GeneScore)>60]$gene),
+                 "CM.LF"=unique(res[compa=="cmlf"&abs(GeneScore)>60]$gene),
+                 "LM.LF"=unique(res[compa=="lmlf"&abs(GeneScore)>60]$gene))
+venn.diagram(genes.list,
+             filename = "analyses/model14_without_iugr/venn/venn_genescore_cmvslm_cmvslf_lgamvslgaF.tiff") 
+
+genes<-intersect(unique(res[compa=="cmlm"&abs(GeneScore)>60]$gene),unique(res[compa=="cmlf"&abs(GeneScore)>60]$gene))
+# Setdiff with LM.LF
+genes<-setdiff(genes,unique(res[compa=="lmlf"&abs(GeneScore)>60]$gene))
+
+resK<-enrichKEGG(bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+                 organism = "hsa",pvalueCutoff = 0.05)
+as.data.frame(resK)#Hippo signaling pathway
+tr(as.data.frame(resK)$geneID,tradEntrezInSymbol = T) #"PRKCZ"  "PPP1CA" "CCND1"  "CCND2"  "WNT1"   "SMAD3"  "AXIN1"  "ACTG1" "CSNK1D"
+#intersection with cf
+genes<-intersect(genes,setdiff(intersect(unique(res[compa=="cflm"&abs(GeneScore)>60]$gene),
+                                  unique(res[compa=="cflf"&abs(GeneScore)>60]$gene)),
+                        unique(res[compa=="cfcm"&abs(GeneScore)>60]$gene)))
+
+length(genes) #173
+resK<-enrichKEGG(bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+                 organism = "hsa",pvalueCutoff = 0.05)
+as.data.frame(resK)#Hippo signaling pathway
+tr(as.data.frame(resK)$geneID,tradEntrezInSymbol = T)
+
+
+
+#GSEA [a simplifier] ? => functional impact different between female and male
 library(clusterProfiler)
 library(org.Hs.eg.db)
 resg<-unique(res[order(gene,compa,pval)],by=c("gene","compa"))
