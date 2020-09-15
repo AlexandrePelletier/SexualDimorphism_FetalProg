@@ -323,30 +323,111 @@ p<-ggplot(unique(res,by=c("gene","compa")))+
 
 p+geom_boxplot(aes(compa,GeneScore),alpha=0.5,outlier.shape = NA)
 
-genes.list<-list("CM.LM"=unique(res[compa=="cmlm"&abs(GeneScore)>60]$gene),
-                 "CM.LF"=unique(res[compa=="cmlf"&abs(GeneScore)>60]$gene),
-                 "LM.LF"=unique(res[compa=="lmlf"&abs(GeneScore)>60]$gene))
+plot(density(unique(res[compa=="lmlf"]$GeneScore)))
+abline(v=30) 
+quantile(unique(res[compa=="lmlf"]$GeneScore),c(0.9,0.95))
+genes<-intersect(genes,unique(res[compa=="lmlf"&GeneScore>30]$gene))
+length(genes)#973
+plot(density(unique(res[compa=="cmlf"]$GeneScore)))
+abline(v=40) 
+quantile(unique(res[compa=="cmlf"]$GeneScore),0.9)
+genes.list<-list("CM.LM"=unique(res[compa=="cmlm"&abs(GeneScore)>40]$gene),
+                 "CM.LF"=unique(res[compa=="cmlf"&abs(GeneScore)>40]$gene),
+                 "LM.LF"=unique(res[compa=="lmlf"&abs(GeneScore)>30]$gene))
 venn.diagram(genes.list,
              filename = "analyses/model14_without_iugr/venn/venn_genescore_cmvslm_cmvslf_lgamvslgaF.tiff") 
 
-genes<-intersect(unique(res[compa=="cmlm"&abs(GeneScore)>60]$gene),unique(res[compa=="cmlf"&abs(GeneScore)>60]$gene))
+genes<-intersect(unique(res[compa=="cmlm"&abs(GeneScore)>40]$gene),unique(res[compa=="cmlf"&abs(GeneScore)>40]$gene))
 # Setdiff with LM.LF
-genes<-setdiff(genes,unique(res[compa=="lmlf"&abs(GeneScore)>60]$gene))
+genes<-setdiff(genes,unique(res[compa=="lmlf"&abs(GeneScore)>30]$gene))
 
-resK<-enrichKEGG(bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
-                 organism = "hsa",pvalueCutoff = 0.05)
-as.data.frame(resK)#Hippo signaling pathway
-tr(as.data.frame(resK)$geneID,tradEntrezInSymbol = T) #"PRKCZ"  "PPP1CA" "CCND1"  "CCND2"  "WNT1"   "SMAD3"  "AXIN1"  "ACTG1" "CSNK1D"
 #intersection with cf
-genes<-intersect(genes,setdiff(intersect(unique(res[compa=="cflm"&abs(GeneScore)>60]$gene),
-                                  unique(res[compa=="cflf"&abs(GeneScore)>60]$gene)),
-                        unique(res[compa=="cfcm"&abs(GeneScore)>60]$gene)))
+genes<-intersect(genes,setdiff(intersect(unique(res[compa=="cflm"&GeneScore>60]$gene),
+                                  unique(res[compa=="cflf"&GeneScore>60]$gene)),
+                        unique(res[compa=="cfcm"&GeneScore>60]$gene)))
 
-length(genes) #173
+length(genes) #576
 resK<-enrichKEGG(bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
                  organism = "hsa",pvalueCutoff = 0.05)
-as.data.frame(resK)#Hippo signaling pathway
-tr(as.data.frame(resK)$geneID,tradEntrezInSymbol = T)
+as.data.frame(resK)
+emapplot(resK)
+#=> Hippo signaling pathway
+tr(as.data.frame(resK)["hsa04390",]$geneID,tradEntrezInSymbol = T)
+# [1] "PRKCZ"  "WNT9A"  "WNT3A"  "FZD8"   "TEAD1"  "PPP1CA" "BIRC2"  "WNT5B"  "CCND2"  "WNT1"  
+# [11] "BMP4"   "MPP5"   "AXIN1"  "WNT9B"  "CSNK1D" "SMAD7" 
+
+#2020-09-15 
+
+library(data.table)
+library(VennDiagram)
+library(ggplot2)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+source("scripts/utils/methyl_utils.R")
+res<-list(
+  "cfcm"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CF.CM.csv"),
+  "cflm"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CF.LM.csv"),
+  "cflf"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CF.LF.csv"),
+  "cmlf"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CM.LF.csv"),
+  "cmlm"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CM.LM.csv"),
+  "lmlf"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_LM.LF.csv")
+)
+lapply(names(res),function(comp)res[[comp]][,compa:=..comp])
+res<-Reduce(function(x, y) merge(x, y, all = T),res)
+#Female Stress response
+genes<-setdiff(unique(res[compa=="cflf"&GeneScore>60]$gene),unique(res[compa=="cflm"&abs(GeneScore)>60]$gene))
+genes<-setdiff(genes,unique(res[compa=="cfcm"&abs(GeneScore)>60]$gene))
+length(genes) #1809
+#=> Intersection with LM.LF & CM.LF
+
+genes<-intersect(genes,unique(res[compa=="cmlf"&GeneScore>40]$gene))
+genes<-intersect(genes,unique(res[compa=="lmlf"&GeneScore>30]$gene))
+length(genes)#300
+
+
+resK<-enrichKEGG(bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+                 organism = "hsa",pvalueCutoff = 0.2)
+as.data.frame(resK)
+emapplot(resK)
+#=> Rap1 signaling pathway 
+tr(as.data.frame(resK)["hsa04015",]$geneID,tradEntrezInSymbol = T)
+
+# [1] "PFN2"    "FGFR3"   "PDGFRA"  "FGF5"    "RAPGEF6" "PFN3"    "EGFR"    "FGFR1"   "GNAQ"   
+# [10] "VAV2"    "LPAR2"   "TIAM1"   "ITGB2"  
+
+#=> parathyroid
+tr(as.data.frame(resK)["hsa04928",]$geneID,tradEntrezInSymbol = T)
+# 1] "CREB1" "PTH1R" "RUNX2" "EGFR"  "FGFR1" "GNAQ"  "RXRA" 
+
+#Female Stress response - stringent
+genes<-setdiff(unique(res[compa=="cflf"&GeneScore>60]$gene),unique(res[compa=="cflm"&abs(GeneScore)>60]$gene))
+genes<-setdiff(genes,unique(res[compa=="cfcm"&abs(GeneScore)>60]$gene))
+length(genes) #1809
+#=> Intersection with LM.LF & CM.LF
+genes.list<-list("CM.LM"=unique(res[compa=="cmlm"&GeneScore>20]$gene),
+                 "CM.LF"=unique(res[compa=="cmlf"&GeneScore>20]$gene),
+                 "LM.LF"=unique(res[compa=="lmlf"&GeneScore>20]$gene))
+venn.diagram(genes.list,
+             filename = "analyses/model14_without_iugr/venn/venn_genescore_cmvslm_cmvslf_lgamvslgaF_genescore20.tiff") 
+
+genes<-intersect(genes,unique(res[compa=="cmlf"&GeneScore>20]$gene))
+genes<-intersect(genes,unique(res[compa=="lmlf"&GeneScore>20]$gene))
+length(genes)#979
+
+
+resK<-enrichKEGG(bitr(genes,fromType = "SYMBOL",toType = "ENTREZID",OrgDb = org.Hs.eg.db)$ENTREZID,
+                 organism = "hsa",pvalueCutoff = 0.05)
+as.data.frame(resK)
+emapplot(resK,showCategory = nrow(as.data.frame(resK)))
+#=> Rap1 signaling pathway 
+tr(as.data.frame(resK)["hsa04015",]$geneID,tradEntrezInSymbol = T)
+
+[1] "PFN2"    "FGFR3"   "PDGFRA"  "FGF5"    "RAPGEF6" "PFN3"    "EGFR"    "FGFR1"   "GNAQ"   
+[10] "VAV2"    "LPAR2"   "TIAM1"   "ITGB2"  
+
+#=> parathyroid
+tr(as.data.frame(resK)["hsa04928",]$geneID,tradEntrezInSymbol = T)
+# 1] "CREB1" "PTH1R" "RUNX2" "EGFR"  "FGFR1" "GNAQ"  "RXRA" 
 
 
 
