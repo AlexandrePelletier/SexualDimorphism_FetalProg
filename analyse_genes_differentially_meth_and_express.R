@@ -173,3 +173,106 @@ longevityPathsID<-unique(data.table(Reduce(rbind,list(data.table(as.data.frame(r
                                                       data.table(as.data.frame(resFM_KEGG))[,.(ID,Description)])))[Description%in%longevityPaths]$ID)
 
 
+# 2020-09-16 Make list of CpG
+library(data.table)
+library(stringr)
+#I) CpG with DEG interesting
+
+
+#DEG
+resE<-list(
+  "cl"=fread("../singlecell/analyses/04-DEG_in_LGA/2020-09-01_pseudo_bulk_DEseq2_LgaVsCtrl_CBP1andcbp558_559_samples_excluded_regr_on_batch_and_sex_all_genes.csv"),
+  "cflf"=fread("../singlecell/analyses/04-DEG_in_LGA/2020-09-07_pseudo_bulk_DEseq2_LgaFVsCtrlF_CBP1and3andCbp558andMaleandIugr_samples_excluded_regr_batch_all_genes.csv"),
+  "cl_hsc"=fread("../singlecell/analyses/04-DEG_in_LGA/2020-09-07_pseudo_bulk_HSC_MPP_DEseq2_LgaVsCtrl_CBP1andcbp558_559_samples_excluded_regr_on_batch_and_sex_all_genes.csv"),
+  "cflf_hsc"=fread("../singlecell/analyses/04-DEG_in_LGA/2020-09-07_pseudo_bulk_HSC_MPP_DEseq2_LgaFVsCtrlF_CBP1and3andCbp558andMaleandIugr_samples_excluded_regr_batch_all_genes.csv")
+)
+
+lapply(names(resE),function(comp)resE[[comp]][,compa:=strsplit(..comp,"_")[[1]][1]])
+lapply(names(resE),function(comp)resE[[comp]][,subpop:=ifelse(str_detect(..comp,"_"),"hsc/mpp","all_progen")])
+resE<-Reduce(function(x, y) merge(x[,.(gene,baseMean,log2FoldChange,pvalue,padj,compa,subpop)],
+                                  y[,.(gene,baseMean,log2FoldChange,pvalue,padj,compa,subpop)], all = T),resE)
+
+
+
+#meth
+resM<-list(
+  "cl"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_C.L.csv"),
+  "cfcm"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CF.CM.csv"),
+  "cflm"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CF.LM.csv"),
+  "cflf"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CF.LF.csv"),
+  "cmlf"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CM.LF.csv"),
+  "cmlm"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_CM.LM.csv"),
+  "lmlf"=fread("analyses/model14_without_iugr/2020-09-09_res_with_genescore_LM.LF.csv")
+)
+lapply(names(resM),function(comp)resM[[comp]][,compa:=..comp])
+resM<-Reduce(function(x, y) merge(x, y, all = T),resM)
+
+
+resM[,cpg_of_interest:=abs(meth.change>20)&pval<0.005&(abs(tss_dist)<10000|in_eQTR==TRUE)&type!=0]
+
+
+
+distFromNext<-function(x){
+  x_sorted<-sort(x)
+  dists<-rep(NA,length(x_sorted))
+  for(i in 1:(length(x_sorted)-1)){
+    dists[i]<-abs(x_sorted[i]-x_sorted[i+1])
+  }
+  return(dists[match(x,x_sorted)])
+}
+distFromPrev<-function(x){
+  x_sorted<-sort(x,decreasing =T )
+  dists<-rep(NA,length(x_sorted))
+  for(i in 1:(length(x_sorted)-1)){
+    dists[i]<-abs(x_sorted[i]-x_sorted[i+1])
+  }
+  return(dists[match(x,x_sorted)])
+}
+
+
+
+resM[,dist_from_next_cpg:=distFromNext(tss_dist),by=c('gene',"compa")]
+resM[,dist_from_prev_cpg:=distFromPrev(tss_dist),by=c('gene',"compa")]
+resM[,cpg_close_to_int:=c(FALSE,c(dist_from_next_cpg<300&cpg_of_interest==TRUE)[-.N])|
+       c(c(dist_from_next_cpg<300&cpg_of_interest==TRUE,FALSE)[-1]),by=c('gene',"compa")]
+resM[cpg_of_interest==T|cpg_close_to_int==TRUE]
+
+resM[,cpg_close_to_int_int:=cpg_close_to_int&pval<0.05&abs(meth.change)>20]
+
+res_of_int<-merge(resM[cpg_of_interest==T|cpg_close_to_int_int==T],resE,by=c("gene","compa"),all.x = T)
+
+res_of_int<-res_of_int[,.(locisID,chr,pos,gene,compa,meth.change,pval,cpg_of_interest,cpg_close_to_int_int,tss_dist,in_eQTR,type,feature_type_name,
+                          GeneScore,gene,compa,subpop,baseMean,log2FoldChange,pvalue,padj,
+                          dist_from_next_cpg,dist_from_prev_cpg)]
+res_of_int[order(-GeneScore,pval)]
+
+
+fwrite(res_of_int[order(gene,-GeneScore,pval)],"analyses/model14_without_iugr/2020-09-17_cpgs_of_interest_and_cpg_close_pval0.005_meth.change20_tss_dist10k_or_ineQTR_type123456.csv",sep=";")
+genes_dint<-c("SOCS3",
+              "SOCS1",
+              "PIK3R3",
+              "LGALS1",
+              "ID1",
+              "HES1",
+              "HES4",
+              "FOS",
+              "MYC",
+              "JUNB",
+              "KLF2",
+              "KLF4",
+              "KLF3",
+              "KLF6",
+              "POMC",
+              "BEX1",
+              "EEF1D",
+              "DUSP2",
+              "RGCC",
+              "PLK3",
+              "LMNA",
+              "CYP1A1",
+              "HSPA5")
+fwrite(res_of_int[gene%in%genes_dint][order(gene,-GeneScore,pval)],"analyses/model14_without_iugr/2020-09-17_cpgs_of_interest_and_cpg_close_in_genesDEG_of_interest_pval0.005_meth.change20_tss_dist10k_or_ineQTR_type123456.csv",sep=";")
+
+
+
+
