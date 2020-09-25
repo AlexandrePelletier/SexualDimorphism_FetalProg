@@ -248,30 +248,79 @@ res_of_int[order(-GeneScore,pval)]
 
 
 fwrite(res_of_int[order(gene,-GeneScore,pval)],"analyses/model14_without_iugr/2020-09-17_cpgs_of_interest_and_cpg_close_pval0.005_meth.change20_tss_dist10k_or_ineQTR_type123456.csv",sep=";")
-genes_dint<-c("SOCS3",
-              "SOCS1",
-              "PIK3R3",
-              "LGALS1",
-              "ID1",
-              "HES1",
-              "HES4",
-              "FOS",
-              "MYC",
-              "JUNB",
-              "KLF2",
-              "KLF4",
-              "KLF3",
-              "KLF6",
-              "POMC",
-              "BEX1",
-              "EEF1D",
-              "DUSP2",
-              "RGCC",
-              "PLK3",
-              "LMNA",
-              "CYP1A1",
-              "HSPA5")
-fwrite(res_of_int[gene%in%genes_dint][order(gene,-GeneScore,pval)],"analyses/model14_without_iugr/2020-09-17_cpgs_of_interest_and_cpg_close_in_genesDEG_of_interest_pval0.005_meth.change20_tss_dist10k_or_ineQTR_type123456.csv",sep=";")
+
+#2020-09-25 make cpg list of int of genes of int (deg, module)
+library(data.table)
+
+degs<-fread("../singlecell/analyses/04-DEG_in_LGA/2020-09-01_pseudo_bulk_DEseq2_LgaVsCtrl_CBP1andcbp558_559_samples_excluded_regr_on_batch_and_sex_padj0.05_DEG.csv")
+degs[abs(log2FoldChange)>0.5]
+meth<-fread("analyses/model14_without_iugr/2020-09-24_all_res_with_perm.csv")
+methg<-unique(meth[order(gene,compa,pval)],by=c("gene","compa"))
+demet<-merge(degs[,.(gene,baseMean,log2FoldChange,pvalue,padj)],meth,by="gene")
+genes_DEG<-unique(demet[abs(log2FoldChange)>0.5&abs(GeneScore)>60]$gene)
+
+hormon<-fread("analyses/genes_of_interest/2020-09-24_genes_hub_modul_hormon.csv")
+genes_hormon<-unique(hormon[abs(GeneScore)>60]$gene)
+
+longev<-fread("analyses/genes_of_interest/2020-09-24_genes_hub_modul_longevity.csv")
+
+genes_longev<-unique(longev[abs(GeneScore)>60]$gene)
+
+stem<-fread("analyses/genes_of_interest/2020-09-25_genes_hub_modul_stem.csv")
+genes_stem<-unique(stem[abs(GeneScore)>60]$gene)
+
+nut<-fread("analyses/genes_of_interest/2020-09-25_genes_hub_modul_nutrient.csv")
+
+genes_nutrient<-unique(nut[abs(GeneScore)>60]$gene)
+
+prolif<-fread("analyses/genes_of_interest/2020-09-25_genes_hub_modul_prolif.csv")
+genes_prolif<-unique(prolif[abs(GeneScore)>60]$gene)
+genes_dint<-unique(c(genes_DEG,genes_hormon,genes_longev,genes_nutrient,genes_prolif,genes_stem))
+length(genes_dint)
+methg[,DEG:=gene%in%genes_DEG]
+methg[,hormon:=gene%in%genes_hormon]
+methg[,longev:=gene%in%genes_longev]
+methg[,nutrient:=gene%in%genes_nutrient]
+methg[,prolif:=gene%in%genes_prolif]
+methg[,stem:=gene%in%genes_stem]
+fwrite(methg[gene%in%genes_dint],"analyses/genes_of_interest/2020-09-25_all_genes_of_interest.csv",sep=";")
+
+meth[,cpg_of_interest:=abs(meth.change>20)&pval<0.005&(abs(tss_dist)<10000|in_eQTR==TRUE)&type!=0]
+
+
+
+distFromNext<-function(x){
+  x_sorted<-sort(x)
+  dists<-rep(NA,length(x_sorted))
+  for(i in 1:(length(x_sorted)-1)){
+    dists[i]<-abs(x_sorted[i]-x_sorted[i+1])
+  }
+  return(dists[match(x,x_sorted)])
+}
+distFromPrev<-function(x){
+  x_sorted<-sort(x,decreasing =T )
+  dists<-rep(NA,length(x_sorted))
+  for(i in 1:(length(x_sorted)-1)){
+    dists[i]<-abs(x_sorted[i]-x_sorted[i+1])
+  }
+  return(dists[match(x,x_sorted)])
+}
+
+
+
+meth[,dist_from_next_cpg:=distFromNext(tss_dist),by=c('gene',"compa")]
+meth[,dist_from_prev_cpg:=distFromPrev(tss_dist),by=c('gene',"compa")]
+meth[,cpg_close_to_int:=c(FALSE,c(dist_from_next_cpg<300&cpg_of_interest==TRUE)[-.N])|
+       c(c(dist_from_next_cpg<300&cpg_of_interest==TRUE,FALSE)[-1]),by=c('gene',"compa")]
+meth[cpg_of_interest==T|cpg_close_to_int==TRUE]
+
+meth[,cpg_close_to_int_int:=cpg_close_to_int&pval<0.05&abs(meth.change)>20]
+
+res_of_int<-merge(meth[cpg_of_interest==T|cpg_close_to_int_int==T],methg[gene%in%genes_dint])
+
+
+fwrite(res_of_int[,.(locisID,chr,pos,pval,meth.change,cpg_of_interest,cpg_close_to_int,dist_from_next_cpg,gene,GeneScore,compa,DEG,stem,prolif,hormon,longev,nutrient)][order(gene,-GeneScore,pval)],
+       "analyses/genes_of_interest/2020-09-25_all_cpgs_of_interest_and_cpg_close_in_genes_of_interest_pval0.005_meth.change20_tss_dist10k_or_ineQTR_type123456.csv",sep=";")
 
 
 

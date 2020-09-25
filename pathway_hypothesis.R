@@ -726,7 +726,7 @@ pathC<-lapply(pathIDofInterest2, function(id)return(pathview(gene.data  = geneLi
 
 #1) create/find a gene list of genes involved nutrient sensing pathway :
 #a quoi ressemble une custom ?
-custom_exampl<-read.gmt("../../ref/msigdb/c2.cp.kegg.v7.1.symbols.gmt") 
+custom_exampl<-read.gmt("ref/msigdb/c2.cp.kegg.v7.1.symbols.gmt") 
 head(custom_exampl)
 custom_exampl[str_detect(custom_exampl$term,"LONGEVITY")] #no longevity in this db
 
