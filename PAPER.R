@@ -139,7 +139,9 @@ saveRDS(modules,"analyses/paper/modules_stem_nutrient_prolif.rds")
 
 hub<-list(prolif=prolif_hub,stem=stem_hub,nutrient=nutrient_hub,hormon=hormon_hub)
 saveRDS(hub,"analyses/paper/hub_stem_nutrient_prolif.rds")
-# 3) PseudoBulk 
+
+# 3) Validation
+#   a.PseudoBulk 
 #   plot DEG~GeneScore et genes in Metalongevity
 cbps<-readRDS("../singlecell/analyses/02-hematopo_datasets_integration/all_cbps/all_cbps.rds")
 #with wilcoxon
@@ -428,6 +430,28 @@ ggplot(res_meth1[padj<1],aes(log2FoldChange,-log10(pvalue),col=padj<0.1))+
   ggtitle("growth_hormon")+
   theme_minimal() +
   theme(legend.position = "none")
+
+
+#   b.diff male fem en in hsc
+
+cbps_ctrl<-subset(cbps,group=="ctrl")
+mtd<-data.table(cbps_ctrl@meta.data)
+mtd[,n_cells.sample:=.N,by="sample"]
+mtd[,pct.ct:=.N/n_cells.sample,by=c("cell_type","sample")]
+
+mtd[,pct.lin:=.N/n_cells.sample,by=c("new.lineage","sample")]
+unique(mtd[,.(sample,sex,cell_type,pct.ct)])
+ggplot(unique(mtd[,.(sample,sex,cell_type,pct.ct)]))+
+  geom_boxplot(aes(x=sex,y=pct.ct,col=sex))+
+  facet_wrap("cell_type",scales = "free_y")+
+  scale_y_continuous(labels = scales::percent)
+ggsave("analyses/paper/ctrlM_vs_ctrlF/2020-10-06_distr_cell_type_by_sex.png")
+ggplot(unique(mtd[,.(sample,sex,new.lineage,pct.lin)]))+
+  geom_boxplot(aes(x=sex,y=pct.lin,col=sex))+
+  facet_wrap("new.lineage",scales = "free_y")+
+  scale_y_continuous(labels = scales::percent)
+ggsave("analyses/paper/ctrlM_vs_ctrlF/2020-10-06_distr_lineage_by_sex.png")
+
 
 #II) CTRL vs LGA
 
