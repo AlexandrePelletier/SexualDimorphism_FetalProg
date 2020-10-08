@@ -484,10 +484,10 @@ plotMeth<-function(cpgs,
   library(ggplot2)
   library(data.table)
   if(is.null(methyl_df)){
-    methyl_df<-fread("../../ref/2020-05-25_methyl_data_before_limma.csv")
+    methyl_df<-fread("datasets/cd34/2020-05-25_methyl_data_before_limma.csv")
   }
   if(is.null(batch)){
-    batch<-fread("../../ref/cleaned_batch_CD34_library_date_220620.csv")
+    batch<-fread("datasets/cd34/cleaned_batch_CD34_library_date_220620.csv")
     
     keep<-batch[[factor]]%in%levels
     batch<-batch[as.vector(keep)]
@@ -532,9 +532,8 @@ plotMeth<-function(cpgs,
         if(plot=="boxplot"){
           if(wrap){
             return(ggplot(cpgs_data_batch)+
-                     geom_boxplot(aes_string(group,"unmeth",fill=factor),width=0.5)+
-                     facet_wrap(factor)+
-              scale_x_discrete(limits=ord)+
+                     geom_boxplot(aes_string(factor,"unmeth",fill=factor),width=0.5)+
+                     facet_wrap(group)+
               theme_minimal())
           }
           return(ggplot(cpgs_data_batch)+geom_boxplot(aes_string(factor,"unmeth",fill=group))+scale_color_manual(breaks=as.character(ord)))
@@ -868,5 +867,6 @@ getGenesKEGGPathw<-function(pathID){
 }
 
 
+ul<-function(x)as.vector(unique(unlist(x)))
 
 

@@ -23,7 +23,7 @@ res<-fread("analyses/model14_without_iugr/2020-09-24_all_res_with_perm.csv")
 # searchDatasets(mart = ensembl, pattern = "hsapiens")
 # ensembl <- useDataset(dataset = "hsapiens_gene_ensembl", mart = ensembl)
 # searchAttributes(mart = ensembl, pattern = "hgnc") #hgnc_symbol
-# searchAttributes(mart = ensembl, pattern = "entrez") #entrezgene_id
+# searchAttributes*(mart = ensembl, pattern = "entrez") #entrezgene_id
 # genes<-getBM(attributes = c('hgnc_symbol', 'entrezgene_id'),
 #       filters = 'hgnc_symbol',
 #       values = unique(res$gene), 
@@ -66,6 +66,11 @@ fwrite(resGO_gsea_C,"analyses/paper/ctrlM_vs_ctrlF/2020-10-05_gsea_GO_ctrlFvsCtr
 
 
 #   2c) metalongevity genes 
+long_ids<-c("hsa04211","hsa04310","hsa04910","hsa04010","hsa04152","hsa04068","hsa04150")
+long_genes<-lapply(long_ids,getGenesKEGGPathw)
+lg<-ul(long_genes)
+length(lg)
+saveRDS(lg,"analyses/paper/longevity_genes.rds")
 
 stem_paths<-c("Wnt","TGF-beta","JAK","pluripotency","MAPK")
 stem_ids<-sapply(stem_paths,function(path_word)unique(resK_gsea_C[str_detect(Description,path_word)]$ID))
